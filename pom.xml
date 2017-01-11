@@ -48,7 +48,7 @@
     <jmh.version>1.12</jmh.version>
     <nukleus.plugin.version>0.2</nukleus.plugin.version>
     <nukleus.version>0.1</nukleus.version>
-    <nukleus.tcp.spec.version>0.1</nukleus.tcp.spec.version>
+    <nukleus.http.spec.version>0.2</nukleus.http.spec.version>
     <reaktor.test.version>0.1</reaktor.test.version>
     <reaktor.version>0.1</reaktor.version>
   </properties>
@@ -61,8 +61,8 @@
     </dependency>
     <dependency>
       <groupId>org.reaktivity</groupId>
-      <artifactId>nukleus-tcp.spec</artifactId>
-      <version>${nukleus.tcp.spec.version}</version>
+      <artifactId>nukleus-http.spec</artifactId>
+      <version>${nukleus.http.spec.version}</version>
       <scope>provided</scope>
     </dependency>
     <dependency>
@@ -120,8 +120,8 @@
         <artifactId>nukleus-maven-plugin</artifactId>
         <version>${nukleus.plugin.version}</version>
         <configuration>
-          <scopeNames>common tcp</scopeNames>
-          <packageName>org.reaktivity.nukleus.tcp.internal.types</packageName>
+          <scopeNames>common http</scopeNames>
+          <packageName>org.reaktivity.nukleus.http.internal.types</packageName>
         </configuration>
         <executions>
           <execution>
