@@ -16,13 +16,14 @@
 package org.reaktivity.nukleus.http.internal.routable.stream;
 
 import java.util.List;
+import java.util.function.BiFunction;
 import java.util.function.LongFunction;
 import java.util.function.LongSupplier;
 
 import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
-import org.agrona.collections.LongLongConsumer;
 import org.agrona.concurrent.MessageHandler;
+import org.reaktivity.nukleus.http.internal.routable.Correlation;
 import org.reaktivity.nukleus.http.internal.routable.Route;
 import org.reaktivity.nukleus.http.internal.routable.Source;
 import org.reaktivity.nukleus.http.internal.types.stream.BeginFW;
@@ -30,7 +31,7 @@ import org.reaktivity.nukleus.http.internal.types.stream.DataFW;
 import org.reaktivity.nukleus.http.internal.types.stream.EndFW;
 import org.reaktivity.nukleus.http.internal.types.stream.FrameFW;
 
-public final class ClientInitialStreamFactory
+public final class SourceOutputStreamFactory
 {
     private final FrameFW frameRO = new FrameFW();
 
@@ -41,32 +42,32 @@ public final class ClientInitialStreamFactory
     private final Source source;
     private final LongSupplier supplyTargetId;
     private final LongFunction<List<Route>> supplyRoutes;
-    private final LongLongConsumer correlateInitial;
+    private final BiFunction<Long, Correlation, Correlation> correlateNew;
 
-    public ClientInitialStreamFactory(
+    public SourceOutputStreamFactory(
         Source source,
         LongFunction<List<Route>> supplyRoutes,
         LongSupplier supplyTargetId,
-        LongLongConsumer correlateInitial)
+        BiFunction<Long, Correlation, Correlation> correlateNew)
     {
         this.source = source;
         this.supplyTargetId = supplyTargetId;
         this.supplyRoutes = supplyRoutes;
-        this.correlateInitial = correlateInitial;
+        this.correlateNew = correlateNew;
     }
 
     public MessageHandler newStream()
     {
-        return new ClientInitialStream()::handleStream;
+        return new SourceOutputStream()::handleStream;
     }
 
-    private final class ClientInitialStream
+    private final class SourceOutputStream
     {
         private MessageHandler currentState;
 
         private long sourceId;
 
-        private ClientInitialStream()
+        private SourceOutputStream()
         {
             nextState(this::beforeBegin);
         }

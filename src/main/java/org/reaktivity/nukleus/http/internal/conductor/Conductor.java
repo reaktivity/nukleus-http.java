@@ -29,18 +29,12 @@ import org.reaktivity.nukleus.Reaktive;
 import org.reaktivity.nukleus.http.internal.Context;
 import org.reaktivity.nukleus.http.internal.router.Router;
 import org.reaktivity.nukleus.http.internal.types.OctetsFW;
-import org.reaktivity.nukleus.http.internal.types.control.BindFW;
-import org.reaktivity.nukleus.http.internal.types.control.BoundFW;
 import org.reaktivity.nukleus.http.internal.types.control.ErrorFW;
 import org.reaktivity.nukleus.http.internal.types.control.HttpRouteExFW;
-import org.reaktivity.nukleus.http.internal.types.control.RejectFW;
-import org.reaktivity.nukleus.http.internal.types.control.RejectedFW;
+import org.reaktivity.nukleus.http.internal.types.control.Role;
 import org.reaktivity.nukleus.http.internal.types.control.RouteFW;
 import org.reaktivity.nukleus.http.internal.types.control.RoutedFW;
-import org.reaktivity.nukleus.http.internal.types.control.UnbindFW;
-import org.reaktivity.nukleus.http.internal.types.control.UnboundFW;
-import org.reaktivity.nukleus.http.internal.types.control.UnrejectFW;
-import org.reaktivity.nukleus.http.internal.types.control.UnrejectedFW;
+import org.reaktivity.nukleus.http.internal.types.control.State;
 import org.reaktivity.nukleus.http.internal.types.control.UnrouteFW;
 import org.reaktivity.nukleus.http.internal.types.control.UnroutedFW;
 
@@ -49,22 +43,14 @@ public final class Conductor implements Nukleus
 {
     private static final Map<String, String> EMPTY_HEADERS = Collections.emptyMap();
 
-    private final BindFW bindRO = new BindFW();
-    private final UnbindFW unbindRO = new UnbindFW();
     private final RouteFW routeRO = new RouteFW();
     private final UnrouteFW unrouteRO = new UnrouteFW();
-    private final RejectFW rejectRO = new RejectFW();
-    private final UnrejectFW unrejectRO = new UnrejectFW();
 
     private final HttpRouteExFW httpRouteExRO = new HttpRouteExFW();
 
     private final ErrorFW.Builder errorRW = new ErrorFW.Builder();
-    private final BoundFW.Builder boundRW = new BoundFW.Builder();
-    private final UnboundFW.Builder unboundRW = new UnboundFW.Builder();
     private final RoutedFW.Builder routedRW = new RoutedFW.Builder();
     private final UnroutedFW.Builder unroutedRW = new UnroutedFW.Builder();
-    private final RejectedFW.Builder rejectedRW = new RejectedFW.Builder();
-    private final UnrejectedFW.Builder unrejectedRW = new UnrejectedFW.Builder();
 
     private final RingBuffer conductorCommands;
     private final BroadcastTransmitter conductorResponses;
@@ -107,33 +93,13 @@ public final class Conductor implements Nukleus
         conductorResponses.transmit(errorRO.typeId(), errorRO.buffer(), errorRO.offset(), errorRO.length());
     }
 
-    public void onBoundResponse(
-        long correlationId,
-        long referenceId)
-    {
-        BoundFW boundRO = boundRW.wrap(sendBuffer, 0, sendBuffer.capacity())
-                                 .correlationId(correlationId)
-                                 .referenceId(referenceId)
-                                 .build();
-
-        conductorResponses.transmit(boundRO.typeId(), boundRO.buffer(), boundRO.offset(), boundRO.length());
-    }
-
-    public void onUnboundResponse(
-        long correlationId)
-    {
-        UnboundFW unboundRO = unboundRW.wrap(sendBuffer, 0, sendBuffer.capacity())
-                                       .correlationId(correlationId)
-                                       .build();
-
-        conductorResponses.transmit(unboundRO.typeId(), unboundRO.buffer(), unboundRO.offset(), unboundRO.length());
-    }
-
     public void onRoutedResponse(
-        long correlationId)
+        long correlationId,
+        long sourceRef)
     {
         RoutedFW routedRO = routedRW.wrap(sendBuffer, 0, sendBuffer.capacity())
                                     .correlationId(correlationId)
+                                    .sourceRef(sourceRef)
                                     .build();
 
         conductorResponses.transmit(routedRO.typeId(), routedRO.buffer(), routedRO.offset(), routedRO.length());
@@ -149,47 +115,19 @@ public final class Conductor implements Nukleus
         conductorResponses.transmit(unroutedRO.typeId(), unroutedRO.buffer(), unroutedRO.offset(), unroutedRO.length());
     }
 
-    public void onRejectedResponse(
-        long correlationId)
-    {
-        RejectedFW rejectedRO = rejectedRW.wrap(sendBuffer, 0, sendBuffer.capacity())
-                                          .correlationId(correlationId)
-                                          .build();
-
-        conductorResponses.transmit(rejectedRO.typeId(), rejectedRO.buffer(), rejectedRO.offset(), rejectedRO.length());
-    }
-
-    public void onUnrejectedResponse(
-        long correlationId)
-    {
-        UnrejectedFW unrejectedRO = unrejectedRW.wrap(sendBuffer, 0, sendBuffer.capacity())
-                                                .correlationId(correlationId)
-                                                .build();
-
-        conductorResponses.transmit(unrejectedRO.typeId(), unrejectedRO.buffer(), unrejectedRO.offset(), unrejectedRO.length());
-    }
-
-    private void handleCommand(int msgTypeId, DirectBuffer buffer, int index, int length)
+    private void handleCommand(
+        int msgTypeId,
+        DirectBuffer buffer,
+        int index,
+        int length)
     {
         switch (msgTypeId)
         {
-        case BindFW.TYPE_ID:
-            handleBindCommand(buffer, index, length);
-            break;
-        case UnbindFW.TYPE_ID:
-            handleUnbindCommand(buffer, index, length);
-            break;
         case RouteFW.TYPE_ID:
             handleRouteCommand(buffer, index, length);
             break;
         case UnrouteFW.TYPE_ID:
             handleUnrouteCommand(buffer, index, length);
-            break;
-        case RejectFW.TYPE_ID:
-            handleRejectCommand(buffer, index, length);
-            break;
-        case UnrejectFW.TYPE_ID:
-            handleUnrejectCommand(buffer, index, length);
             break;
         default:
             // ignore unrecognized commands (forwards compatible)
@@ -197,49 +135,23 @@ public final class Conductor implements Nukleus
         }
     }
 
-    private void handleBindCommand(DirectBuffer buffer, int index, int length)
-    {
-        bindRO.wrap(buffer, index, index + length);
-
-        final long correlationId = bindRO.correlationId();
-        final byte kind = bindRO.kind();
-
-        router.doBind(correlationId, kind);
-    }
-
-    private void handleUnbindCommand(DirectBuffer buffer, int index, int length)
-    {
-        unbindRO.wrap(buffer, index, index + length);
-
-        final long correlationId = unbindRO.correlationId();
-        final long referenceId = unbindRO.referenceId();
-
-        router.doUnbind(correlationId, referenceId);
-    }
-
-    private void handleRouteCommand(DirectBuffer buffer, int index, int length)
+    private void handleRouteCommand(
+        DirectBuffer buffer,
+        int index,
+        int length)
     {
         routeRO.wrap(buffer, index, index + length);
 
         final long correlationId = routeRO.correlationId();
+        final Role role = routeRO.role().get();
+        final State state = routeRO.state().get();
         final String source = routeRO.source().asString();
         final long sourceRef = routeRO.sourceRef();
         final String target = routeRO.target().asString();
         final long targetRef = routeRO.targetRef();
         final OctetsFW extension = routeRO.extension();
 
-        if (extension.length() == 0)
-        {
-            router.doRoute(correlationId, source, sourceRef, target, targetRef, EMPTY_HEADERS);
-        }
-        else
-        {
-            final HttpRouteExFW routeEx = extension.get(httpRouteExRO::wrap);
-            final Map<String, String> headers = new LinkedHashMap<>();
-            routeEx.headers().forEach(h -> headers.put(h.name().asString(), h.value().asString()));
-
-            router.doRoute(correlationId, source, sourceRef, target, targetRef, headers);
-        }
+        router.doRoute(correlationId, role, state, source, sourceRef, target, targetRef, headers(extension));
     }
 
     private void handleUnrouteCommand(DirectBuffer buffer, int index, int length)
@@ -247,40 +159,23 @@ public final class Conductor implements Nukleus
         unrouteRO.wrap(buffer, index, index + length);
 
         final long correlationId = unrouteRO.correlationId();
+        final Role role = unrouteRO.role().get();
+        final State state = unrouteRO.state().get();
         final String source = unrouteRO.source().asString();
         final long sourceRef = unrouteRO.sourceRef();
         final String target = unrouteRO.target().asString();
         final long targetRef = unrouteRO.targetRef();
         final OctetsFW extension = unrouteRO.extension();
 
-        if (extension.length() == 0)
-        {
-            router.doUnroute(correlationId, source, sourceRef, target, targetRef, EMPTY_HEADERS);
-        }
-        else
-        {
-            final HttpRouteExFW routeEx = extension.get(httpRouteExRO::wrap);
-            final Map<String, String> headers = new LinkedHashMap<>();
-            routeEx.headers().forEach(h -> headers.put(h.name().asString(), h.value().asString()));
-
-            router.doUnroute(correlationId, source, sourceRef, target, targetRef, headers);
-        }
+        router.doUnroute(correlationId, role, state, source, sourceRef, target, targetRef, headers(extension));
     }
 
-    private void handleRejectCommand(DirectBuffer buffer, int index, int length)
+    private Map<String, String> headers(
+        OctetsFW extension)
     {
-        rejectRO.wrap(buffer, index, index + length);
-
-        final long correlationId = rejectRO.correlationId();
-        final String source = rejectRO.source().asString();
-        final long sourceRef = rejectRO.sourceRef();
-        final String target = rejectRO.target().asString();
-        final long targetRef = rejectRO.targetRef();
-        final OctetsFW extension = rejectRO.extension();
-
         if (extension.length() == 0)
         {
-            router.doReject(correlationId, source, sourceRef, target, targetRef, EMPTY_HEADERS);
+            return EMPTY_HEADERS;
         }
         else
         {
@@ -288,32 +183,7 @@ public final class Conductor implements Nukleus
             final Map<String, String> headers = new LinkedHashMap<>();
             routeEx.headers().forEach(h -> headers.put(h.name().asString(), h.value().asString()));
 
-            router.doReject(correlationId, source, sourceRef, target, targetRef, headers);
-        }
-    }
-
-    private void handleUnrejectCommand(DirectBuffer buffer, int index, int length)
-    {
-        unrejectRO.wrap(buffer, index, index + length);
-
-        final long correlationId = unrejectRO.correlationId();
-        final String source = unrejectRO.source().asString();
-        final long sourceRef = unrejectRO.sourceRef();
-        final String target = unrejectRO.target().asString();
-        final long targetRef = unrejectRO.targetRef();
-        final OctetsFW extension = unrejectRO.extension();
-
-        if (extension.length() == 0)
-        {
-            router.doUnreject(correlationId, source, sourceRef, target, targetRef, EMPTY_HEADERS);
-        }
-        else
-        {
-            final HttpRouteExFW routeEx = extension.get(httpRouteExRO::wrap);
-            final Map<String, String> headers = new LinkedHashMap<>();
-            routeEx.headers().forEach(h -> headers.put(h.name().asString(), h.value().asString()));
-
-            router.doUnreject(correlationId, source, sourceRef, target, targetRef, headers);
+            return headers;
         }
     }
 }

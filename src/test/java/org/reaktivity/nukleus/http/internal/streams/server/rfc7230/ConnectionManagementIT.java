@@ -30,7 +30,7 @@ import org.reaktivity.reaktor.test.NukleusRule;
 public class ConnectionManagementIT
 {
     private final K3poRule k3po = new K3poRule()
-            .addScriptRoot("control", "org/reaktivity/specification/nukleus/http/control")
+            .addScriptRoot("route", "org/reaktivity/specification/nukleus/http/control/route")
             .addScriptRoot("streams", "org/reaktivity/specification/nukleus/http/streams/rfc7230/connection.management");
 
     private final TestRule timeout = new DisableOnDebug(new Timeout(5, SECONDS));
@@ -41,24 +41,24 @@ public class ConnectionManagementIT
         .responseBufferCapacity(1024)
         .counterValuesBufferCapacity(1024)
         .streams("http", "source")
-        .streams("rejectTarget", "http#source")
+        .streams("source", "http#source")
         .streams("target", "http#source")
-        .streams("http", "replySource")
-        .streams("replyTarget", "http#replySource");
+        .streams("http", "target")
+        .streams("source", "http#target");
 
     @Rule
     public final TestRule chain = outerRule(nukleus).around(k3po).around(timeout);
 
     @Test
     @Specification({
-        "${control}/bind/server/initial/controller",
-        "${control}/bind/server/reply/controller",
-        "${control}/route/server/initial/controller",
-        "${control}/route/server/reply/controller",
+        "${route}/input/new/controller",
         "${streams}/response.status.101.with.upgrade/server/source",
         "${streams}/response.status.101.with.upgrade/server/target" })
     public void shouldSwitchProtocolAfterUpgrade() throws Exception
     {
+        k3po.start();
+        k3po.awaitBarrier("ROUTED_INPUT");
+        k3po.notifyBarrier("ROUTED_OUTPUT");
         k3po.finish();
     }
 }

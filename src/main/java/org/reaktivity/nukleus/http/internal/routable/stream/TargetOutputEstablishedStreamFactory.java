@@ -17,23 +17,19 @@ package org.reaktivity.nukleus.http.internal.routable.stream;
 
 import static java.lang.Character.toUpperCase;
 import static java.nio.charset.StandardCharsets.US_ASCII;
-import static org.reaktivity.nukleus.http.internal.routable.Route.headersMatch;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.Optional;
+import java.util.function.Function;
 import java.util.function.LongFunction;
 import java.util.function.LongSupplier;
-import java.util.function.LongUnaryOperator;
-import java.util.function.Predicate;
 
 import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
 import org.agrona.concurrent.MessageHandler;
 import org.agrona.concurrent.UnsafeBuffer;
-import org.reaktivity.nukleus.http.internal.routable.Route;
+import org.reaktivity.nukleus.http.internal.routable.Correlation;
 import org.reaktivity.nukleus.http.internal.routable.Source;
 import org.reaktivity.nukleus.http.internal.routable.Target;
 import org.reaktivity.nukleus.http.internal.types.OctetsFW;
@@ -45,7 +41,7 @@ import org.reaktivity.nukleus.http.internal.types.stream.HttpBeginExFW;
 import org.reaktivity.nukleus.http.internal.types.stream.ResetFW;
 import org.reaktivity.nukleus.http.internal.types.stream.WindowFW;
 
-public final class ServerReplyStreamFactory
+public final class TargetOutputEstablishedStreamFactory
 {
     private static final Map<String, String> EMPTY_HEADERS = Collections.emptyMap();
 
@@ -61,28 +57,28 @@ public final class ServerReplyStreamFactory
     private final HttpBeginExFW beginExRO = new HttpBeginExFW();
 
     private final Source source;
-    private final LongFunction<List<Route>> supplyRoutes;
-    private final LongSupplier supplyTargetId;
-    private final LongUnaryOperator correlateReply;
+    private final Function<String, Target> supplyTarget;
+    private final LongSupplier supplyStreamId;
+    private final LongFunction<Correlation> correlateEstablished;
 
-    public ServerReplyStreamFactory(
+    public TargetOutputEstablishedStreamFactory(
         Source source,
-        LongFunction<List<Route>> supplyRoutes,
-        LongSupplier supplyTargetId,
-        LongUnaryOperator correlateReply)
+        Function<String, Target> supplyTarget,
+        LongSupplier supplyStreamId,
+        LongFunction<Correlation> correlateEstablished)
     {
         this.source = source;
-        this.supplyRoutes = supplyRoutes;
-        this.supplyTargetId = supplyTargetId;
-        this.correlateReply = correlateReply;
+        this.supplyTarget = supplyTarget;
+        this.supplyStreamId = supplyStreamId;
+        this.correlateEstablished = correlateEstablished;
     }
 
     public MessageHandler newStream()
     {
-        return new ServerReplyStream()::handleStream;
+        return new TargetOutputEstablishedStream()::handleStream;
     }
 
-    private final class ServerReplyStream
+    private final class TargetOutputEstablishedStream
     {
         private MessageHandler streamState;
         private MessageHandler throttleState;
@@ -101,7 +97,7 @@ public final class ServerReplyStreamFactory
                     getClass().getSimpleName(), source.routableName(), sourceId, window, targetId);
         }
 
-        private ServerReplyStream()
+        private TargetOutputEstablishedStream()
         {
             this.streamState = this::beforeBegin;
             this.throttleState = this::throttleSkipNextWindow;
@@ -208,79 +204,66 @@ public final class ServerReplyStreamFactory
 
             final long newSourceId = beginRO.streamId();
             final long sourceRef = beginRO.referenceId();
-            final long correlationId = beginRO.correlationId();
+            final long targetCorrelationId = beginRO.correlationId();
             final OctetsFW extension = beginRO.extension();
 
-            final List<Route> routes = supplyRoutes.apply(sourceRef);
+            final Correlation correlation = correlateEstablished.apply(targetCorrelationId);
 
-            Map<String, String> headers = EMPTY_HEADERS;
-            if (extension.length() > 0)
+            if (sourceRef == 0L && correlation != null)
             {
-                final HttpBeginExFW beginEx = extension.get(beginExRO::wrap);
-                Map<String, String> headers0 = new LinkedHashMap<>();
-                beginEx.headers().forEach(h -> headers0.put(h.name().asString(), h.value().asString()));
-                headers = headers0;
-            }
+                final Target newTarget = supplyTarget.apply(correlation.source());
+                final long newTargetId = supplyStreamId.getAsLong();
+                final long sourceCorrelationId = correlation.sourceCorrelationId();
 
-            final Predicate<Route> predicate = headersMatch(headers);
-            final Optional<Route> optional = routes.stream().filter(predicate).findFirst();
-
-            if (optional.isPresent())
-            {
-                final Route route = optional.get();
-                final Target newTarget = route.target();
-                final long targetRef = route.targetRef();
-                final long newTargetId = supplyTargetId.getAsLong();
-
-                final long correlatedId = correlateReply.applyAsLong(correlationId);
-
-                if (correlatedId != -1L)
+                Map<String, String> headers = EMPTY_HEADERS;
+                if (extension.length() > 0)
                 {
-                    this.sourceId = newSourceId;
-                    this.target = newTarget;
-                    this.targetId = newTargetId;
+                    final HttpBeginExFW beginEx = extension.get(beginExRO::wrap);
+                    Map<String, String> headers0 = new LinkedHashMap<>();
+                    beginEx.headers().forEach(h -> headers0.put(h.name().asString(), h.value().asString()));
+                    headers = headers0;
+                }
 
-                    // TODO: replace with connection pool (start)
-                    target.doBegin(newTargetId, targetRef, correlatedId);
-                    newTarget.addThrottle(newTargetId, this::handleThrottle);
-                    // TODO: replace with connection pool (end)
+                this.sourceId = newSourceId;
+                this.target = newTarget;
+                this.targetId = newTargetId;
 
-                    // default status (and reason)
-                    String[] status = new String[] { "200", "OK" };
+                // TODO: replace with connection pool (start)
+                target.doBegin(newTargetId, 0L, sourceCorrelationId);
+                newTarget.addThrottle(newTargetId, this::handleThrottle);
+                // TODO: replace with connection pool (end)
 
-                    StringBuilder headersChars = new StringBuilder();
-                    headers.forEach((name, value) ->
+                // default status (and reason)
+                String[] status = new String[] { "200", "OK" };
+
+                StringBuilder headersChars = new StringBuilder();
+                headers.forEach((name, value) ->
+                {
+                    if (":status".equals(name))
                     {
-                        if (":status".equals(name))
+                        status[0] = value;
+                        if ("101".equals(status[0]))
                         {
-                            status[0] = value;
-                            if ("101".equals(status[0]))
-                            {
-                                status[1] = "Switching Protocols";
-                            }
+                            status[1] = "Switching Protocols";
                         }
-                        else
-                        {
-                            headersChars.append(toUpperCase(name.charAt(0))).append(name.substring(1))
-                                   .append(": ").append(value).append("\r\n");
-                        }
-                    });
+                    }
+                    else
+                    {
+                        headersChars.append(toUpperCase(name.charAt(0))).append(name.substring(1))
+                               .append(": ").append(value).append("\r\n");
+                    }
+                });
 
-                    String payloadChars =
-                            new StringBuilder().append("HTTP/1.1 ").append(status[0]).append(" ").append(status[1]).append("\r\n")
-                                               .append(headersChars).append("\r\n").toString();
+                String payloadChars =
+                        new StringBuilder().append("HTTP/1.1 ").append(status[0]).append(" ").append(status[1]).append("\r\n")
+                                           .append(headersChars).append("\r\n").toString();
 
-                    final DirectBuffer payload = new UnsafeBuffer(payloadChars.getBytes(US_ASCII));
+                final DirectBuffer payload = new UnsafeBuffer(payloadChars.getBytes(US_ASCII));
 
-                    target.doData(targetId, payload, 0, payload.capacity());
+                target.doData(targetId, payload, 0, payload.capacity());
 
-                    this.streamState = this::afterBeginOrData;
-                    this.throttleState = this::throttleNextThenSkipWindow;
-                }
-                else
-                {
-                    processUnexpected(buffer, index, length);
-                }
+                this.streamState = this::afterBeginOrData;
+                this.throttleState = this::throttleNextThenSkipWindow;
             }
             else
             {

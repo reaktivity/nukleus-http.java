@@ -21,6 +21,7 @@ import static java.nio.ByteOrder.nativeOrder;
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 
 import org.agrona.DirectBuffer;
 import org.agrona.collections.Long2ObjectHashMap;
@@ -30,15 +31,13 @@ import org.agrona.concurrent.broadcast.BroadcastReceiver;
 import org.agrona.concurrent.broadcast.CopyBroadcastReceiver;
 import org.agrona.concurrent.ringbuffer.RingBuffer;
 import org.reaktivity.nukleus.Controller;
-import org.reaktivity.nukleus.http.internal.types.Flyweight;
-import org.reaktivity.nukleus.http.internal.types.control.BindFW;
-import org.reaktivity.nukleus.http.internal.types.control.BoundFW;
+import org.reaktivity.nukleus.http.internal.types.OctetsFW;
 import org.reaktivity.nukleus.http.internal.types.control.ErrorFW;
 import org.reaktivity.nukleus.http.internal.types.control.HttpRouteExFW;
+import org.reaktivity.nukleus.http.internal.types.control.Role;
 import org.reaktivity.nukleus.http.internal.types.control.RouteFW;
 import org.reaktivity.nukleus.http.internal.types.control.RoutedFW;
-import org.reaktivity.nukleus.http.internal.types.control.UnbindFW;
-import org.reaktivity.nukleus.http.internal.types.control.UnboundFW;
+import org.reaktivity.nukleus.http.internal.types.control.State;
 import org.reaktivity.nukleus.http.internal.types.control.UnrouteFW;
 import org.reaktivity.nukleus.http.internal.types.control.UnroutedFW;
 
@@ -47,16 +46,12 @@ public final class HttpController implements Controller
     private static final int MAX_SEND_LENGTH = 1024; // TODO: Configuration and Context
 
     // TODO: thread-safe flyweights or command queue from public methods
-    private final BindFW.Builder bindRW = new BindFW.Builder();
-    private final UnbindFW.Builder unbindRW = new UnbindFW.Builder();
     private final RouteFW.Builder routeRW = new RouteFW.Builder();
     private final UnrouteFW.Builder unrouteRW = new UnrouteFW.Builder();
 
     private final HttpRouteExFW.Builder routeExRW = new HttpRouteExFW.Builder();
 
     private final ErrorFW errorRO = new ErrorFW();
-    private final BoundFW boundRO = new BoundFW();
-    private final UnboundFW unboundRO = new UnboundFW();
     private final RoutedFW routedRO = new RoutedFW();
     private final UnroutedFW unroutedRO = new UnroutedFW();
 
@@ -103,72 +98,28 @@ public final class HttpController implements Controller
         return "http";
     }
 
-    public CompletableFuture<Long> bind(
-        int kind)
-    {
-        final CompletableFuture<Long> promise = new CompletableFuture<Long>();
-
-        long correlationId = conductorCommands.nextCorrelationId();
-
-        BindFW bindRO = bindRW.wrap(atomicBuffer, 0, atomicBuffer.capacity())
-                              .correlationId(correlationId)
-                              .kind((byte) kind)
-                              .build();
-
-        if (!conductorCommands.write(bindRO.typeId(), bindRO.buffer(), bindRO.offset(), bindRO.length()))
-        {
-            commandSendFailed(promise);
-        }
-        else
-        {
-            commandSent(correlationId, promise);
-        }
-
-        return promise;
-    }
-
-    public CompletableFuture<Void> unbind(
-        long referenceId)
-    {
-        final CompletableFuture<Void> promise = new CompletableFuture<>();
-
-        long correlationId = conductorCommands.nextCorrelationId();
-
-        UnbindFW unbindRO = unbindRW.wrap(atomicBuffer, 0, atomicBuffer.capacity())
-                                    .correlationId(correlationId)
-                                    .referenceId(referenceId)
-                                    .build();
-
-        if (!conductorCommands.write(unbindRO.typeId(), unbindRO.buffer(), unbindRO.offset(), unbindRO.length()))
-        {
-            commandSendFailed(promise);
-        }
-        else
-        {
-            commandSent(correlationId, promise);
-        }
-
-        return promise;
-    }
-
-    public CompletableFuture<Void> route(
+    public CompletableFuture<Long> route(
+        Role role,
+        State state,
         String source,
         long sourceRef,
         String target,
         long targetRef,
         Map<String, String> headers)
     {
-        final CompletableFuture<Void> promise = new CompletableFuture<>();
+        final CompletableFuture<Long> promise = new CompletableFuture<>();
 
         long correlationId = conductorCommands.nextCorrelationId();
 
         RouteFW routeRO = routeRW.wrap(atomicBuffer, 0, atomicBuffer.capacity())
                                  .correlationId(correlationId)
+                                 .role(b -> b.set(role))
+                                 .state(b -> b.set(state))
                                  .source(source)
                                  .sourceRef(sourceRef)
                                  .target(target)
                                  .targetRef(targetRef)
-                                 .extension(e -> e.set(visitRouteEx(headers)))
+                                 .extension(extension(headers))
                                  .build();
 
         if (!conductorCommands.write(routeRO.typeId(), routeRO.buffer(), routeRO.offset(), routeRO.length()))
@@ -184,6 +135,8 @@ public final class HttpController implements Controller
     }
 
     public CompletableFuture<Void> unroute(
+        Role role,
+        State state,
         String source,
         long sourceRef,
         String target,
@@ -196,11 +149,13 @@ public final class HttpController implements Controller
 
         UnrouteFW unrouteRO = unrouteRW.wrap(atomicBuffer, 0, atomicBuffer.capacity())
                                  .correlationId(correlationId)
+                                 .role(b -> b.set(role))
+                                 .state(b -> b.set(state))
                                  .source(source)
                                  .sourceRef(sourceRef)
                                  .target(target)
                                  .targetRef(targetRef)
-                                 .extension(e -> e.set(visitRouteEx(headers)))
+                                 .extension(extension(headers))
                                  .build();
 
         if (!conductorCommands.write(unrouteRO.typeId(), unrouteRO.buffer(), unrouteRO.offset(), unrouteRO.length()))
@@ -236,20 +191,27 @@ public final class HttpController implements Controller
         return new HttpStreams(streamsCapacity, throttleCapacity, path, true);
     }
 
-    private Flyweight.Builder.Visitor visitRouteEx(
+    private Consumer<OctetsFW.Builder> extension(
         Map<String, String> headers)
     {
-        return (buffer, offset, limit) ->
-            routeExRW.wrap(buffer, offset, limit)
-                     .headers(hs ->
-                     {
-                         headers.forEach((k, v) ->
+        if (headers != null)
+        {
+            return e -> e.set((buffer, offset, limit) ->
+                routeExRW.wrap(buffer, offset, limit)
+                         .headers(hs ->
                          {
-                             hs.item(h -> h.name(k).value(v));
-                         });
-                     })
-                     .build()
-                     .length();
+                             headers.forEach((k, v) ->
+                             {
+                                 hs.item(h -> h.name(k).value(v));
+                             });
+                         })
+                         .build()
+                         .length());
+        }
+        else
+        {
+            return b -> {};
+        }
     }
 
     private int handleResponse(
@@ -262,12 +224,6 @@ public final class HttpController implements Controller
         {
         case ErrorFW.TYPE_ID:
             handleErrorResponse(buffer, index, length);
-            break;
-        case BoundFW.TYPE_ID:
-            handleBoundResponse(buffer, index, length);
-            break;
-        case UnboundFW.TYPE_ID:
-            handleUnboundResponse(buffer, index, length);
             break;
         case RoutedFW.TYPE_ID:
             handleRoutedResponse(buffer, index, length);
@@ -297,37 +253,8 @@ public final class HttpController implements Controller
         }
     }
 
+
     @SuppressWarnings("unchecked")
-    private void handleBoundResponse(
-        DirectBuffer buffer,
-        int index,
-        int length)
-    {
-        boundRO.wrap(buffer, index, length);
-        long correlationId = boundRO.correlationId();
-
-        CompletableFuture<Long> promise = (CompletableFuture<Long>)promisesByCorrelationId.remove(correlationId);
-        if (promise != null)
-        {
-            commandSucceeded(promise, boundRO.referenceId());
-        }
-    }
-
-    private void handleUnboundResponse(
-        DirectBuffer buffer,
-        int index,
-        int length)
-    {
-        unboundRO.wrap(buffer, index, length);
-        long correlationId = unboundRO.correlationId();
-
-        CompletableFuture<?> promise = promisesByCorrelationId.remove(correlationId);
-        if (promise != null)
-        {
-            commandSucceeded(promise);
-        }
-    }
-
     private void handleRoutedResponse(
         DirectBuffer buffer,
         int index,
@@ -335,11 +262,12 @@ public final class HttpController implements Controller
     {
         routedRO.wrap(buffer, index, length);
         long correlationId = routedRO.correlationId();
+        long sourceRef = routedRO.sourceRef();
 
-        CompletableFuture<?> promise = promisesByCorrelationId.remove(correlationId);
+        CompletableFuture<Long> promise = (CompletableFuture<Long>) promisesByCorrelationId.remove(correlationId);
         if (promise != null)
         {
-            promise.complete(null);
+            commandSucceeded(promise, sourceRef);
         }
     }
 
@@ -354,7 +282,7 @@ public final class HttpController implements Controller
         CompletableFuture<?> promise = promisesByCorrelationId.remove(correlationId);
         if (promise != null)
         {
-            promise.complete(null);
+            commandSucceeded(promise);
         }
     }
 

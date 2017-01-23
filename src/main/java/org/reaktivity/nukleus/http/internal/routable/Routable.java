@@ -26,13 +26,13 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiFunction;
+import java.util.function.LongFunction;
 import java.util.function.LongSupplier;
-import java.util.function.LongUnaryOperator;
 import java.util.function.Predicate;
 
 import org.agrona.LangUtil;
 import org.agrona.collections.Long2ObjectHashMap;
-import org.agrona.collections.LongLongConsumer;
 import org.agrona.concurrent.AtomicBuffer;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.reaktivity.nukleus.Nukleus;
@@ -53,29 +53,30 @@ public final class Routable extends Nukleus.Composite
     private final Map<String, Source> sourcesByPartitionName;
     private final Map<String, Target> targetsByName;
     private final Long2ObjectHashMap<List<Route>> routesByRef;
-    private final Long2ObjectHashMap<List<Route>> rejectsByRef;
-    private final LongLongConsumer correlateInitial;
-    private final LongUnaryOperator correlateReply;
+    private final BiFunction<Long, Correlation, Correlation> correlateNew;
+    private final LongFunction<Correlation> correlateEstablished;
+    private final LongFunction<Correlation> lookupEstablished;
     private final LongSupplier supplyTargetId;
 
     public Routable(
         Context context,
         Conductor conductor,
         String sourceName,
-        LongLongConsumer correlateInitial,
-        LongUnaryOperator correlateReply)
+        BiFunction<Long, Correlation, Correlation> correlateNew,
+        LongFunction<Correlation> correlateEstablished,
+        LongFunction<Correlation> lookupEstablished)
     {
         this.context = context;
         this.conductor = conductor;
         this.sourceName = sourceName;
-        this.correlateInitial = correlateInitial;
-        this.correlateReply = correlateReply;
+        this.correlateNew = correlateNew;
+        this.correlateEstablished = correlateEstablished;
+        this.lookupEstablished = lookupEstablished;
         this.writeBuffer = new UnsafeBuffer(new byte[context.maxMessageLength()]);
         this.sourcesByPartitionName = new HashMap<>();
         this.targetsByName = new HashMap<>();
         this.routesByRef = new Long2ObjectHashMap<>();
-        this.rejectsByRef = new Long2ObjectHashMap<>();
-        this.supplyTargetId = context.counters().streamsTargeted()::increment;
+        this.supplyTargetId = context.counters().streamsSourced()::increment;
     }
 
     @Override
@@ -99,13 +100,13 @@ public final class Routable extends Nukleus.Composite
     {
         try
         {
-            final Target target = targetsByName.computeIfAbsent(targetName, this::newTarget);
+            final Target target = supplyTarget(targetName);
             final Route newRoute = new Route(sourceName, sourceRef, target, targetRef, headers);
 
             routesByRef.computeIfAbsent(sourceRef, this::newRoutes)
                        .add(newRoute);
 
-            conductor.onRoutedResponse(correlationId);
+            conductor.onRoutedResponse(correlationId, sourceRef);
         }
         catch (Exception ex)
         {
@@ -140,56 +141,6 @@ public final class Routable extends Nukleus.Composite
         }
     }
 
-    public void doReject(
-        long correlationId,
-        long sourceRef,
-        String targetName,
-        long targetRef,
-        Map<String, String> headers)
-    {
-        try
-        {
-            final Target target = targetsByName.computeIfAbsent(targetName, this::newTarget);
-            final Route newRoute = new Route(sourceName, sourceRef, target, targetRef, headers);
-
-            rejectsByRef.computeIfAbsent(sourceRef, this::newRoutes)
-                        .add(newRoute);
-
-            conductor.onRejectedResponse(correlationId);
-        }
-        catch (Exception ex)
-        {
-            conductor.onErrorResponse(correlationId);
-            LangUtil.rethrowUnchecked(ex);
-        }
-    }
-
-    public void doUnreject(
-        long correlationId,
-        long sourceRef,
-        String targetName,
-        long targetRef,
-        Map<String, String> headers)
-    {
-        final List<Route> rejects = supplyRejects(sourceRef);
-
-        final Predicate<Route> filter =
-                sourceMatches(sourceName)
-                 .and(sourceRefMatches(sourceRef))
-                 .and(targetMatches(targetName))
-                 .and(targetRefMatches(targetRef))
-                 .and(headersMatch(headers));
-
-        if (rejects.removeIf(filter))
-        {
-            conductor.onUnrejectedResponse(correlationId);
-        }
-        else
-        {
-            conductor.onErrorResponse(correlationId);
-        }
-    }
-
     private List<Route> newRoutes(
         long sourceRef)
     {
@@ -200,12 +151,6 @@ public final class Routable extends Nukleus.Composite
         long referenceId)
     {
         return routesByRef.getOrDefault(referenceId, EMPTY_ROUTES);
-    }
-
-    private List<Route> supplyRejects(
-        long referenceId)
-    {
-        return rejectsByRef.getOrDefault(referenceId, EMPTY_ROUTES);
     }
 
     private Source newSource(
@@ -219,8 +164,15 @@ public final class Routable extends Nukleus.Composite
             .build();
 
         return include(new Source(sourceName, partitionName, layout, writeBuffer,
-                                  this::supplyRoutes, this::supplyRejects, supplyTargetId,
-                                  correlateInitial, correlateReply));
+                                  this::supplyRoutes, supplyTargetId,
+                                  this::supplyTarget, correlateNew, lookupEstablished,
+                                  correlateEstablished));
+    }
+
+    private Target supplyTarget(
+        String targetName)
+    {
+        return targetsByName.computeIfAbsent(targetName, this::newTarget);
     }
 
     private Target newTarget(
