@@ -363,7 +363,7 @@ public final class SourceInputStreamFactory
                     {
                         final long newTargetId = supplyStreamId.getAsLong();
                         final long targetCorrelationId = newTargetId;
-                        final Correlation correlation = new Correlation(source.routableName(), correlationId, OUTPUT_ESTABLISHED);
+                        final Correlation correlation = new Correlation(correlationId, source.routableName(), OUTPUT_ESTABLISHED);
 
                         correlateNew.accept(targetCorrelationId, correlation);
 

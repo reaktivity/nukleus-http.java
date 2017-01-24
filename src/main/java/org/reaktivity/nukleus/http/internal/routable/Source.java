@@ -177,7 +177,7 @@ public final class Source implements Nukleus
         final long sourceRef = beginRO.referenceId();
         final long correlationId = beginRO.correlationId();
 
-        RouteKind routeKind = resolveRouteKind(sourceRef, correlationId);
+        RouteKind routeKind = resolve(sourceRef, correlationId);
         if (routeKind != null)
         {
             final Supplier<MessageHandler> streamFactory = streamFactories.get(routeKind);
@@ -189,30 +189,6 @@ public final class Source implements Nukleus
         {
             doReset(sourceId);
         }
-    }
-
-    private RouteKind resolveRouteKind(
-        final long sourceRef,
-        final long correlationId)
-    {
-        RouteKind routeKind = null;
-        if (sourceRef == 0L)
-        {
-            final Correlation correlation = lookupEstablished.apply(correlationId);
-            if (correlation != null)
-            {
-                routeKind = correlation.getEstablishedRouteKind();
-            }
-            else
-            {
-                routeKind = null;
-            }
-        }
-        else
-        {
-            routeKind = RouteKind.match(sourceRef);
-        }
-        return routeKind;
     }
 
     public void doWindow(
@@ -238,5 +214,31 @@ public final class Source implements Nukleus
         long streamId)
     {
         streams.remove(streamId);
+    }
+
+    private RouteKind resolve(
+        final long sourceRef,
+        final long correlationId)
+    {
+        RouteKind routeKind = null;
+
+        if (sourceRef == 0L)
+        {
+            final Correlation correlation = lookupEstablished.apply(correlationId);
+            if (correlation != null)
+            {
+                routeKind = correlation.established();
+            }
+            else
+            {
+                routeKind = null;
+            }
+        }
+        else
+        {
+            routeKind = RouteKind.match(sourceRef);
+        }
+
+        return routeKind;
     }
 }

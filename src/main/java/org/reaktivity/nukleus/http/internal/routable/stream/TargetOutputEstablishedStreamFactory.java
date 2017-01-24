@@ -213,7 +213,7 @@ public final class TargetOutputEstablishedStreamFactory
             {
                 final Target newTarget = supplyTarget.apply(correlation.source());
                 final long newTargetId = supplyStreamId.getAsLong();
-                final long sourceCorrelationId = correlation.sourceCorrelationId();
+                final long sourceCorrelationId = correlation.id();
 
                 Map<String, String> headers = EMPTY_HEADERS;
                 if (extension.length() > 0)

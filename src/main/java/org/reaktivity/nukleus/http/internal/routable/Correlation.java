@@ -23,40 +23,41 @@ import org.reaktivity.nukleus.http.internal.router.RouteKind;
 
 public class Correlation
 {
-    private final String sourceName;
-    private final long sourceCorrelationId;
-    private final RouteKind establishedRouteKind;
+    private final String source;
+    private final long id;
+    private final RouteKind established;
 
     public Correlation(
-        String sourceName,
-        long sourceCorrelationId,
-        RouteKind establishedRouteKind)
+        long id,
+        String source,
+        RouteKind established)
     {
-        this.sourceName = requireNonNull(sourceName, "sourceName");
-        this.sourceCorrelationId = sourceCorrelationId;
-        this.establishedRouteKind = establishedRouteKind;
+        this.id = id;
+        this.source = requireNonNull(source, "source");
+        this.established = requireNonNull(established, "established");
     }
 
     public String source()
     {
-        return sourceName;
+        return source;
     }
 
-    public long sourceCorrelationId()
+    public long id()
     {
-        return sourceCorrelationId;
+        return id;
     }
 
-    public RouteKind getEstablishedRouteKind()
+    public RouteKind established()
     {
-        return establishedRouteKind;
+        return established;
     }
 
     @Override
     public int hashCode()
     {
-        int result = sourceName.hashCode();
-        result = 31 * result + Long.hashCode(sourceCorrelationId);
+        int result = Long.hashCode(id);
+        result = 31 * result + source.hashCode();
+        result = 31 * result + established.hashCode();
 
         return result;
     }
@@ -71,13 +72,14 @@ public class Correlation
         }
 
         Correlation that = (Correlation) obj;
-        return this.sourceCorrelationId == that.sourceCorrelationId &&
-                Objects.equals(this.sourceName, that.sourceName);
+        return this.id == that.id &&
+                this.established == that.established &&
+                Objects.equals(this.source, that.source);
     }
 
     @Override
     public String toString()
     {
-        return String.format("[source=\"%s\", sourceCorrelationId=%s]", sourceName, sourceCorrelationId);
+        return String.format("[id=%s, source=\"%s\", established=%s]", id, source, established);
     }
 }
