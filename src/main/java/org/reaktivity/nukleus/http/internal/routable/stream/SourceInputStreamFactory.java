@@ -26,7 +26,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.BiFunction;
 import java.util.function.LongFunction;
 import java.util.function.LongSupplier;
 import java.util.function.Predicate;
@@ -48,6 +47,7 @@ import org.reaktivity.nukleus.http.internal.types.stream.EndFW;
 import org.reaktivity.nukleus.http.internal.types.stream.FrameFW;
 import org.reaktivity.nukleus.http.internal.types.stream.ResetFW;
 import org.reaktivity.nukleus.http.internal.types.stream.WindowFW;
+import org.reaktivity.nukleus.http.internal.util.function.LongObjectBiConsumer;
 
 public final class SourceInputStreamFactory
 {
@@ -66,14 +66,14 @@ public final class SourceInputStreamFactory
     private final LongFunction<List<Route>> supplyRoutes;
     private final LongSupplier supplyStreamId;
     private final Target rejectTarget;
-    private final BiFunction<Long, Correlation, Correlation> correlateNew;
+    private final LongObjectBiConsumer<Correlation> correlateNew;
 
     public SourceInputStreamFactory(
         Source source,
         LongFunction<List<Route>> supplyRoutes,
         LongSupplier supplyStreamId,
         Target rejectTarget,
-        BiFunction<Long, Correlation, Correlation> correlateNew)
+        LongObjectBiConsumer<Correlation> correlateNew)
     {
         this.source = source;
         this.supplyRoutes = supplyRoutes;
@@ -365,7 +365,7 @@ public final class SourceInputStreamFactory
                         final long targetCorrelationId = newTargetId;
                         final Correlation correlation = new Correlation(source.routableName(), correlationId, OUTPUT_ESTABLISHED);
 
-                        correlateNew.apply(targetCorrelationId, correlation);
+                        correlateNew.accept(targetCorrelationId, correlation);
 
                         final Route route = optional.get();
                         final Target newTarget = route.target();

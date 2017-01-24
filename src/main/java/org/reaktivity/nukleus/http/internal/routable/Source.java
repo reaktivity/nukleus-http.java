@@ -17,7 +17,6 @@ package org.reaktivity.nukleus.http.internal.routable;
 
 import java.util.EnumMap;
 import java.util.List;
-import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.LongFunction;
 import java.util.function.LongSupplier;
@@ -39,6 +38,7 @@ import org.reaktivity.nukleus.http.internal.types.stream.BeginFW;
 import org.reaktivity.nukleus.http.internal.types.stream.FrameFW;
 import org.reaktivity.nukleus.http.internal.types.stream.ResetFW;
 import org.reaktivity.nukleus.http.internal.types.stream.WindowFW;
+import org.reaktivity.nukleus.http.internal.util.function.LongObjectBiConsumer;
 
 public final class Source implements Nukleus
 {
@@ -67,7 +67,7 @@ public final class Source implements Nukleus
         LongFunction<List<Route>> supplyRoutes,
         LongSupplier supplyTargetId,
         Function<String, Target> supplyTarget,
-        BiFunction<Long, Correlation, Correlation> correlateNew,
+        LongObjectBiConsumer<Correlation> correlateNew,
         LongFunction<Correlation> correlateEstablished,
         LongFunction<Correlation> lookupEstablished)
     {

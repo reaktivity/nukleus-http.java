@@ -16,7 +16,6 @@
 package org.reaktivity.nukleus.http.internal.routable.stream;
 
 import java.util.List;
-import java.util.function.BiFunction;
 import java.util.function.LongFunction;
 import java.util.function.LongSupplier;
 
@@ -30,6 +29,7 @@ import org.reaktivity.nukleus.http.internal.types.stream.BeginFW;
 import org.reaktivity.nukleus.http.internal.types.stream.DataFW;
 import org.reaktivity.nukleus.http.internal.types.stream.EndFW;
 import org.reaktivity.nukleus.http.internal.types.stream.FrameFW;
+import org.reaktivity.nukleus.http.internal.util.function.LongObjectBiConsumer;
 
 public final class SourceOutputStreamFactory
 {
@@ -42,13 +42,13 @@ public final class SourceOutputStreamFactory
     private final Source source;
     private final LongSupplier supplyTargetId;
     private final LongFunction<List<Route>> supplyRoutes;
-    private final BiFunction<Long, Correlation, Correlation> correlateNew;
+    private final LongObjectBiConsumer<Correlation> correlateNew;
 
     public SourceOutputStreamFactory(
         Source source,
         LongFunction<List<Route>> supplyRoutes,
         LongSupplier supplyTargetId,
-        BiFunction<Long, Correlation, Correlation> correlateNew)
+        LongObjectBiConsumer<Correlation> correlateNew)
     {
         this.source = source;
         this.supplyTargetId = supplyTargetId;

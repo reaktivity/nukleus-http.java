@@ -26,7 +26,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.BiFunction;
 import java.util.function.LongFunction;
 import java.util.function.LongSupplier;
 import java.util.function.Predicate;
@@ -40,6 +39,7 @@ import org.reaktivity.nukleus.Reaktive;
 import org.reaktivity.nukleus.http.internal.Context;
 import org.reaktivity.nukleus.http.internal.conductor.Conductor;
 import org.reaktivity.nukleus.http.internal.layouts.StreamsLayout;
+import org.reaktivity.nukleus.http.internal.util.function.LongObjectBiConsumer;
 
 @Reaktive
 public final class Routable extends Nukleus.Composite
@@ -53,7 +53,7 @@ public final class Routable extends Nukleus.Composite
     private final Map<String, Source> sourcesByPartitionName;
     private final Map<String, Target> targetsByName;
     private final Long2ObjectHashMap<List<Route>> routesByRef;
-    private final BiFunction<Long, Correlation, Correlation> correlateNew;
+    private final LongObjectBiConsumer<Correlation> correlateNew;
     private final LongFunction<Correlation> correlateEstablished;
     private final LongFunction<Correlation> lookupEstablished;
     private final LongSupplier supplyTargetId;
@@ -62,7 +62,7 @@ public final class Routable extends Nukleus.Composite
         Context context,
         Conductor conductor,
         String sourceName,
-        BiFunction<Long, Correlation, Correlation> correlateNew,
+        LongObjectBiConsumer<Correlation> correlateNew,
         LongFunction<Correlation> correlateEstablished,
         LongFunction<Correlation> lookupEstablished)
     {
