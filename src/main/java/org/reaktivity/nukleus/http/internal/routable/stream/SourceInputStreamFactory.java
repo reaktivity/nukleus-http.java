@@ -17,7 +17,7 @@ package org.reaktivity.nukleus.http.internal.routable.stream;
 
 import static java.lang.Integer.parseInt;
 import static org.reaktivity.nukleus.http.internal.routable.Route.headersMatch;
-import static org.reaktivity.nukleus.http.internal.routable.Route.sourceMatches;
+import static org.reaktivity.nukleus.http.internal.router.RouteKind.OUTPUT_ESTABLISHED;
 import static org.reaktivity.nukleus.http.internal.util.BufferUtil.limitOfBytes;
 
 import java.net.URI;
@@ -34,9 +34,9 @@ import java.util.regex.Pattern;
 
 import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
-import org.agrona.collections.LongLongConsumer;
 import org.agrona.concurrent.MessageHandler;
 import org.agrona.concurrent.UnsafeBuffer;
+import org.reaktivity.nukleus.http.internal.routable.Correlation;
 import org.reaktivity.nukleus.http.internal.routable.Route;
 import org.reaktivity.nukleus.http.internal.routable.Source;
 import org.reaktivity.nukleus.http.internal.routable.Target;
@@ -47,8 +47,9 @@ import org.reaktivity.nukleus.http.internal.types.stream.EndFW;
 import org.reaktivity.nukleus.http.internal.types.stream.FrameFW;
 import org.reaktivity.nukleus.http.internal.types.stream.ResetFW;
 import org.reaktivity.nukleus.http.internal.types.stream.WindowFW;
+import org.reaktivity.nukleus.http.internal.util.function.LongObjectBiConsumer;
 
-public final class ServerInitialStreamFactory
+public final class SourceInputStreamFactory
 {
     private static final byte[] CRLFCRLF_BYTES = "\r\n\r\n".getBytes(StandardCharsets.US_ASCII);
 
@@ -63,30 +64,30 @@ public final class ServerInitialStreamFactory
 
     private final Source source;
     private final LongFunction<List<Route>> supplyRoutes;
-    private final LongFunction<List<Route>> supplyRejects;
-    private final LongSupplier supplyTargetId;
-    private final LongLongConsumer correlateInitial;
+    private final LongSupplier supplyStreamId;
+    private final Target rejectTarget;
+    private final LongObjectBiConsumer<Correlation> correlateNew;
 
-    public ServerInitialStreamFactory(
+    public SourceInputStreamFactory(
         Source source,
         LongFunction<List<Route>> supplyRoutes,
-        LongFunction<List<Route>> supplyRejects,
-        LongSupplier supplyTargetId,
-        LongLongConsumer correlateInitial)
+        LongSupplier supplyStreamId,
+        Target rejectTarget,
+        LongObjectBiConsumer<Correlation> correlateNew)
     {
         this.source = source;
         this.supplyRoutes = supplyRoutes;
-        this.supplyRejects = supplyRejects;
-        this.supplyTargetId = supplyTargetId;
-        this.correlateInitial = correlateInitial;
+        this.supplyStreamId = supplyStreamId;
+        this.rejectTarget = rejectTarget;
+        this.correlateNew = correlateNew;
     }
 
     public MessageHandler newStream()
     {
-        return new ServerInitialStream()::handleStream;
+        return new SourceInputStream()::handleStream;
     }
 
-    private final class ServerInitialStream
+    private final class SourceInputStream
     {
         private MessageHandler streamState;
         private MessageHandler throttleState;
@@ -109,7 +110,7 @@ public final class ServerInitialStreamFactory
                     getClass().getSimpleName(), source.routableName(), sourceId, window, targetId);
         }
 
-        private ServerInitialStream()
+        private SourceInputStream()
         {
             this.streamState = this::streamBeforeBegin;
             this.throttleState = this::throttleSkipNextWindow;
@@ -216,33 +217,22 @@ public final class ServerInitialStreamFactory
             int requestBytes,
             String payloadChars)
         {
-            final Optional<Route> optional = resolveReject(sourceRef);
+            final Target target = rejectTarget;
+            final long newTargetId = supplyStreamId.getAsLong();
 
-            if (optional.isPresent())
-            {
-                final Route reject = optional.get();
-                final Target target = reject.target();
-                final long targetRef = reject.targetRef();
-                final long newTargetId = supplyTargetId.getAsLong();
+            // TODO: replace with connection pool (start)
+            target.doBegin(newTargetId, 0L, correlationId);
+            target.addThrottle(newTargetId, this::handleThrottle);
+            // TODO: replace with connection pool (end)
 
-                // TODO: replace with connection pool (start)
-                target.doBegin(newTargetId, targetRef, correlationId);
-                target.addThrottle(newTargetId, this::handleThrottle);
-                // TODO: replace with connection pool (end)
+            // TODO: acquire slab for response if targetWindow requires partial write
+            DirectBuffer payload = new UnsafeBuffer(payloadChars.getBytes(StandardCharsets.UTF_8));
+            target.doData(newTargetId, payload, 0, payload.capacity());
 
-                // TODO: acquire slab for response if targetWindow requires partial write
-                DirectBuffer payload = new UnsafeBuffer(payloadChars.getBytes(StandardCharsets.UTF_8));
-                target.doData(newTargetId, payload, 0, payload.capacity());
-
-                this.decoderState = this::decodeHttpBegin;
-                this.streamState = this::streamAfterReplyOrReset;
-                this.throttleState = this::throttleSkipNextWindow;
-                this.sourceUpdateDeferred = requestBytes - payload.capacity();
-            }
-            else
-            {
-                processUnexpected(sourceId);
-            }
+            this.decoderState = this::decodeHttpBegin;
+            this.streamState = this::streamAfterReplyOrReset;
+            this.throttleState = this::throttleSkipNextWindow;
+            this.sourceUpdateDeferred = requestBytes - payload.capacity();
         }
 
         private void processBegin(
@@ -371,10 +361,11 @@ public final class ServerInitialStreamFactory
                     final Optional<Route> optional = resolveTarget(sourceRef, headers);
                     if (optional.isPresent())
                     {
-                        final long newTargetId = supplyTargetId.getAsLong();
+                        final long newTargetId = supplyStreamId.getAsLong();
                         final long targetCorrelationId = newTargetId;
+                        final Correlation correlation = new Correlation(correlationId, source.routableName(), OUTPUT_ESTABLISHED);
 
-                        correlateInitial.accept(targetCorrelationId, correlationId);
+                        correlateNew.accept(targetCorrelationId, correlation);
 
                         final Route route = optional.get();
                         final Target newTarget = route.target();
@@ -476,15 +467,6 @@ public final class ServerInitialStreamFactory
         {
             final List<Route> routes = supplyRoutes.apply(sourceRef);
             final Predicate<Route> predicate = headersMatch(headers);
-
-            return routes.stream().filter(predicate).findFirst();
-        }
-
-        private Optional<Route> resolveReject(
-            long sourceRef)
-        {
-            final List<Route> routes = supplyRejects.apply(sourceRef);
-            final Predicate<Route> predicate = sourceMatches(source.routableName());
 
             return routes.stream().filter(predicate).findFirst();
         }

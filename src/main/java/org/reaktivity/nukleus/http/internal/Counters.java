@@ -20,29 +20,29 @@ import org.agrona.concurrent.status.CountersManager;
 
 public final class Counters implements AutoCloseable
 {
-    private final AtomicCounter targetsBound;
-    private final AtomicCounter streamsTargeted;
+    private final AtomicCounter routesSourced;
+    private final AtomicCounter streamsSourced;
 
     Counters(CountersManager countersManager)
     {
-        targetsBound = countersManager.newCounter("targetsBound");
-        streamsTargeted = countersManager.newCounter("streamsTargeted");
+        routesSourced = countersManager.newCounter("routesSourced");
+        streamsSourced = countersManager.newCounter("streamsSourced");
     }
 
     @Override
     public void close() throws Exception
     {
-        targetsBound.close();
-        streamsTargeted.close();
+        routesSourced.close();
+        streamsSourced.close();
     }
 
-    public AtomicCounter targetsBound()
+    public AtomicCounter routesSourced()
     {
-        return targetsBound;
+        return routesSourced;
     }
 
-    public AtomicCounter streamsTargeted()
+    public AtomicCounter streamsSourced()
     {
-        return streamsTargeted;
+        return streamsSourced;
     }
 }

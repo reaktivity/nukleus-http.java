@@ -18,40 +18,40 @@ package org.reaktivity.nukleus.http.internal.routable.stream;
 import java.util.List;
 import java.util.function.LongFunction;
 import java.util.function.LongSupplier;
-import java.util.function.LongUnaryOperator;
 
 import org.agrona.MutableDirectBuffer;
 import org.agrona.concurrent.MessageHandler;
+import org.reaktivity.nukleus.http.internal.routable.Correlation;
 import org.reaktivity.nukleus.http.internal.routable.Route;
 import org.reaktivity.nukleus.http.internal.routable.Source;
 
-public final class ClientReplyStreamFactory
+public final class TargetInputEstablishedStreamFactory
 {
     private final Source source;
     private final LongFunction<List<Route>> supplyRoutes;
     private final LongSupplier supplyTargetId;
-    private final LongUnaryOperator correlateReply;
+    private final LongFunction<Correlation> correlateEstablished;
 
-    public ClientReplyStreamFactory(
+    public TargetInputEstablishedStreamFactory(
         Source source,
         LongFunction<List<Route>> supplyRoutes,
         LongSupplier supplyTargetId,
-        LongUnaryOperator correlateReply)
+        LongFunction<Correlation> correlateEstablished)
     {
         this.source = source;
         this.supplyRoutes = supplyRoutes;
         this.supplyTargetId = supplyTargetId;
-        this.correlateReply = correlateReply;
+        this.correlateEstablished = correlateEstablished;
     }
 
     public MessageHandler newStream()
     {
-        return new ClientReplyStream()::handleStream;
+        return new TargetInputEstablishedStream()::handleStream;
     }
 
-    private final class ClientReplyStream
+    private final class TargetInputEstablishedStream
     {
-        private ClientReplyStream()
+        private TargetInputEstablishedStream()
         {
             // TODO Auto-generated constructor stub
         }

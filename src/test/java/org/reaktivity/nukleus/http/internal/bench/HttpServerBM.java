@@ -23,8 +23,8 @@ import static org.agrona.BitUtil.SIZE_OF_INT;
 import static org.agrona.BitUtil.SIZE_OF_LONG;
 import static org.reaktivity.nukleus.Configuration.DIRECTORY_PROPERTY_NAME;
 import static org.reaktivity.nukleus.Configuration.STREAMS_BUFFER_CAPACITY_PROPERTY_NAME;
-import static org.reaktivity.nukleus.http.internal.router.RouteKind.SERVER_INITIAL;
-import static org.reaktivity.nukleus.http.internal.router.RouteKind.SERVER_REPLY;
+import static org.reaktivity.nukleus.http.internal.types.control.Role.INPUT;
+import static org.reaktivity.nukleus.http.internal.types.control.State.NEW;
 
 import java.io.File;
 import java.io.IOException;
@@ -106,19 +106,18 @@ public class HttpServerBM
     private final DataFW.Builder dataRW = new DataFW.Builder();
     private final WindowFW.Builder windowRW = new WindowFW.Builder();
 
-    private HttpStreams initialStreams;
-    private HttpStreams replyStreams;
+    private HttpStreams sourceInputStreams;
+    private HttpStreams sourceOutputEstStreams;
 
     private MutableDirectBuffer throttleBuffer;
 
-    private long initialRef;
-    private long replyRef;
+    private long sourceInputRef;
+    private long targetInputRef;
 
-    private long targetRef;
-    private long sourceId;
+    private long sourceInputId;
     private DataFW data;
 
-    private MessageHandler replyHandler;
+    private MessageHandler sourceOutputEstHandler;
 
     @Setup(Level.Trial)
     public void reinit() throws Exception
@@ -126,29 +125,25 @@ public class HttpServerBM
         final Random random = new Random();
         final HttpController controller = reaktor.controller(HttpController.class);
 
-        this.initialRef = controller.bind(SERVER_INITIAL.kind()).get();
-        this.replyRef = controller.bind(SERVER_REPLY.kind()).get();
-        this.targetRef = random.nextLong();
-        this.replyHandler = this::processBegin;
+        this.targetInputRef = random.nextLong();
+        this.sourceInputRef = controller.route(INPUT, NEW, "source", 0L, "target", targetInputRef, emptyMap()).get();
 
-        controller.route("source", initialRef, "http", replyRef, emptyMap()).get();
-        controller.route("http", replyRef, "target", targetRef, emptyMap()).get();
+        this.sourceInputStreams = controller.streams("source");
+        this.sourceOutputEstStreams = controller.streams("http", "target");
 
-        this.initialStreams = controller.streams("source");
-        this.replyStreams = controller.streams("http", "target");
-
-        this.sourceId = random.nextLong();
+        this.sourceInputId = random.nextLong();
+        this.sourceOutputEstHandler = this::processBegin;
 
         final AtomicBuffer writeBuffer = new UnsafeBuffer(new byte[256]);
 
         BeginFW begin = beginRW.wrap(writeBuffer, 0, writeBuffer.capacity())
-                .streamId(sourceId)
-                .referenceId(initialRef)
+                .streamId(sourceInputId)
+                .referenceId(sourceInputRef)
                 .correlationId(random.nextLong())
                 .extension(e -> e.reset())
                 .build();
 
-        this.initialStreams.writeStreams(begin.typeId(), begin.buffer(), begin.offset(), begin.length());
+        this.sourceInputStreams.writeStreams(begin.typeId(), begin.buffer(), begin.offset(), begin.length());
 
         String payload =
                 "POST / HTTP/1.1\r\n" +
@@ -159,7 +154,7 @@ public class HttpServerBM
         byte[] sendArray = payload.getBytes(StandardCharsets.UTF_8);
 
         this.data = dataRW.wrap(writeBuffer, 0, writeBuffer.capacity())
-                          .streamId(sourceId)
+                          .streamId(sourceInputId)
                           .payload(p -> p.set(sendArray))
                           .extension(e -> e.reset())
                           .build();
@@ -172,17 +167,13 @@ public class HttpServerBM
     {
         HttpController controller = reaktor.controller(HttpController.class);
 
-        controller.unroute("source", initialRef, "http", replyRef, null).get();
-        controller.unroute("http", replyRef, "target", targetRef, null).get();
+        controller.unroute(INPUT, NEW, "source", sourceInputRef, "target", targetInputRef, null).get();
 
-        controller.unbind(initialRef).get();
-        controller.unbind(replyRef).get();
+        this.sourceInputStreams.close();
+        this.sourceInputStreams = null;
 
-        this.initialStreams.close();
-        this.initialStreams = null;
-
-        this.replyStreams.close();
-        this.replyStreams = null;
+        this.sourceOutputEstStreams.close();
+        this.sourceOutputEstStreams = null;
     }
 
     @Benchmark
@@ -191,13 +182,13 @@ public class HttpServerBM
     public void writer(Control control) throws Exception
     {
         while (!control.stopMeasurement &&
-               !initialStreams.writeStreams(data.typeId(), data.buffer(), 0, data.limit()))
+               !sourceInputStreams.writeStreams(data.typeId(), data.buffer(), 0, data.limit()))
         {
             Thread.yield();
         }
 
         while (!control.stopMeasurement &&
-                initialStreams.readThrottle((t, b, o, l) -> {}) == 0)
+                sourceInputStreams.readThrottle((t, b, o, l) -> {}) == 0)
         {
             Thread.yield();
         }
@@ -209,19 +200,19 @@ public class HttpServerBM
     public void reader(Control control) throws Exception
     {
         while (!control.stopMeasurement &&
-               replyStreams.readStreams(this::handleReply) == 0)
+               sourceOutputEstStreams.readStreams(this::handleSourceOutputEst) == 0)
         {
             Thread.yield();
         }
     }
 
-    private void handleReply(
+    private void handleSourceOutputEst(
         int msgTypeId,
         MutableDirectBuffer buffer,
         int index,
         int length)
     {
-        replyHandler.onMessage(msgTypeId, buffer, index, length);
+        sourceOutputEstHandler.onMessage(msgTypeId, buffer, index, length);
     }
 
     private void processBegin(
@@ -234,7 +225,7 @@ public class HttpServerBM
         final long streamId = beginRO.streamId();
         doWindow(streamId, 8192);
 
-        this.replyHandler = this::processData;
+        this.sourceOutputEstHandler = this::processData;
     }
 
     private void processData(
@@ -260,7 +251,7 @@ public class HttpServerBM
                 .update(update)
                 .build();
 
-        replyStreams.writeThrottle(window.typeId(), window.buffer(), window.offset(), window.length());
+        sourceOutputEstStreams.writeThrottle(window.typeId(), window.buffer(), window.offset(), window.length());
     }
 
     public static void main(String[] args) throws RunnerException

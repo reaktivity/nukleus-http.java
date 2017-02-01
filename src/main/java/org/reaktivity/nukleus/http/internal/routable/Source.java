@@ -15,35 +15,30 @@
  */
 package org.reaktivity.nukleus.http.internal.routable;
 
-import static org.reaktivity.nukleus.http.internal.router.RouteKind.CLIENT_INITIAL;
-import static org.reaktivity.nukleus.http.internal.router.RouteKind.CLIENT_REPLY;
-import static org.reaktivity.nukleus.http.internal.router.RouteKind.SERVER_INITIAL;
-import static org.reaktivity.nukleus.http.internal.router.RouteKind.SERVER_REPLY;
-
 import java.util.EnumMap;
 import java.util.List;
+import java.util.function.Function;
 import java.util.function.LongFunction;
 import java.util.function.LongSupplier;
-import java.util.function.LongUnaryOperator;
 import java.util.function.Supplier;
 
 import org.agrona.MutableDirectBuffer;
 import org.agrona.collections.Long2ObjectHashMap;
-import org.agrona.collections.LongLongConsumer;
 import org.agrona.concurrent.AtomicBuffer;
 import org.agrona.concurrent.MessageHandler;
 import org.agrona.concurrent.ringbuffer.RingBuffer;
 import org.reaktivity.nukleus.Nukleus;
 import org.reaktivity.nukleus.http.internal.layouts.StreamsLayout;
-import org.reaktivity.nukleus.http.internal.routable.stream.ClientInitialStreamFactory;
-import org.reaktivity.nukleus.http.internal.routable.stream.ClientReplyStreamFactory;
-import org.reaktivity.nukleus.http.internal.routable.stream.ServerInitialStreamFactory;
-import org.reaktivity.nukleus.http.internal.routable.stream.ServerReplyStreamFactory;
+import org.reaktivity.nukleus.http.internal.routable.stream.SourceInputStreamFactory;
+import org.reaktivity.nukleus.http.internal.routable.stream.SourceOutputStreamFactory;
+import org.reaktivity.nukleus.http.internal.routable.stream.TargetInputEstablishedStreamFactory;
+import org.reaktivity.nukleus.http.internal.routable.stream.TargetOutputEstablishedStreamFactory;
 import org.reaktivity.nukleus.http.internal.router.RouteKind;
 import org.reaktivity.nukleus.http.internal.types.stream.BeginFW;
 import org.reaktivity.nukleus.http.internal.types.stream.FrameFW;
 import org.reaktivity.nukleus.http.internal.types.stream.ResetFW;
 import org.reaktivity.nukleus.http.internal.types.stream.WindowFW;
+import org.reaktivity.nukleus.http.internal.util.function.LongObjectBiConsumer;
 
 public final class Source implements Nukleus
 {
@@ -62,6 +57,7 @@ public final class Source implements Nukleus
     private final Long2ObjectHashMap<MessageHandler> streams;
 
     private final EnumMap<RouteKind, Supplier<MessageHandler>> streamFactories;
+    private final LongFunction<Correlation> lookupEstablished;
 
     Source(
         String sourceName,
@@ -69,10 +65,11 @@ public final class Source implements Nukleus
         StreamsLayout layout,
         AtomicBuffer writeBuffer,
         LongFunction<List<Route>> supplyRoutes,
-        LongFunction<List<Route>> supplyRejects,
         LongSupplier supplyTargetId,
-        LongLongConsumer correlateInitial,
-        LongUnaryOperator correlateReply)
+        Function<String, Target> supplyTarget,
+        LongObjectBiConsumer<Correlation> correlateNew,
+        LongFunction<Correlation> correlateEstablished,
+        LongFunction<Correlation> lookupEstablished)
     {
         this.sourceName = sourceName;
         this.partitionName = partitionName;
@@ -83,15 +80,18 @@ public final class Source implements Nukleus
         this.throttleBuffer = layout.throttleBuffer();
         this.streams = new Long2ObjectHashMap<>();
 
+        Target rejectTarget = supplyTarget.apply(sourceName);
         this.streamFactories = new EnumMap<>(RouteKind.class);
-        this.streamFactories.put(SERVER_INITIAL,
-                new ServerInitialStreamFactory(this, supplyRoutes, supplyRejects, supplyTargetId, correlateInitial)::newStream);
-        this.streamFactories.put(SERVER_REPLY,
-                new ServerReplyStreamFactory(this, supplyRoutes, supplyTargetId, correlateReply)::newStream);
-        this.streamFactories.put(CLIENT_INITIAL,
-                new ClientInitialStreamFactory(this, supplyRoutes, supplyTargetId, correlateInitial)::newStream);
-        this.streamFactories.put(CLIENT_REPLY,
-                new ClientReplyStreamFactory(this, supplyRoutes, supplyTargetId, correlateReply)::newStream);
+        this.streamFactories.put(RouteKind.INPUT,
+                new SourceInputStreamFactory(this, supplyRoutes, supplyTargetId, rejectTarget, correlateNew)::newStream);
+        this.streamFactories.put(RouteKind.OUTPUT_ESTABLISHED,
+                new TargetOutputEstablishedStreamFactory(this, supplyTarget, supplyTargetId, correlateEstablished)::newStream);
+        this.streamFactories.put(RouteKind.OUTPUT,
+                new SourceOutputStreamFactory(this, supplyRoutes, supplyTargetId, correlateNew)::newStream);
+        this.streamFactories.put(RouteKind.INPUT_ESTABLISHED,
+                new TargetInputEstablishedStreamFactory(this, supplyRoutes, supplyTargetId, correlateEstablished)::newStream);
+
+        this.lookupEstablished = lookupEstablished;
     }
 
     @Override
@@ -175,11 +175,20 @@ public final class Source implements Nukleus
         beginRO.wrap(buffer, index, index + length);
         final long sourceId = beginRO.streamId();
         final long sourceRef = beginRO.referenceId();
+        final long correlationId = beginRO.correlationId();
 
-        final Supplier<MessageHandler> streamFactory = streamFactories.get(RouteKind.match(sourceRef));
-        final MessageHandler newStream = streamFactory.get();
-        streams.put(sourceId, newStream);
-        newStream.onMessage(msgTypeId, buffer, index, length);
+        RouteKind routeKind = resolve(sourceRef, correlationId);
+        if (routeKind != null)
+        {
+            final Supplier<MessageHandler> streamFactory = streamFactories.get(routeKind);
+            final MessageHandler newStream = streamFactory.get();
+            streams.put(sourceId, newStream);
+            newStream.onMessage(msgTypeId, buffer, index, length);
+        }
+        else
+        {
+            doReset(sourceId);
+        }
     }
 
     public void doWindow(
@@ -205,5 +214,31 @@ public final class Source implements Nukleus
         long streamId)
     {
         streams.remove(streamId);
+    }
+
+    private RouteKind resolve(
+        final long sourceRef,
+        final long correlationId)
+    {
+        RouteKind routeKind = null;
+
+        if (sourceRef == 0L)
+        {
+            final Correlation correlation = lookupEstablished.apply(correlationId);
+            if (correlation != null)
+            {
+                routeKind = correlation.established();
+            }
+            else
+            {
+                routeKind = null;
+            }
+        }
+        else
+        {
+            routeKind = RouteKind.match(sourceRef);
+        }
+
+        return routeKind;
     }
 }
