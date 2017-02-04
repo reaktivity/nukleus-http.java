@@ -61,7 +61,7 @@ public class ControllerIT
     {
         long targetRef = new Random().nextLong();
         Map<String, String> headers = new LinkedHashMap<>();
-        headers.put("host", "localhost:8080");
+        headers.put(":authority", "localhost:8080");
 
         k3po.start();
 
@@ -80,7 +80,7 @@ public class ControllerIT
     {
         long targetRef = new Random().nextLong();
         Map<String, String> headers = new LinkedHashMap<>();
-        headers.put("host", "localhost:8080");
+        headers.put(":authority", "localhost:8080");
 
         k3po.start();
 
@@ -130,7 +130,7 @@ public class ControllerIT
     {
         long targetRef = new Random().nextLong();
         Map<String, String> headers = new LinkedHashMap<>();
-        headers.put("host", "localhost:8080");
+        headers.put(":authority", "localhost:8080");
 
         k3po.start();
 
@@ -156,7 +156,7 @@ public class ControllerIT
     {
         long targetRef = new Random().nextLong();
         Map<String, String> headers = new LinkedHashMap<>();
-        headers.put("host", "localhost:8080");
+        headers.put(":authority", "localhost:8080");
 
         k3po.start();
 
