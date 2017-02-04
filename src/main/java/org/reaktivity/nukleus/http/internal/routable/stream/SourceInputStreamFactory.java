@@ -217,7 +217,8 @@ public final class SourceInputStreamFactory
             int requestBytes,
             String payloadChars)
         {
-            final Target target = rejectTarget;
+            this.target = rejectTarget;
+
             final long newTargetId = supplyStreamId.getAsLong();
 
             // TODO: replace with connection pool (start)
@@ -318,41 +319,12 @@ public final class SourceInputStreamFactory
             }
             else
             {
-                URI requestURI = URI.create(start[1]);
+                final URI requestURI = URI.create(start[1]);
 
-                Map<String, String> headers = new LinkedHashMap<>();
-                headers.put(":scheme", "http");
-                headers.put(":method", start[0]);
-                headers.put(":path", requestURI.getPath());
-
-                String host = null;
-                String upgrade = null;
-                Pattern headerPattern = Pattern.compile("([^\\s:]+)\\s*:\\s*(.*)");
-                for (int i = 1; i < lines.length; i++)
-                {
-                    Matcher headerMatcher = headerPattern.matcher(lines[i]);
-                    if (!headerMatcher.matches())
-                    {
-                        throw new IllegalStateException("illegal http header syntax");
-                    }
-
-                    String name = headerMatcher.group(1).toLowerCase();
-                    String value = headerMatcher.group(2);
-
-                    if ("host".equals(name))
-                    {
-                        host = value;
-                    }
-                    else if ("upgrade".equals(name))
-                    {
-                        upgrade = value;
-                    }
-
-                    headers.put(name, value);
-                }
+                final Map<String, String> headers = decodeHttpHeaders(start, lines, requestURI);
                 // TODO: replace with lightweight approach (end)
 
-                if (host == null || requestURI.getUserInfo() != null)
+                if (headers.get(":authority") == null || requestURI.getUserInfo() != null)
                 {
                     processInvalidRequest(endOfHeadersAt - offset, "HTTP/1.1 400 Bad Request\r\n\r\n");
                 }
@@ -375,8 +347,10 @@ public final class SourceInputStreamFactory
                                 hs -> headers.forEach((k, v) -> hs.item(i -> i.name(k).value(v))));
                         newTarget.addThrottle(newTargetId, this::handleThrottle);
 
+                        boolean hasUpgrade = headers.containsKey("upgrade");
+
                         // TODO: wait for 101 first
-                        if (upgrade != null)
+                        if (hasUpgrade)
                         {
                             this.decoderState = this::decodeHttpDataAfterUpgrade;
                         }
@@ -386,8 +360,7 @@ public final class SourceInputStreamFactory
                             this.decoderState = this::decodeHttpData;
                         }
 
-
-                        if (upgrade != null || contentRemaining != 0)
+                        if (hasUpgrade || contentRemaining != 0)
                         {
                             // content stream
                             this.target = newTarget;
@@ -400,6 +373,9 @@ public final class SourceInputStreamFactory
                             // no content
                             newTarget.doHttpEnd(newTargetId);
                             source.doWindow(sourceId, limit - offset);
+
+                            this.target = newTarget;
+                            this.targetId = newTargetId;
                             this.throttleState = this::throttleSkipNextWindow;
                         }
                     }
@@ -411,6 +387,52 @@ public final class SourceInputStreamFactory
             }
 
             return endOfHeadersAt;
+        }
+
+        private Map<String, String> decodeHttpHeaders(
+            String[] start,
+            String[] lines,
+            URI requestURI)
+        {
+            String authority = requestURI.getAuthority();
+
+            Map<String, String> headers = new LinkedHashMap<>();
+            headers.put(":scheme", "http");
+            headers.put(":method", start[0]);
+            headers.put(":path", requestURI.getPath());
+
+            if (authority != null)
+            {
+                headers.put(":authority", authority);
+            }
+
+            Pattern headerPattern = Pattern.compile("([^\\s:]+)\\s*:\\s*(.*)");
+            for (int i = 1; i < lines.length; i++)
+            {
+                Matcher headerMatcher = headerPattern.matcher(lines[i]);
+                if (!headerMatcher.matches())
+                {
+                    throw new IllegalStateException("illegal http header syntax");
+                }
+
+                String name = headerMatcher.group(1).toLowerCase();
+                String value = headerMatcher.group(2);
+
+                // rfc7230#section-5.5
+                if ("host".equals(name))
+                {
+                    if (authority == null)
+                    {
+                        headers.put(":authority", value);
+                    }
+                }
+                else
+                {
+                    headers.put(name, value);
+                }
+            }
+
+            return headers;
         }
 
         private int decodeHttpData(
