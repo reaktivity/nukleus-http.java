@@ -126,7 +126,7 @@ public class HttpServerBM
         final HttpController controller = reaktor.controller(HttpController.class);
 
         this.targetInputRef = random.nextLong();
-        this.sourceInputRef = controller.route(INPUT, NEW, "source", 0L, "target", targetInputRef, emptyMap()).get();
+        this.sourceInputRef = controller.routeInputNew("source", 0L, "target", targetInputRef, emptyMap()).get();
 
         this.sourceInputStreams = controller.streams("source");
         this.sourceOutputEstStreams = controller.streams("http", "target");

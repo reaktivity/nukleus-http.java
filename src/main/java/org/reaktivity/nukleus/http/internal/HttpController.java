@@ -98,7 +98,67 @@ public final class HttpController implements Controller
         return "http";
     }
 
-    public CompletableFuture<Long> route(
+    public CompletableFuture<Long> routeInputNone(
+            String source,
+            long sourceRef,
+            String target,
+            long targetRef,
+            Map<String, String> headers)
+    {
+        return route(Role.INPUT, State.NONE, source, sourceRef, target, targetRef, headers);
+    }
+
+    public CompletableFuture<Long> routeInputEstablished(
+            String source,
+            long sourceRef,
+            String target,
+            long targetRef,
+            Map<String, String> headers)
+    {
+        return route(Role.INPUT, State.ESTABLISHED, source, sourceRef, target, targetRef, headers);
+    }
+
+    public CompletableFuture<Long> routeInputNew(
+            String source,
+            long sourceRef,
+            String target,
+            long targetRef,
+            Map<String, String> headers)
+    {
+        return route(Role.INPUT, State.NEW, source, sourceRef, target, targetRef, headers);
+    }
+
+    public CompletableFuture<Long> routeOutputNone(
+            String source,
+            long sourceRef,
+            String target,
+            long targetRef,
+            Map<String, String> headers)
+    {
+        return route(Role.OUTPUT, State.NONE, source, sourceRef, target, targetRef, headers);
+    }
+
+    public CompletableFuture<Long> routeOutputEstablished(
+            String source,
+            long sourceRef,
+            String target,
+            long targetRef,
+            Map<String, String> headers)
+    {
+        return route(Role.OUTPUT, State.ESTABLISHED, source, sourceRef, target, targetRef, headers);
+    }
+
+    public CompletableFuture<Long> routeOutputNew(
+            String source,
+            long sourceRef,
+            String target,
+            long targetRef,
+            Map<String, String> headers)
+    {
+        return route(Role.OUTPUT, State.NEW, source, sourceRef, target, targetRef, headers);
+    }
+
+    private CompletableFuture<Long> route(
         Role role,
         State state,
         String source,
