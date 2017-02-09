@@ -23,8 +23,6 @@ import static org.agrona.BitUtil.SIZE_OF_INT;
 import static org.agrona.BitUtil.SIZE_OF_LONG;
 import static org.reaktivity.nukleus.Configuration.DIRECTORY_PROPERTY_NAME;
 import static org.reaktivity.nukleus.Configuration.STREAMS_BUFFER_CAPACITY_PROPERTY_NAME;
-import static org.reaktivity.nukleus.http.internal.types.control.Role.INPUT;
-import static org.reaktivity.nukleus.http.internal.types.control.State.NEW;
 
 import java.io.File;
 import java.io.IOException;
@@ -167,7 +165,7 @@ public class HttpServerBM
     {
         HttpController controller = reaktor.controller(HttpController.class);
 
-        controller.unroute(INPUT, NEW, "source", sourceInputRef, "target", targetInputRef, null).get();
+        controller.unrouteInputNew("source", sourceInputRef, "target", targetInputRef, null).get();
 
         this.sourceInputStreams.close();
         this.sourceInputStreams = null;
