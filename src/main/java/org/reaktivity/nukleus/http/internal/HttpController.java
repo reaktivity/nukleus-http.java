@@ -98,77 +98,126 @@ public final class HttpController implements Controller
         return "http";
     }
 
-    public CompletableFuture<Long> route(
-        Role role,
-        State state,
+    public CompletableFuture<Long> routeInputNone(
         String source,
         long sourceRef,
         String target,
         long targetRef,
         Map<String, String> headers)
     {
-        final CompletableFuture<Long> promise = new CompletableFuture<>();
-
-        long correlationId = conductorCommands.nextCorrelationId();
-
-        RouteFW routeRO = routeRW.wrap(atomicBuffer, 0, atomicBuffer.capacity())
-                                 .correlationId(correlationId)
-                                 .role(b -> b.set(role))
-                                 .state(b -> b.set(state))
-                                 .source(source)
-                                 .sourceRef(sourceRef)
-                                 .target(target)
-                                 .targetRef(targetRef)
-                                 .extension(extension(headers))
-                                 .build();
-
-        if (!conductorCommands.write(routeRO.typeId(), routeRO.buffer(), routeRO.offset(), routeRO.length()))
-        {
-            commandSendFailed(promise);
-        }
-        else
-        {
-            commandSent(correlationId, promise);
-        }
-
-        return promise;
+        return route(Role.INPUT, State.NONE, source, sourceRef, target, targetRef, headers);
     }
 
-    public CompletableFuture<Void> unroute(
-        Role role,
-        State state,
+    public CompletableFuture<Long> routeInputEstablished(
         String source,
         long sourceRef,
         String target,
         long targetRef,
         Map<String, String> headers)
     {
-        final CompletableFuture<Void> promise = new CompletableFuture<>();
-
-        long correlationId = conductorCommands.nextCorrelationId();
-
-        UnrouteFW unrouteRO = unrouteRW.wrap(atomicBuffer, 0, atomicBuffer.capacity())
-                                 .correlationId(correlationId)
-                                 .role(b -> b.set(role))
-                                 .state(b -> b.set(state))
-                                 .source(source)
-                                 .sourceRef(sourceRef)
-                                 .target(target)
-                                 .targetRef(targetRef)
-                                 .extension(extension(headers))
-                                 .build();
-
-        if (!conductorCommands.write(unrouteRO.typeId(), unrouteRO.buffer(), unrouteRO.offset(), unrouteRO.length()))
-        {
-            commandSendFailed(promise);
-        }
-        else
-        {
-            commandSent(correlationId, promise);
-        }
-
-        return promise;
+        return route(Role.INPUT, State.ESTABLISHED, source, sourceRef, target, targetRef, headers);
     }
+
+    public CompletableFuture<Long> routeInputNew(
+        String source,
+        long sourceRef,
+        String target,
+        long targetRef,
+        Map<String, String> headers)
+    {
+        return route(Role.INPUT, State.NEW, source, sourceRef, target, targetRef, headers);
+    }
+
+    public CompletableFuture<Long> routeOutputNone(
+        String source,
+        long sourceRef,
+        String target,
+        long targetRef,
+        Map<String, String> headers)
+    {
+        return route(Role.OUTPUT, State.NONE, source, sourceRef, target, targetRef, headers);
+    }
+
+    public CompletableFuture<Long> routeOutputEstablished(
+        String source,
+        long sourceRef,
+        String target,
+        long targetRef,
+        Map<String, String> headers)
+    {
+        return route(Role.OUTPUT, State.ESTABLISHED, source, sourceRef, target, targetRef, headers);
+    }
+
+    public CompletableFuture<Long> routeOutputNew(
+        String source,
+        long sourceRef,
+        String target,
+        long targetRef,
+        Map<String, String> headers)
+    {
+        return route(Role.OUTPUT, State.NEW, source, sourceRef, target, targetRef, headers);
+    }
+
+    public CompletableFuture<Void> unrouteInputEstablished(
+        String source,
+        long sourceRef,
+        String target,
+        long targetRef,
+        Map<String, String> headers)
+    {
+        return unroute(Role.INPUT, State.ESTABLISHED, source, sourceRef, target, targetRef, headers);
+    }
+
+    public CompletableFuture<Void> unrouteInputNew(
+        String source,
+        long sourceRef,
+        String target,
+        long targetRef,
+        Map<String, String> headers)
+    {
+        return unroute(Role.INPUT, State.NEW, source, sourceRef, target, targetRef, headers);
+    }
+
+    public CompletableFuture<Void> unrouteInputNone(
+        String source,
+        long sourceRef,
+        String target,
+        long targetRef,
+        Map<String, String> headers)
+    {
+        return unroute(Role.INPUT, State.NONE, source, sourceRef, target, targetRef, headers);
+    }
+
+    public CompletableFuture<Void> unrouteOutputEstablished(
+        String source,
+        long sourceRef,
+        String target,
+        long targetRef,
+        Map<String, String> headers)
+    {
+        return unroute(Role.OUTPUT, State.ESTABLISHED, source, sourceRef, target, targetRef, headers);
+    }
+
+    public CompletableFuture<Void> unrouteOutputNew(
+        String source,
+        long sourceRef,
+        String target,
+        long targetRef,
+        Map<String, String> headers)
+    {
+        return unroute(Role.OUTPUT, State.NEW, source, sourceRef, target, targetRef, headers);
+    }
+
+    public CompletableFuture<Void> unrouteOutputNone(
+        String source,
+        long sourceRef,
+        String target,
+        long targetRef,
+        Map<String, String> headers)
+    {
+        return unroute(Role.OUTPUT, State.NONE, source, sourceRef, target, targetRef, headers);
+    }
+
 
     public HttpStreams streams(
         String source)
@@ -318,4 +367,77 @@ public final class HttpController implements Controller
     {
         return promise.completeExceptionally(new IllegalStateException(message).fillInStackTrace());
     }
+
+    private CompletableFuture<Long> route(
+        Role role,
+        State state,
+        String source,
+        long sourceRef,
+        String target,
+        long targetRef,
+        Map<String, String> headers)
+    {
+        final CompletableFuture<Long> promise = new CompletableFuture<>();
+
+        long correlationId = conductorCommands.nextCorrelationId();
+
+        RouteFW routeRO = routeRW.wrap(atomicBuffer, 0, atomicBuffer.capacity())
+                                 .correlationId(correlationId)
+                                 .role(b -> b.set(role))
+                                 .state(b -> b.set(state))
+                                 .source(source)
+                                 .sourceRef(sourceRef)
+                                 .target(target)
+                                 .targetRef(targetRef)
+                                 .extension(extension(headers))
+                                 .build();
+
+        if (!conductorCommands.write(routeRO.typeId(), routeRO.buffer(), routeRO.offset(), routeRO.length()))
+        {
+            commandSendFailed(promise);
+        }
+        else
+        {
+            commandSent(correlationId, promise);
+        }
+
+        return promise;
+    }
+
+    private CompletableFuture<Void> unroute(
+        Role role,
+        State state,
+        String source,
+        long sourceRef,
+        String target,
+        long targetRef,
+        Map<String, String> headers)
+    {
+        final CompletableFuture<Void> promise = new CompletableFuture<>();
+
+        long correlationId = conductorCommands.nextCorrelationId();
+
+        UnrouteFW unrouteRO = unrouteRW.wrap(atomicBuffer, 0, atomicBuffer.capacity())
+                                 .correlationId(correlationId)
+                                 .role(b -> b.set(role))
+                                 .state(b -> b.set(state))
+                                 .source(source)
+                                 .sourceRef(sourceRef)
+                                 .target(target)
+                                 .targetRef(targetRef)
+                                 .extension(extension(headers))
+                                 .build();
+
+        if (!conductorCommands.write(unrouteRO.typeId(), unrouteRO.buffer(), unrouteRO.offset(), unrouteRO.length()))
+        {
+            commandSendFailed(promise);
+        }
+        else
+        {
+            commandSent(correlationId, promise);
+        }
+
+        return promise;
+    }
+
 }
