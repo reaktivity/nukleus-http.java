@@ -17,10 +17,6 @@ package org.reaktivity.nukleus.http.internal.control;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.rules.RuleChain.outerRule;
-import static org.reaktivity.nukleus.http.internal.types.control.Role.INPUT;
-import static org.reaktivity.nukleus.http.internal.types.control.Role.OUTPUT;
-import static org.reaktivity.nukleus.http.internal.types.control.State.ESTABLISHED;
-import static org.reaktivity.nukleus.http.internal.types.control.State.NEW;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -66,7 +62,7 @@ public class ControllerIT
         k3po.start();
 
         controller.controller(HttpController.class)
-                  .route(INPUT, NEW, "source", 0L, "target", targetRef, headers)
+                  .routeInputNew("source", 0L, "target", targetRef, headers)
                   .get();
 
         k3po.finish();
@@ -85,7 +81,7 @@ public class ControllerIT
         k3po.start();
 
         controller.controller(HttpController.class)
-                  .route(OUTPUT, NEW, "source", 0L, "target", targetRef, headers)
+                  .routeOutputNew("source", 0L, "target", targetRef, headers)
                   .get();
 
         k3po.finish();
@@ -100,7 +96,7 @@ public class ControllerIT
         k3po.start();
 
         controller.controller(HttpController.class)
-                  .route(OUTPUT, ESTABLISHED, "target", 0L, "source", 0L, null)
+                  .routeOutputEstablished("target", 0L, "source", 0L, null)
                   .get();
 
         k3po.finish();
@@ -115,7 +111,7 @@ public class ControllerIT
         k3po.start();
 
         controller.controller(HttpController.class)
-                  .route(INPUT, ESTABLISHED, "target", 0L, "source", 0L, null)
+                  .routeInputEstablished("target", 0L, "source", 0L, null)
                   .get();
 
         k3po.finish();
@@ -135,13 +131,13 @@ public class ControllerIT
         k3po.start();
 
         long sourceRef = controller.controller(HttpController.class)
-                  .route(INPUT, NEW, "source", 0L, "target", targetRef, headers)
+                  .routeInputNew("source", 0L, "target", targetRef, headers)
                   .get();
 
         k3po.notifyBarrier("ROUTED_INPUT");
 
         controller.controller(HttpController.class)
-                  .unroute(INPUT, NEW, "source", sourceRef, "target", targetRef, headers)
+                  .unrouteInputNew("source", sourceRef, "target", targetRef, headers)
                   .get();
 
         k3po.finish();
@@ -161,13 +157,13 @@ public class ControllerIT
         k3po.start();
 
         long sourceRef = controller.controller(HttpController.class)
-                  .route(OUTPUT, NEW, "source", 0L, "target", targetRef, headers)
+                  .routeOutputNew("source", 0L, "target", targetRef, headers)
                   .get();
 
         k3po.notifyBarrier("ROUTED_OUTPUT");
 
         controller.controller(HttpController.class)
-                  .unroute(OUTPUT, NEW, "source", sourceRef, "target", targetRef, null)
+                  .unrouteOutputNew("source", sourceRef, "target", targetRef, null)
                   .get();
 
         k3po.finish();
@@ -183,13 +179,13 @@ public class ControllerIT
         k3po.start();
 
         long targetRef = controller.controller(HttpController.class)
-                  .route(OUTPUT, ESTABLISHED, "target", 0L, "source", 0L, null)
+                  .routeOutputEstablished("target", 0L, "source", 0L, null)
                   .get();
 
         k3po.notifyBarrier("ROUTED_OUTPUT");
 
         controller.controller(HttpController.class)
-                  .unroute(OUTPUT, ESTABLISHED, "target", targetRef, "source", 0L, null)
+                  .unrouteOutputEstablished("target", targetRef, "source", 0L, null)
                   .get();
 
         k3po.finish();
@@ -205,13 +201,13 @@ public class ControllerIT
         k3po.start();
 
         long targetRef  = controller.controller(HttpController.class)
-                  .route(INPUT, ESTABLISHED, "target", 0L, "source", 0L, null)
+                  .routeInputEstablished("target", 0L, "source", 0L, null)
                   .get();
 
         k3po.notifyBarrier("ROUTED_INPUT");
 
         controller.controller(HttpController.class)
-                  .unroute(INPUT, ESTABLISHED, "target", targetRef, "source", 0L, null)
+                  .unrouteInputEstablished("target", targetRef, "source", 0L, null)
                   .get();
 
         k3po.finish();
