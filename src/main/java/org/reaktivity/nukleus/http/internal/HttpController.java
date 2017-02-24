@@ -255,11 +255,11 @@ public final class HttpController implements Controller
                              });
                          })
                          .build()
-                         .length());
+                         .sizeof());
         }
         else
         {
-            return b -> {};
+            return e -> e.reset();
         }
     }
 
@@ -392,7 +392,7 @@ public final class HttpController implements Controller
                                  .extension(extension(headers))
                                  .build();
 
-        if (!conductorCommands.write(routeRO.typeId(), routeRO.buffer(), routeRO.offset(), routeRO.length()))
+        if (!conductorCommands.write(routeRO.typeId(), routeRO.buffer(), routeRO.offset(), routeRO.sizeof()))
         {
             commandSendFailed(promise);
         }
@@ -428,7 +428,7 @@ public final class HttpController implements Controller
                                  .extension(extension(headers))
                                  .build();
 
-        if (!conductorCommands.write(unrouteRO.typeId(), unrouteRO.buffer(), unrouteRO.offset(), unrouteRO.length()))
+        if (!conductorCommands.write(unrouteRO.typeId(), unrouteRO.buffer(), unrouteRO.offset(), unrouteRO.sizeof()))
         {
             commandSendFailed(promise);
         }

@@ -216,7 +216,7 @@ public final class TargetOutputEstablishedStreamFactory
                 final long sourceCorrelationId = correlation.id();
 
                 Map<String, String> headers = EMPTY_HEADERS;
-                if (extension.length() > 0)
+                if (extension.sizeof() > 0)
                 {
                     final HttpBeginExFW beginEx = extension.get(beginExRO::wrap);
                     Map<String, String> headers0 = new LinkedHashMap<>();
@@ -279,8 +279,7 @@ public final class TargetOutputEstablishedStreamFactory
 
             dataRO.wrap(buffer, index, index + length);
 
-            OctetsFW payload = dataRO.payload();
-            window -= payload.length() - 1;
+            window -= dataRO.length();
 
             if (window < 0)
             {
@@ -288,6 +287,8 @@ public final class TargetOutputEstablishedStreamFactory
             }
             else
             {
+                final OctetsFW payload = dataRO.payload();
+
                 target.doData(targetId, payload);
             }
         }

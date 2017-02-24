@@ -59,7 +59,6 @@ import org.openjdk.jmh.runner.options.OptionsBuilder;
 import org.reaktivity.nukleus.Configuration;
 import org.reaktivity.nukleus.http.internal.HttpController;
 import org.reaktivity.nukleus.http.internal.HttpStreams;
-import org.reaktivity.nukleus.http.internal.types.OctetsFW;
 import org.reaktivity.nukleus.http.internal.types.stream.BeginFW;
 import org.reaktivity.nukleus.http.internal.types.stream.DataFW;
 import org.reaktivity.nukleus.http.internal.types.stream.WindowFW;
@@ -141,7 +140,7 @@ public class HttpServerBM
                 .extension(e -> e.reset())
                 .build();
 
-        this.sourceInputStreams.writeStreams(begin.typeId(), begin.buffer(), begin.offset(), begin.length());
+        this.sourceInputStreams.writeStreams(begin.typeId(), begin.buffer(), begin.offset(), begin.sizeof());
 
         String payload =
                 "POST / HTTP/1.1\r\n" +
@@ -234,9 +233,8 @@ public class HttpServerBM
     {
         dataRO.wrap(buffer, index, index + length);
         final long streamId = dataRO.streamId();
-        final OctetsFW payload = dataRO.payload();
+        final int update = dataRO.length();
 
-        final int update = payload.length();
         doWindow(streamId, update);
     }
 
@@ -249,7 +247,7 @@ public class HttpServerBM
                 .update(update)
                 .build();
 
-        sourceOutputEstStreams.writeThrottle(window.typeId(), window.buffer(), window.offset(), window.length());
+        sourceOutputEstStreams.writeThrottle(window.typeId(), window.buffer(), window.offset(), window.sizeof());
     }
 
     public static void main(String[] args) throws RunnerException

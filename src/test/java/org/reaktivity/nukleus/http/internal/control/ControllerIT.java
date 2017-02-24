@@ -163,7 +163,7 @@ public class ControllerIT
         k3po.notifyBarrier("ROUTED_OUTPUT");
 
         controller.controller(HttpController.class)
-                  .unrouteOutputNew("source", sourceRef, "target", targetRef, null)
+                  .unrouteOutputNew("source", sourceRef, "target", targetRef, headers)
                   .get();
 
         k3po.finish();
