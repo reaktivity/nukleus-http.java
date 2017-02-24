@@ -6,7 +6,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>org.reaktivity</groupId>
   <artifactId>nukleus-http</artifactId>
-  <version>0.3</version>
+  <version>0.4</version>
   <name>HTTP Nukleus Implementation</name>
   <description>HTTP Nukleus Implementation</description>
   <url>https://github.com/reaktivity/nukleus-http.java</url>
@@ -46,9 +46,9 @@
     <junit.version>4.12</junit.version>
     <k3po.version>3.0.0-alpha-54</k3po.version>
     <jmh.version>1.12</jmh.version>
-    <nukleus.plugin.version>0.6.1</nukleus.plugin.version>
+    <nukleus.plugin.version>0.7.3</nukleus.plugin.version>
     <nukleus.version>0.2</nukleus.version>
-    <nukleus.http.spec.version>0.5</nukleus.http.spec.version>
+    <nukleus.http.spec.version>0.6</nukleus.http.spec.version>
     <reaktor.test.version>0.1</reaktor.test.version>
     <reaktor.version>0.1</reaktor.version>
   </properties>
@@ -69,11 +69,13 @@
       <groupId>org.reaktivity</groupId>
       <artifactId>reaktor</artifactId>
       <version>${reaktor.version}</version>
+      <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.reaktivity</groupId>
       <artifactId>reaktor-test</artifactId>
       <version>${reaktor.test.version}</version>
+      <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>junit</groupId>
@@ -251,34 +253,6 @@
         </executions>
       </plugin>
     </plugins>
-    <pluginManagement>
-      <plugins>
-        <plugin>
-          <groupId>org.eclipse.m2e</groupId>
-          <artifactId>lifecycle-mapping</artifactId>
-          <version>1.0.0</version>
-          <configuration>
-            <lifecycleMappingMetadata>
-              <pluginExecutions>
-                <pluginExecution>
-                  <pluginExecutionFilter>
-                    <groupId>org.reaktivity</groupId>
-                    <artifactId>nukleus-maven-plugin</artifactId>
-                    <versionRange>[0.1,)</versionRange>
-                    <goals>
-                      <goal>generate</goal>
-                    </goals>
-                  </pluginExecutionFilter>
-                  <action>
-                    <ignore></ignore>
-                  </action>
-                </pluginExecution>
-              </pluginExecutions>
-            </lifecycleMappingMetadata>
-          </configuration>
-        </plugin>
-      </plugins>
-    </pluginManagement>
   </build>
 
   <profiles>

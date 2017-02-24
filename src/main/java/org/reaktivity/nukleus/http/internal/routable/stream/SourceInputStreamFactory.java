@@ -263,9 +263,7 @@ public final class SourceInputStreamFactory
         {
             dataRO.wrap(buffer, index, index + length);
 
-            final OctetsFW payload = dataRO.payload();
-            int offset = payload.offset() + 1;
-            window -= payload.length() - 1;
+            window -= dataRO.length();
 
             if (window < 0)
             {
@@ -273,8 +271,10 @@ public final class SourceInputStreamFactory
             }
             else
             {
+                final OctetsFW payload = dataRO.payload();
                 final int limit = payload.limit();
 
+                int offset = payload.offset();
                 while (offset < limit)
                 {
                     offset = decoderState.decode(buffer, offset, limit);

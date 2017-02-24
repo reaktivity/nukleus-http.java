@@ -23,8 +23,6 @@ import static org.agrona.BitUtil.SIZE_OF_INT;
 import static org.agrona.BitUtil.SIZE_OF_LONG;
 import static org.reaktivity.nukleus.Configuration.DIRECTORY_PROPERTY_NAME;
 import static org.reaktivity.nukleus.Configuration.STREAMS_BUFFER_CAPACITY_PROPERTY_NAME;
-import static org.reaktivity.nukleus.http.internal.types.control.Role.INPUT;
-import static org.reaktivity.nukleus.http.internal.types.control.State.NEW;
 
 import java.io.File;
 import java.io.IOException;
@@ -61,7 +59,6 @@ import org.openjdk.jmh.runner.options.OptionsBuilder;
 import org.reaktivity.nukleus.Configuration;
 import org.reaktivity.nukleus.http.internal.HttpController;
 import org.reaktivity.nukleus.http.internal.HttpStreams;
-import org.reaktivity.nukleus.http.internal.types.OctetsFW;
 import org.reaktivity.nukleus.http.internal.types.stream.BeginFW;
 import org.reaktivity.nukleus.http.internal.types.stream.DataFW;
 import org.reaktivity.nukleus.http.internal.types.stream.WindowFW;
@@ -126,7 +123,7 @@ public class HttpServerBM
         final HttpController controller = reaktor.controller(HttpController.class);
 
         this.targetInputRef = random.nextLong();
-        this.sourceInputRef = controller.route(INPUT, NEW, "source", 0L, "target", targetInputRef, emptyMap()).get();
+        this.sourceInputRef = controller.routeInputNew("source", 0L, "target", targetInputRef, emptyMap()).get();
 
         this.sourceInputStreams = controller.streams("source");
         this.sourceOutputEstStreams = controller.streams("http", "target");
@@ -143,7 +140,7 @@ public class HttpServerBM
                 .extension(e -> e.reset())
                 .build();
 
-        this.sourceInputStreams.writeStreams(begin.typeId(), begin.buffer(), begin.offset(), begin.length());
+        this.sourceInputStreams.writeStreams(begin.typeId(), begin.buffer(), begin.offset(), begin.sizeof());
 
         String payload =
                 "POST / HTTP/1.1\r\n" +
@@ -167,7 +164,7 @@ public class HttpServerBM
     {
         HttpController controller = reaktor.controller(HttpController.class);
 
-        controller.unroute(INPUT, NEW, "source", sourceInputRef, "target", targetInputRef, null).get();
+        controller.unrouteInputNew("source", sourceInputRef, "target", targetInputRef, null).get();
 
         this.sourceInputStreams.close();
         this.sourceInputStreams = null;
@@ -236,9 +233,8 @@ public class HttpServerBM
     {
         dataRO.wrap(buffer, index, index + length);
         final long streamId = dataRO.streamId();
-        final OctetsFW payload = dataRO.payload();
+        final int update = dataRO.length();
 
-        final int update = payload.length();
         doWindow(streamId, update);
     }
 
@@ -251,7 +247,7 @@ public class HttpServerBM
                 .update(update)
                 .build();
 
-        sourceOutputEstStreams.writeThrottle(window.typeId(), window.buffer(), window.offset(), window.length());
+        sourceOutputEstStreams.writeThrottle(window.typeId(), window.buffer(), window.offset(), window.sizeof());
     }
 
     public static void main(String[] args) throws RunnerException
