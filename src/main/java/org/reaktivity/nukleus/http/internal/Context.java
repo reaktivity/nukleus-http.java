@@ -37,7 +37,6 @@ import org.agrona.concurrent.ringbuffer.RingBuffer;
 import org.agrona.concurrent.status.CountersManager;
 import org.reaktivity.nukleus.Configuration;
 import org.reaktivity.nukleus.http.internal.layouts.ControlLayout;
-import org.reaktivity.nukleus.tcp.internal.Context;
 
 public final class Context implements Closeable
 {
