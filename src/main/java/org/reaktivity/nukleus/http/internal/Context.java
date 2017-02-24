@@ -37,6 +37,7 @@ import org.agrona.concurrent.ringbuffer.RingBuffer;
 import org.agrona.concurrent.status.CountersManager;
 import org.reaktivity.nukleus.Configuration;
 import org.reaktivity.nukleus.http.internal.layouts.ControlLayout;
+import org.reaktivity.nukleus.tcp.internal.Context;
 
 public final class Context implements Closeable
 {
@@ -226,7 +227,7 @@ public final class Context implements Closeable
 
     public Logger logger()
     {
-        return Logger.getLogger("nuklei.ws");
+        return Logger.getLogger(Context.class.getPackage().getName());
     }
 
     public Context countersManager(
