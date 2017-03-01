@@ -27,7 +27,7 @@ import org.kaazing.k3po.junit.annotation.Specification;
 import org.kaazing.k3po.junit.rules.K3poRule;
 import org.reaktivity.reaktor.test.NukleusRule;
 
-public class MessageFormatIT
+public class MessageFormatFragmentedIT
 {
     private final K3poRule k3po = new K3poRule()
             .addScriptRoot("route", "org/reaktivity/specification/nukleus/http/control/route")
@@ -52,22 +52,9 @@ public class MessageFormatIT
     @Test
     @Specification({
         "${route}/input/new/controller",
-        "${streams}/request.with.content.length/server/source",
-        "${streams}/request.with.content.length/server/target" })
-    public void shouldAcceptRequestWithContentLength() throws Exception
-    {
-        k3po.start();
-        k3po.awaitBarrier("ROUTED_INPUT");
-        k3po.notifyBarrier("ROUTED_OUTPUT");
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${route}/input/new/controller",
-        "${streams}/request.with.headers/server/source",
-        "${streams}/request.with.headers/server/target" })
-    public void shouldAcceptRequestWithHeaders() throws Exception
+        "${streams}/request.fragmented/server/source",
+        "${streams}/request.fragmented/server/target" })
+    public void shouldAcceptFragmentedRequest() throws Exception
     {
         k3po.start();
         k3po.awaitBarrier("ROUTED_INPUT");

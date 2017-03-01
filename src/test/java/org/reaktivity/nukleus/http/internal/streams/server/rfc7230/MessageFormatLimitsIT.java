@@ -17,6 +17,8 @@ package org.reaktivity.nukleus.http.internal.streams.server.rfc7230;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.rules.RuleChain.outerRule;
+import static org.reaktivity.nukleus.http.internal.InternalSystemProperty.MAXIMUM_HEADERS_SIZE;
+import static org.reaktivity.nukleus.http.internal.InternalSystemProperty.MAXIMUM_STREAMS_WITH_PENDING_HEADERS_DECODING;
 
 import org.junit.Rule;
 import org.junit.Test;
@@ -25,15 +27,20 @@ import org.junit.rules.TestRule;
 import org.junit.rules.Timeout;
 import org.kaazing.k3po.junit.annotation.Specification;
 import org.kaazing.k3po.junit.rules.K3poRule;
+import org.reaktivity.nukleus.http.internal.test.SystemPropertiesRule;
 import org.reaktivity.reaktor.test.NukleusRule;
 
-public class MessageFormatIT
+public class MessageFormatLimitsIT
 {
     private final K3poRule k3po = new K3poRule()
             .addScriptRoot("route", "org/reaktivity/specification/nukleus/http/control/route")
             .addScriptRoot("streams", "org/reaktivity/specification/nukleus/http/streams/rfc7230/message.format");
 
     private final TestRule timeout = new DisableOnDebug(new Timeout(5, SECONDS));
+
+    private final TestRule settings = new SystemPropertiesRule()
+        .setProperty(MAXIMUM_HEADERS_SIZE, "26")
+        .setProperty(MAXIMUM_STREAMS_WITH_PENDING_HEADERS_DECODING, "1");
 
     private final NukleusRule nukleus = new NukleusRule("http")
         .directory("target/nukleus-itests")
@@ -47,27 +54,13 @@ public class MessageFormatIT
         .streams("source", "http#target");
 
     @Rule
-    public final TestRule chain = outerRule(nukleus).around(k3po).around(timeout);
+    public final TestRule chain = outerRule(settings).around(nukleus).around(k3po).around(timeout);
 
     @Test
     @Specification({
         "${route}/input/new/controller",
-        "${streams}/request.with.content.length/server/source",
-        "${streams}/request.with.content.length/server/target" })
-    public void shouldAcceptRequestWithContentLength() throws Exception
-    {
-        k3po.start();
-        k3po.awaitBarrier("ROUTED_INPUT");
-        k3po.notifyBarrier("ROUTED_OUTPUT");
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${route}/input/new/controller",
-        "${streams}/request.with.headers/server/source",
-        "${streams}/request.with.headers/server/target" })
-    public void shouldAcceptRequestWithHeaders() throws Exception
+        "${streams}/request.headers.too.long/server/source" })
+    public void shouldRejectRequestExceedingMaximumHeadersSize() throws Exception
     {
         k3po.start();
         k3po.awaitBarrier("ROUTED_INPUT");

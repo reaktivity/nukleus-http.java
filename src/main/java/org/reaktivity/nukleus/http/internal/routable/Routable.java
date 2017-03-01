@@ -16,6 +16,8 @@
 package org.reaktivity.nukleus.http.internal.routable;
 
 import static java.util.Collections.emptyList;
+import static org.reaktivity.nukleus.http.internal.InternalSystemProperty.MAXIMUM_HEADERS_SIZE;
+import static org.reaktivity.nukleus.http.internal.InternalSystemProperty.MAXIMUM_STREAMS_WITH_PENDING_HEADERS_DECODING;
 import static org.reaktivity.nukleus.http.internal.routable.Route.headersMatch;
 import static org.reaktivity.nukleus.http.internal.routable.Route.sourceMatches;
 import static org.reaktivity.nukleus.http.internal.routable.Route.sourceRefMatches;
@@ -163,10 +165,17 @@ public final class Routable extends Nukleus.Composite
             .readonly(true)
             .build();
 
+        int maximumHeadersSize = MAXIMUM_HEADERS_SIZE.intValue();
+        int maximumStreamsPendingDecode = MAXIMUM_STREAMS_WITH_PENDING_HEADERS_DECODING.intValue(() ->
+        {
+            return (context.maximumStreamsCount() < 1001 ? context.maximumStreamsCount()
+                    : context.maximumStreamsCount() / 10);
+        });
+
         return include(new Source(sourceName, partitionName, layout, writeBuffer,
                                   this::supplyRoutes, supplyTargetId,
                                   this::supplyTarget, correlateNew, lookupEstablished,
-                                  correlateEstablished));
+                                  correlateEstablished, maximumHeadersSize, maximumStreamsPendingDecode));
     }
 
     private Target supplyTarget(

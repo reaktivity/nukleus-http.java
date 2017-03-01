@@ -67,19 +67,25 @@ public final class SourceInputStreamFactory
     private final LongSupplier supplyStreamId;
     private final Target rejectTarget;
     private final LongObjectBiConsumer<Correlation> correlateNew;
+    private final int maximumHeadersSize;
+    private final Slab slab;
 
     public SourceInputStreamFactory(
         Source source,
         LongFunction<List<Route>> supplyRoutes,
         LongSupplier supplyStreamId,
         Target rejectTarget,
-        LongObjectBiConsumer<Correlation> correlateNew)
+        LongObjectBiConsumer<Correlation> correlateNew,
+        int maximumHeadersSize,
+        int maximumStreamsPendingDecode)
     {
         this.source = source;
         this.supplyRoutes = supplyRoutes;
         this.supplyStreamId = supplyStreamId;
         this.rejectTarget = rejectTarget;
         this.correlateNew = correlateNew;
+        this.maximumHeadersSize = maximumHeadersSize;
+        this.slab = new Slab(maximumStreamsPendingDecode, maximumHeadersSize);
     }
 
     public MessageHandler newStream()
@@ -92,6 +98,7 @@ public final class SourceInputStreamFactory
         private MessageHandler streamState;
         private MessageHandler throttleState;
         private DecoderState decoderState;
+        private int slot;
 
         private long sourceId;
 
@@ -181,7 +188,7 @@ public final class SourceInputStreamFactory
                 dataRO.wrap(buffer, index, index + length);
                 final long streamId = dataRO.streamId();
 
-                source.doWindow(streamId, length);
+                source.doWindow(streamId, dataRO.length());
             }
             else if (msgTypeId == EndFW.TYPE_ID)
             {
@@ -223,17 +230,19 @@ public final class SourceInputStreamFactory
 
             // TODO: replace with connection pool (start)
             target.doBegin(newTargetId, 0L, correlationId);
-            target.addThrottle(newTargetId, this::handleThrottle);
+            //target.addThrottle(newTargetId, this::handleThrottle);
             // TODO: replace with connection pool (end)
 
-            // TODO: acquire slab for response if targetWindow requires partial write
+            // TODO: acquire slab for response if targetWindow requires partial write, defer the write till
+            //       we have available (reject) targetWindow
             DirectBuffer payload = new UnsafeBuffer(payloadChars.getBytes(StandardCharsets.UTF_8));
             target.doData(newTargetId, payload, 0, payload.capacity());
 
             this.decoderState = this::decodeHttpBegin;
             this.streamState = this::streamAfterReplyOrReset;
             this.throttleState = this::throttleSkipNextWindow;
-            this.sourceUpdateDeferred = requestBytes - payload.capacity();
+            window += requestBytes;
+            source.doWindow(sourceId, requestBytes);
         }
 
         private void processBegin(
@@ -250,10 +259,8 @@ public final class SourceInputStreamFactory
             this.streamState = this::streamAfterBeginOrData;
             this.decoderState = this::decodeHttpBegin;
 
-            // TODO: acquire slab for request decode of up to initial bytes
-            final int initial = 512;
-            this.window += initial;
-            source.doWindow(sourceId, initial);
+            this.window += maximumHeadersSize;
+            source.doWindow(sourceId, maximumHeadersSize);
         }
 
         private void processData(
@@ -296,6 +303,34 @@ public final class SourceInputStreamFactory
             target.removeThrottle(targetId);
         }
 
+        private int defragmentHttpBegin(
+            final DirectBuffer payload,
+            final int offset,
+            final int limit)
+        {
+            final int endOfHeadersAt = limitOfBytes(payload, offset, limit, CRLFCRLF_BYTES);
+            slot = slab.append(slot, payload, offset, limit);
+            if (endOfHeadersAt == -1)
+            {
+                if (slot == Slab.OUT_OF_MEMORY)
+                {
+                    processInvalidRequest(limit - offset, "HTTP/1.1 400 Bad Request (request headers too long))\r\n\r\n");
+                }
+                else
+                {
+                    window += limit - offset;
+                    source.doWindow(sourceId, limit - offset);
+                }
+                return limit;
+            }
+            else
+            {
+                processCompleteHttpBegin(slab.buffer(slot), slab.offset(slot), slab.limit(slot), endOfHeadersAt - offset);
+                slab.free(slot);
+                return endOfHeadersAt;
+            }
+        }
+
         private int decodeHttpBegin(
             final DirectBuffer payload,
             final int offset,
@@ -304,9 +339,26 @@ public final class SourceInputStreamFactory
             final int endOfHeadersAt = limitOfBytes(payload, offset, limit, CRLFCRLF_BYTES);
             if (endOfHeadersAt == -1)
             {
-                throw new IllegalStateException("incomplete http headers");
+                slot = slab.acquire(sourceId);
+                slab.append(slot, payload, offset, limit);
+                decoderState = this::defragmentHttpBegin;
+                window += limit - offset;
+                source.doWindow(sourceId, limit - offset);
+                return limit;
             }
+            else
+            {
+                processCompleteHttpBegin(payload, offset, endOfHeadersAt, endOfHeadersAt - offset);
+                return endOfHeadersAt;
+            }
+        }
 
+        private void processCompleteHttpBegin(
+            final DirectBuffer payload,
+            final int offset,
+            final int endOfHeadersAt,
+            int windowUpdate)
+        {
             // TODO: replace with lightweight approach (start)
             String[] lines = payload.getStringWithoutLengthUtf8(offset, endOfHeadersAt - offset).split("\r\n");
             String[] start = lines[0].split("\\s+");
@@ -366,13 +418,13 @@ public final class SourceInputStreamFactory
                             this.target = newTarget;
                             this.targetId = newTargetId;
                             this.throttleState = this::throttleNextWindow;
-                            this.sourceUpdateDeferred = endOfHeadersAt - offset;
+                            this.sourceUpdateDeferred = windowUpdate;
                         }
                         else
                         {
                             // no content
                             newTarget.doHttpEnd(newTargetId);
-                            source.doWindow(sourceId, limit - offset);
+                            source.doWindow(sourceId, windowUpdate);
 
                             this.target = newTarget;
                             this.targetId = newTargetId;
@@ -385,8 +437,6 @@ public final class SourceInputStreamFactory
                     }
                 }
             }
-
-            return endOfHeadersAt;
         }
 
         private Map<String, String> decodeHttpHeaders(
