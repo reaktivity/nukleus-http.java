@@ -168,7 +168,8 @@ public final class Routable extends Nukleus.Composite
         int maximumHeadersSize = MAXIMUM_HEADERS_SIZE.intValue();
         int maximumStreamsPendingDecode = MAXIMUM_STREAMS_PENDING_DECODE.intValue(() ->
         {
-            return Math.max(100, context.maximumStreamsCount() / 10);
+            return (context.maximumStreamsCount() < 1001 ? context.maximumStreamsCount()
+                    : context.maximumStreamsCount() / 10);
         });
 
         return include(new Source(sourceName, partitionName, layout, writeBuffer,

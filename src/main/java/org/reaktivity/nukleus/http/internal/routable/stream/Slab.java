@@ -28,7 +28,7 @@ import org.agrona.concurrent.UnsafeBuffer;
  * A chunk of shared memory for storing incomplete data for decoding purposes.
  * Methods are provided for getting a buffer and appending partial data in the case of an
  * incomplete block of data to be decoded. The memory is segmented into slots, the size of
- * each slot being the maximum allow size for the header portion of an HTTP request or response.
+ * each slot being the maximum allowed size for the header portion of an HTTP request or response.
  * <b>Each instance of this class is assumed to be used by one and only one thread.</b>
  */
 class Slab
@@ -71,6 +71,7 @@ class Slab
 
     public int append(int slot, DirectBuffer written, int offset, int limit)
     {
+        assert slot >= 0 && slot < offsets.length;
         assert offsets[slot] != UNUSED;
         assert limit > offset;
         int dataLength = limit - offset;
