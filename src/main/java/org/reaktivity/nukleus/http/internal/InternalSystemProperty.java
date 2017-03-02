@@ -25,7 +25,7 @@ public enum InternalSystemProperty
     // (the portion up to and including CRLFCRLF)
     MAXIMUM_HEADERS_SIZE("nukleus.http.maximum.headers.size", "8192"),
 
-    MAXIMUM_STREAMS_WITH_PENDING_HEADERS_DECODING("nukleus.http.maximum.streams.pending.decode");
+    MAXIMUM_STREAMS_PENDING_DECODE("nukleus.http.maximum.streams.pending.decode");
 
     private final String name;
     private final String defaultValue;

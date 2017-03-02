@@ -18,7 +18,7 @@ package org.reaktivity.nukleus.http.internal.streams.server.rfc7230;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.rules.RuleChain.outerRule;
 import static org.reaktivity.nukleus.http.internal.InternalSystemProperty.MAXIMUM_HEADERS_SIZE;
-import static org.reaktivity.nukleus.http.internal.InternalSystemProperty.MAXIMUM_STREAMS_WITH_PENDING_HEADERS_DECODING;
+import static org.reaktivity.nukleus.http.internal.InternalSystemProperty.MAXIMUM_STREAMS_PENDING_DECODE;
 
 import org.junit.Rule;
 import org.junit.Test;
@@ -40,7 +40,7 @@ public class MessageFormatLimitsIT
 
     private final TestRule properties = new SystemPropertiesRule()
         .setProperty(MAXIMUM_HEADERS_SIZE, "64")
-        .setProperty(MAXIMUM_STREAMS_WITH_PENDING_HEADERS_DECODING, "1");
+        .setProperty(MAXIMUM_STREAMS_PENDING_DECODE, "1");
 
     private final NukleusRule nukleus = new NukleusRule("http")
         .directory("target/nukleus-itests")
