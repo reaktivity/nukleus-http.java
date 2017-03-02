@@ -309,9 +309,9 @@ public final class SourceInputStreamFactory
             final int limit)
         {
             final int endOfHeadersAt = limitOfBytes(payload, offset, limit, CRLFCRLF_BYTES);
-            slot = slab.append(slot, payload, offset, limit);
             if (endOfHeadersAt == -1)
             {
+                slot = slab.append(slot, payload, offset, limit);
                 if (slot == Slab.OUT_OF_MEMORY)
                 {
                     processInvalidRequest(limit - offset, "HTTP/1.1 400 Bad Request (request headers too long))\r\n\r\n");
@@ -325,6 +325,7 @@ public final class SourceInputStreamFactory
             }
             else
             {
+                slot = slab.append(slot, payload, offset, endOfHeadersAt);
                 processCompleteHttpBegin(slab.buffer(slot), slab.offset(slot), slab.limit(slot), endOfHeadersAt - offset);
                 slab.free(slot);
                 return endOfHeadersAt;

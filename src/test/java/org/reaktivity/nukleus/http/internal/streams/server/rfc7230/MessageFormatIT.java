@@ -75,4 +75,30 @@ public class MessageFormatIT
         k3po.finish();
     }
 
+    @Test
+    @Specification({
+        "${route}/input/new/controller",
+        "${streams}/request.fragmented/server/source",
+        "${streams}/request.fragmented/server/target" })
+    public void shouldAcceptFragmentedRequest() throws Exception
+    {
+        k3po.start();
+        k3po.awaitBarrier("ROUTED_INPUT");
+        k3po.notifyBarrier("ROUTED_OUTPUT");
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/input/new/controller",
+        "${streams}/request.fragmented.with.content.length/server/source",
+        "${streams}/request.fragmented.with.content.length/server/target" })
+    public void shouldAcceptFragmentedRequestWithData() throws Exception
+    {
+        k3po.start();
+        k3po.awaitBarrier("ROUTED_INPUT");
+        k3po.notifyBarrier("ROUTED_OUTPUT");
+        k3po.finish();
+    }
+
 }

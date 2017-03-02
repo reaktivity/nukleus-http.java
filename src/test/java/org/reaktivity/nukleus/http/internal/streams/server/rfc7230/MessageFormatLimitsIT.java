@@ -38,8 +38,8 @@ public class MessageFormatLimitsIT
 
     private final TestRule timeout = new DisableOnDebug(new Timeout(5, SECONDS));
 
-    private final TestRule settings = new SystemPropertiesRule()
-        .setProperty(MAXIMUM_HEADERS_SIZE, "26")
+    private final TestRule properties = new SystemPropertiesRule()
+        .setProperty(MAXIMUM_HEADERS_SIZE, "64")
         .setProperty(MAXIMUM_STREAMS_WITH_PENDING_HEADERS_DECODING, "1");
 
     private final NukleusRule nukleus = new NukleusRule("http")
@@ -54,13 +54,26 @@ public class MessageFormatLimitsIT
         .streams("source", "http#target");
 
     @Rule
-    public final TestRule chain = outerRule(settings).around(nukleus).around(k3po).around(timeout);
+    public final TestRule chain = outerRule(properties).around(nukleus).around(k3po).around(timeout);
 
     @Test
     @Specification({
         "${route}/input/new/controller",
         "${streams}/request.headers.too.long/server/source" })
     public void shouldRejectRequestExceedingMaximumHeadersSize() throws Exception
+    {
+        k3po.start();
+        k3po.awaitBarrier("ROUTED_INPUT");
+        k3po.notifyBarrier("ROUTED_OUTPUT");
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/input/new/controller",
+        "${streams}/request.fragmented.with.content.length/server/source",
+        "${streams}/request.fragmented.with.content.length/server/target" })
+    public void shouldAcceptFragmentedRequestWithDataWhenOnlyDataExceedsMaxRequestHeadersSize() throws Exception
     {
         k3po.start();
         k3po.awaitBarrier("ROUTED_INPUT");
