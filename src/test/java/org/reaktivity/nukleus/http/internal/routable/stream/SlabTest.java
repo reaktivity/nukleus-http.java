@@ -143,6 +143,4 @@ public class SlabTest
         assertNotEquals(Slab.OUT_OF_MEMORY, slot);
     }
 
-
-
 }
