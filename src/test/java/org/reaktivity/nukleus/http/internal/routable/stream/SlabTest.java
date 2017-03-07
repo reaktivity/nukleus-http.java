@@ -15,31 +15,45 @@
  */
 package org.reaktivity.nukleus.http.internal.routable.stream;
 
-import static org.agrona.BitUtil.findNextPositivePowerOfTwo;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
-import org.agrona.ExpandableArrayBuffer;
+import org.agrona.MutableDirectBuffer;
 import org.junit.Test;
 
 public class SlabTest
 {
-    private ExpandableArrayBuffer data = new ExpandableArrayBuffer(100);
-
-    @Test
-    public void acquireShouldAllocateEmptySlot() throws Exception
+    @Test(expected = IllegalArgumentException.class)
+    public void shouldRejectSlotCapacityNotPowerOfTwo()
     {
-        Slab slab = new Slab(10, 120);
-        int slot = slab.acquire(123);
-        assertEquals(0, slab.limit(slot) - slab.offset(slot));
+        new Slab(1024, 100);
     }
 
+    @Test(expected = IllegalArgumentException.class)
+    public void shouldRejectTotalCapacityNotPowerOfTwo()
+    {
+        new Slab(10000, 1024);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void shouldRejectSlotCapacityGreaterThanTotalCapacity()
+    {
+        new Slab(256, 512);
+    }
+
+    @Test
+    public void acquireShouldAllocateSlot() throws Exception
+    {
+        Slab slab = new Slab(16, 4);
+        int slot = slab.acquire(123);
+        assertTrue(slot >= 0 && slot < 4);
+    }
 
     @Test
     public void acquireShouldAllocateDifferentSlotsForDifferentStreams() throws Exception
     {
-        Slab slab = new Slab(10, 120);
+        Slab slab = new Slab(512 * 1024, 1024);
         int slot1 = slab.acquire(111);
         assertTrue(slot1 >= 0);
         int slot2 = slab.acquire(112);
@@ -51,7 +65,7 @@ public class SlabTest
     @Test
     public void acquireShouldAllocateDifferentSlotsForDifferentStreamsWithSameHashcode() throws Exception
     {
-        Slab slab = new Slab(10, 120);
+        Slab slab = new Slab(512 * 1024, 1024);
 
         int slot1 = slab.acquire(1);
         assertTrue(slot1 >= 0);
@@ -65,82 +79,45 @@ public class SlabTest
     @Test
     public void acquireShouldReportOutOfMemory() throws Exception
     {
-        Slab slab = new Slab(10, 120);
+        Slab slab = new Slab(256, 16);
         int slot = 0;
         int i;
-        for (i=0; i < findNextPositivePowerOfTwo(10); i++)
+        for (i = 0; i < 16; i++)
         {
             int streamId = 111 + i;
             slot = slab.acquire(streamId);
             assertTrue(slot >= 0);
         }
         slot = slab.acquire(111 + i);
-        assertEquals(Slab.OUT_OF_MEMORY, slot);
+        assertEquals(Slab.SLOT_NOT_AVAILABLE, slot);
     }
 
     @Test
-    public void appendShouldStoreData() throws Exception
+    public void bufferShouldReturnCorrectlySizedBuffer() throws Exception
     {
-        data.putStringWithoutLengthUtf8(13, "test data");
-        Slab slab = new Slab(1, 120);
+        Slab slab = new Slab(512, 64);
         int slot = slab.acquire(111);
-        int result = slab.append(slot, data, 13, 13 + "test data".length());
-        assertEquals(slot, result);
-        int dataLength = slab.limit(slot) - slab.offset(slot);
-        assertEquals("test data".length(), dataLength);
-        assertEquals("test data", slab.buffer(slot).getStringWithoutLengthUtf8(
-                slab.offset(slot), dataLength));
-    }
-
-    @Test
-    public void appendShouldAppendToAlreadyStoredData() throws Exception
-    {
-        data.putStringWithoutLengthUtf8(0, "test data");
-        Slab slab = new Slab(1, 120);
-        int slot = slab.acquire(111);
-        int result = slab.append(slot, data, 0, "test data".length());
-        data.putStringWithoutLengthUtf8(0, " and more data");
-        result = slab.append(slot, data, 0, " and more data".length());
-        assertEquals(slot, result);
-        int dataLength = slab.limit(slot) - slab.offset(slot);
-        assertEquals("test data and more data".length(), dataLength);
-        assertEquals("test data and more data", slab.buffer(slot).getStringWithoutLengthUtf8(
-                slab.offset(slot), dataLength));
-    }
-
-    @Test
-    public void appendShouldReportOutOfMemory() throws Exception
-    {
-        data.putStringWithoutLengthUtf8(0, "test data");
-        Slab slab = new Slab(1, 16);
-        int slot = slab.acquire(111);
-        int result = slab.append(slot, data, 0, "test data".length());
-        assertEquals(slot, result);
-        data.putStringWithoutLengthUtf8(0, " and more data");
-        result = slab.append(slot, data, 0, " and more data".length());
-        assertEquals(Slab.OUT_OF_MEMORY, result);
-
-        // verify slot has been freed
-        assertEquals(-1, slab.offset(slot));
+        MutableDirectBuffer buffer = slab.buffer(slot);
+        assertEquals(64, buffer.capacity());
     }
 
     @Test
     public void freeShouldMakeSlotAvailableForReuse() throws Exception
     {
-        Slab slab = new Slab(10, 120);
+        Slab slab = new Slab(16 * 1024, 1024);
         int slot = 0;
         int i;
-        for (i=0; i < findNextPositivePowerOfTwo(10); i++)
+        for (i=0; i < 16; i++)
         {
             int streamId = 111 + i;
             slot = slab.acquire(streamId);
             assertTrue(slot >= 0);
         }
         int slotBad = slab.acquire(111 + i);
-        assertEquals(Slab.OUT_OF_MEMORY, slotBad);
-        slab.free(slot);
+        assertEquals(Slab.SLOT_NOT_AVAILABLE, slotBad);
+        slab.release(slot);
         slot = slab.acquire(111 + i);
-        assertNotEquals(Slab.OUT_OF_MEMORY, slot);
+        assertNotEquals(Slab.SLOT_NOT_AVAILABLE, slot);
     }
 
 }

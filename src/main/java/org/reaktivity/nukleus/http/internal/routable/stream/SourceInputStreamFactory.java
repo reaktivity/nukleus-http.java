@@ -98,7 +98,8 @@ public final class SourceInputStreamFactory
         private MessageHandler streamState;
         private MessageHandler throttleState;
         private DecoderState decoderState;
-        private int slot;
+        private int slotIndex;
+        private int slotPosition;
 
         private long sourceId;
 
@@ -309,26 +310,29 @@ public final class SourceInputStreamFactory
             final int limit)
         {
             final int endOfHeadersAt = limitOfBytes(payload, offset, limit, CRLFCRLF_BYTES);
-            if (endOfHeadersAt == -1)
+            int length = endOfHeadersAt == -1 ? limit - offset : endOfHeadersAt - offset;
+            MutableDirectBuffer buffer = slab.buffer(slotIndex);
+            if (slotPosition + length > buffer.capacity())
             {
-                slot = slab.append(slot, payload, offset, limit);
-                if (slot == Slab.OUT_OF_MEMORY)
-                {
-                    processInvalidRequest(limit - offset, "HTTP/1.1 400 Bad Request (request headers too long))\r\n\r\n");
-                }
-                else
-                {
-                    window += limit - offset;
-                    source.doWindow(sourceId, limit - offset);
-                }
+                processInvalidRequest(limit - offset, "HTTP/1.1 400 Bad Request (request headers too long))\r\n\r\n");
                 return limit;
             }
             else
             {
-                slot = slab.append(slot, payload, offset, endOfHeadersAt);
-                processCompleteHttpBegin(slab.buffer(slot), slab.offset(slot), slab.limit(slot), endOfHeadersAt - offset);
-                slab.free(slot);
-                return endOfHeadersAt;
+                buffer.putBytes(slotPosition, payload, offset, length);
+                slotPosition += length;
+                if (endOfHeadersAt == -1)
+                {
+                    window += limit - offset;
+                    source.doWindow(sourceId, limit - offset);
+                    return limit;
+                }
+                else
+                {
+                    decodeCompleteHttpBegin(buffer, 0, slotPosition);
+                    slab.release(slotIndex);
+                    return endOfHeadersAt;
+                }
             }
         }
 
@@ -340,35 +344,38 @@ public final class SourceInputStreamFactory
             final int endOfHeadersAt = limitOfBytes(payload, offset, limit, CRLFCRLF_BYTES);
             if (endOfHeadersAt == -1)
             {
-                slot = slab.acquire(sourceId);
-                slab.append(slot, payload, offset, limit);
+                slotIndex = slab.acquire(sourceId);
+                int length = limit - offset;
+                MutableDirectBuffer buffer = slab.buffer(slotIndex);
+                assert length <= buffer.capacity();
+                buffer.putBytes(0, payload, offset, length);
+                slotPosition = length;
                 decoderState = this::defragmentHttpBegin;
-                window += limit - offset;
-                source.doWindow(sourceId, limit - offset);
+                this.window += length;
+                source.doWindow(sourceId, length);
                 return limit;
             }
             else
             {
-                processCompleteHttpBegin(payload, offset, endOfHeadersAt, endOfHeadersAt - offset);
+                decodeCompleteHttpBegin(payload, offset, endOfHeadersAt - offset);
                 return endOfHeadersAt;
             }
         }
 
-        private void processCompleteHttpBegin(
+        private void decodeCompleteHttpBegin(
             final DirectBuffer payload,
             final int offset,
-            final int endOfHeadersAt,
-            int windowUpdate)
+            final int length)
         {
             // TODO: replace with lightweight approach (start)
-            String[] lines = payload.getStringWithoutLengthUtf8(offset, endOfHeadersAt - offset).split("\r\n");
+            String[] lines = payload.getStringWithoutLengthUtf8(offset, length).split("\r\n");
             String[] start = lines[0].split("\\s+");
 
             Pattern versionPattern = Pattern.compile("HTTP/1\\.(\\d)");
             Matcher versionMatcher = versionPattern.matcher(start[2]);
             if (!versionMatcher.matches())
             {
-                processInvalidRequest(endOfHeadersAt - offset, "HTTP/1.1 505 HTTP Version Not Supported\r\n\r\n");
+                processInvalidRequest(length, "HTTP/1.1 505 HTTP Version Not Supported\r\n\r\n");
             }
             else
             {
@@ -379,7 +386,7 @@ public final class SourceInputStreamFactory
 
                 if (headers.get(":authority") == null || requestURI.getUserInfo() != null)
                 {
-                    processInvalidRequest(endOfHeadersAt - offset, "HTTP/1.1 400 Bad Request\r\n\r\n");
+                    processInvalidRequest(length, "HTTP/1.1 400 Bad Request\r\n\r\n");
                 }
                 else
                 {
@@ -419,13 +426,13 @@ public final class SourceInputStreamFactory
                             this.target = newTarget;
                             this.targetId = newTargetId;
                             this.throttleState = this::throttleNextWindow;
-                            this.sourceUpdateDeferred = windowUpdate;
+                            this.sourceUpdateDeferred = length;
                         }
                         else
                         {
                             // no content
                             newTarget.doHttpEnd(newTargetId);
-                            source.doWindow(sourceId, windowUpdate);
+                            source.doWindow(sourceId, length);
 
                             this.target = newTarget;
                             this.targetId = newTargetId;
@@ -434,7 +441,7 @@ public final class SourceInputStreamFactory
                     }
                     else
                     {
-                        processInvalidRequest(endOfHeadersAt - offset, "HTTP/1.1 404 Not Found\r\n\r\n");
+                        processInvalidRequest(length, "HTTP/1.1 404 Not Found\r\n\r\n");
                     }
                 }
             }

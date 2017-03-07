@@ -15,98 +15,101 @@
  */
 package org.reaktivity.nukleus.http.internal.routable.stream;
 
-import static org.agrona.BitUtil.findNextPositivePowerOfTwo;
+import static org.agrona.BitUtil.isPowerOfTwo;
 
-import java.util.Arrays;
+import java.nio.ByteBuffer;
+import java.util.BitSet;
 
-import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
 import org.agrona.collections.Hashing;
 import org.agrona.concurrent.UnsafeBuffer;
 
 /**
- * A chunk of shared memory for storing incomplete data for decoding purposes.
- * Methods are provided for getting a buffer and appending partial data in the case of an
- * incomplete block of data to be decoded. The memory is segmented into slots, the size of
- * each slot being the maximum allowed size for the header portion of an HTTP request or response.
+ * A chunk of shared memory for temporary storage of data. This is logically segmented into a set of
+ * slots of equal size. Methods are provided for acquiring a slot, getting a buffer that can be used
+ * to store data in it, and releasing the slot once it is no longer needed.
  * <b>Each instance of this class is assumed to be used by one and only one thread.</b>
  */
-class Slab
+public class Slab
 {
-    static final int OUT_OF_MEMORY = -2;
-    private static final int UNUSED = -1;
-    private final int slotSize;
-    private final int slotSizeBits;
+    static final int SLOT_NOT_AVAILABLE = -1;
+
+    private final MutableDirectBuffer mutableFW = new UnsafeBuffer(new byte[0]);
+
+    private final int slotCapacity;
+    private final int bitsPerSlot;
+    private final int mask;
     private final MutableDirectBuffer buffer;
-    private final int offsets[]; // starting position for slot data in buffer
-    private final int remaining[]; // length of data in slot
-    private int acquiredSlots = 0;
+    private final BitSet used;
 
-    Slab(int minimumNumberOfSlots, int minimumSlotSize)
-    {
-        int slots = findNextPositivePowerOfTwo(minimumNumberOfSlots);
-        slotSize = findNextPositivePowerOfTwo(minimumSlotSize);
-        slotSizeBits = Integer.numberOfTrailingZeros(slotSize);
-        int capacityInBytes = slots << slotSizeBits;
-        buffer = new UnsafeBuffer(new byte[capacityInBytes]);
-        offsets = new int[slots];
-        Arrays.fill(offsets, UNUSED);
-        remaining = new int[slots];
-    }
+    private int availableSlots;
 
-    public DirectBuffer buffer(int slot)
+    public Slab(int totalCapacity, int slotCapacity)
     {
-        return buffer;
-    }
-
-    public int offset(int slot)
-    {
-        return offsets[slot];
-    }
-
-    public int limit(int slot)
-    {
-        return offsets[slot] + remaining[slot];
-    }
-
-    public int append(int slot, DirectBuffer written, int offset, int limit)
-    {
-        assert slot >= 0 && slot < offsets.length;
-        assert offsets[slot] != UNUSED;
-        assert limit > offset;
-        int dataLength = limit - offset;
-        if (dataLength + remaining[slot] >= slotSize)
+        if (!isPowerOfTwo(totalCapacity))
         {
-            free(slot);
-            return OUT_OF_MEMORY;
+            throw new IllegalArgumentException("totalCapacity is not a power of 2");
         }
-        buffer.putBytes(offsets[slot] + remaining[slot], written, offset, dataLength);
-        remaining[slot] += dataLength;
-        return slot;
+        if (!isPowerOfTwo(slotCapacity))
+        {
+            throw new IllegalArgumentException("slotCapacity is not a power of 2");
+        }
+        if (slotCapacity > totalCapacity)
+        {
+            throw new IllegalArgumentException("slotCapacity exceeds totalCapacity");
+        }
+        this.slotCapacity = slotCapacity;
+        this.bitsPerSlot = Integer.numberOfTrailingZeros(slotCapacity);
+        int totalSlots = totalCapacity / slotCapacity;
+        this.mask = totalSlots - 1;
+        this.buffer = new UnsafeBuffer(ByteBuffer.allocateDirect(totalCapacity));
+        this.used = new BitSet(totalSlots);
+        this.availableSlots = totalSlots;
     }
 
+    /**
+     * Reserves a slot for use by the given stream
+     * @param streamId - Stream id
+     * @return Id of the acquired slot, or SLOT_NOT_AVAILABLE if all slots are in use
+     */
     public int acquire(long streamId)
     {
-        if (acquiredSlots == offsets.length)
+        if (availableSlots == 0)
         {
-            return OUT_OF_MEMORY;
+            return SLOT_NOT_AVAILABLE;
         }
-        final int mask = offsets.length - 1;
         int slot = Hashing.hash(streamId, mask);
-        while (offsets[slot] != UNUSED)
+        while (used.get(slot))
         {
             slot = ++slot & mask;
         }
-        offsets[slot] = slot << slotSizeBits;
-        acquiredSlots++;
+        used.set(slot);
+        availableSlots--;
         return slot;
     }
 
-    public void free(int slot)
+    /**
+     * Gets a buffer which can be used to write data into the given slot.
+     * @param slot - Id of a previously acquired slot
+     * @return A buffer suitable for <b>one-time use only</b>
+     */
+    public MutableDirectBuffer buffer(int slot)
     {
-        offsets[slot] = UNUSED;
-        remaining[slot] = 0;
-        acquiredSlots--;
+        assert used.get(slot);
+        final long slotAddressOffset = buffer.addressOffset() + slot << bitsPerSlot;
+        mutableFW.wrap(slotAddressOffset, slotCapacity);
+        return mutableFW;
+    }
+
+    /**
+     * Releases a slot so it may be used by other streams
+     * @param slot - Id of a previously acquired slot
+     */
+    public void release(int slot)
+    {
+        assert used.get(slot);
+        used.clear(slot);
+        availableSlots++;
     }
 
 }
