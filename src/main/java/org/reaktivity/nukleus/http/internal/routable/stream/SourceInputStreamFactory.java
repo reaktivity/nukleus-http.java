@@ -77,7 +77,7 @@ public final class SourceInputStreamFactory
         Target rejectTarget,
         LongObjectBiConsumer<Correlation> correlateNew,
         int maximumHeadersSize,
-        int maximumStreamsPendingDecode)
+        int memoryForDecode)
     {
         this.source = source;
         this.supplyRoutes = supplyRoutes;
@@ -85,7 +85,7 @@ public final class SourceInputStreamFactory
         this.rejectTarget = rejectTarget;
         this.correlateNew = correlateNew;
         this.maximumHeadersSize = maximumHeadersSize;
-        this.slab = new Slab(maximumStreamsPendingDecode, maximumHeadersSize);
+        this.slab = new Slab(memoryForDecode, maximumHeadersSize);
     }
 
     public MessageHandler newStream()
@@ -345,6 +345,7 @@ public final class SourceInputStreamFactory
             if (endOfHeadersAt == -1)
             {
                 slotIndex = slab.acquire(sourceId);
+                slotPosition = 0;
                 int length = limit - offset;
                 MutableDirectBuffer buffer = slab.buffer(slotIndex);
                 assert length <= buffer.capacity();

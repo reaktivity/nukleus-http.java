@@ -22,10 +22,12 @@ public enum InternalSystemProperty
 {
 
     // Maximum size for the header portion of an HTTP request or response
-    // (the portion up to and including CRLFCRLF)
+    // (the portion up to and including CRLFCRLF). Must be a positive power of two.
     MAXIMUM_HEADERS_SIZE("nukleus.http.maximum.headers.size", "8192"),
 
-    MAXIMUM_STREAMS_PENDING_DECODE("nukleus.http.maximum.streams.pending.decode");
+    // Maximum memory to be used by all streams from each source for decoding purposes.
+    // Must be a positive power of two.
+    MEMORY_FOR_DECODE("nukleus.http.available.memory.for.decode");
 
     private final String name;
     private final String defaultValue;

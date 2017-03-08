@@ -95,10 +95,12 @@ public class SlabTest
     @Test
     public void bufferShouldReturnCorrectlySizedBuffer() throws Exception
     {
-        Slab slab = new Slab(512, 64);
-        int slot = slab.acquire(111);
+        Slab slab = new Slab(256, 16);
+        int slot = slab.acquire(124123490L);
         MutableDirectBuffer buffer = slab.buffer(slot);
-        assertEquals(64, buffer.capacity());
+        buffer.putInt(0, 123);
+        assertEquals(123, buffer.getInt(0));
+        assertEquals(16, buffer.capacity());
     }
 
     @Test

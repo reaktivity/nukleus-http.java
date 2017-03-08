@@ -96,7 +96,7 @@ public class Slab
     public MutableDirectBuffer buffer(int slot)
     {
         assert used.get(slot);
-        final long slotAddressOffset = buffer.addressOffset() + slot << bitsPerSlot;
+        final long slotAddressOffset = buffer.addressOffset() + (slot << bitsPerSlot);
         mutableFW.wrap(slotAddressOffset, slotCapacity);
         return mutableFW;
     }

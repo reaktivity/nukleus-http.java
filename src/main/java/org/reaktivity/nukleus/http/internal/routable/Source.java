@@ -71,7 +71,7 @@ public final class Source implements Nukleus
         LongFunction<Correlation> correlateEstablished,
         LongFunction<Correlation> lookupEstablished,
         int maximumHeadersSize,
-        int maximumStreamsPendingDecode)
+        int memoryForDecode)
     {
         this.sourceName = sourceName;
         this.partitionName = partitionName;
@@ -85,7 +85,7 @@ public final class Source implements Nukleus
         Target rejectTarget = supplyTarget.apply(sourceName);
         this.streamFactories = new EnumMap<>(RouteKind.class);
         this.streamFactories.put(RouteKind.INPUT, new SourceInputStreamFactory(this, supplyRoutes, supplyTargetId,
-                rejectTarget, correlateNew, maximumHeadersSize, maximumStreamsPendingDecode)::newStream);
+                rejectTarget, correlateNew, maximumHeadersSize, memoryForDecode)::newStream);
         this.streamFactories.put(RouteKind.OUTPUT_ESTABLISHED,
                 new TargetOutputEstablishedStreamFactory(this, supplyTarget, supplyTargetId, correlateEstablished)::newStream);
         this.streamFactories.put(RouteKind.OUTPUT,
