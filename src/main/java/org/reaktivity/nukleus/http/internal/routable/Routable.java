@@ -32,6 +32,7 @@ import java.util.function.LongFunction;
 import java.util.function.LongSupplier;
 import java.util.function.Predicate;
 
+import org.agrona.BitUtil;
 import org.agrona.LangUtil;
 import org.agrona.collections.Long2ObjectHashMap;
 import org.agrona.concurrent.AtomicBuffer;
@@ -168,9 +169,9 @@ public final class Routable extends Nukleus.Composite
         int maximumHeadersSize = MAXIMUM_HEADERS_SIZE.intValue();
         int memoryForDecode = MEMORY_FOR_DECODE.intValue(() ->
         {
-            int maxStreamsWithIncompleteRequest = context.maximumStreamsCount() < 1024 ? 64
-                    : context.maximumStreamsCount() / 16;
-            return maximumHeadersSize * maxStreamsWithIncompleteRequest;
+            int maxStreamsWithIncompleteRequest = context.maximumStreamsCount() < 1024 ? context.maximumStreamsCount()
+                    : context.maximumStreamsCount() / 8;
+            return BitUtil.findNextPositivePowerOfTwo(maximumHeadersSize * maxStreamsWithIncompleteRequest / 2);
         });
 
         return include(new Source(sourceName, partitionName, layout, writeBuffer,

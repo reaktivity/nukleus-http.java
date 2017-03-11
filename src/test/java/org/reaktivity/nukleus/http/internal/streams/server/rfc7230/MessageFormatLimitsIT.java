@@ -25,6 +25,7 @@ import org.junit.Test;
 import org.junit.rules.DisableOnDebug;
 import org.junit.rules.TestRule;
 import org.junit.rules.Timeout;
+import org.kaazing.k3po.junit.annotation.ScriptProperty;
 import org.kaazing.k3po.junit.annotation.Specification;
 import org.kaazing.k3po.junit.rules.K3poRule;
 import org.reaktivity.nukleus.http.internal.test.SystemPropertiesRule;
@@ -73,6 +74,7 @@ public class MessageFormatLimitsIT
         "${route}/input/new/controller",
         "${streams}/request.fragmented.with.content.length/server/source",
         "${streams}/request.fragmented.with.content.length/server/target" })
+    @ScriptProperty("targetInputInitialWindow [0x40 0x00 0x00 0x00]") // 64 bytes, same as max headers size
     public void shouldAcceptFragmentedRequestWithDataWhenOnlyDataExceedsMaxRequestHeadersSize() throws Exception
     {
         k3po.start();

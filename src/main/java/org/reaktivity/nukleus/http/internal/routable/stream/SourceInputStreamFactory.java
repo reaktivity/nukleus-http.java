@@ -121,7 +121,7 @@ public final class SourceInputStreamFactory
         private SourceInputStream()
         {
             this.streamState = this::streamBeforeBegin;
-            this.throttleState = this::throttleSkipNextWindow;
+            this.throttleState = this::throttleResetOnly;
         }
 
         private void handleStream(
@@ -241,7 +241,7 @@ public final class SourceInputStreamFactory
 
             this.decoderState = this::decodeHttpBegin;
             this.streamState = this::streamAfterReplyOrReset;
-            this.throttleState = this::throttleSkipNextWindow;
+            this.throttleState = this::throttleDoWindow;
             window += requestBytes;
             source.doWindow(sourceId, requestBytes);
         }
@@ -261,6 +261,11 @@ public final class SourceInputStreamFactory
             this.decoderState = this::decodeHttpBegin;
 
             this.window += maximumHeadersSize;
+
+            // Make sure we don't advertise more window than available target window
+            // once we have started the stream on the target
+            this.sourceUpdateDeferred -= maximumHeadersSize;
+
             source.doWindow(sourceId, maximumHeadersSize);
         }
 
@@ -310,21 +315,20 @@ public final class SourceInputStreamFactory
             final int limit)
         {
             final int endOfHeadersAt = limitOfBytes(payload, offset, limit, CRLFCRLF_BYTES);
-            int length = endOfHeadersAt == -1 ? limit - offset : endOfHeadersAt - offset;
-            MutableDirectBuffer buffer = slab.buffer(slotIndex);
-            if (slotPosition + length > buffer.capacity())
+            if (window < 2 && endOfHeadersAt == -1)
             {
-                processInvalidRequest(limit - offset, "HTTP/1.1 400 Bad Request (request headers too long))\r\n\r\n");
+                slab.release(slotIndex);
+                processInvalidRequest(limit - offset, "HTTP/1.1 431 Request Header Fields Too Large\r\n\r\n");
                 return limit;
             }
             else
             {
+                int length = endOfHeadersAt == -1 ? limit - offset : endOfHeadersAt - offset;
+                MutableDirectBuffer buffer = slab.buffer(slotIndex);
                 buffer.putBytes(slotPosition, payload, offset, length);
                 slotPosition += length;
                 if (endOfHeadersAt == -1)
                 {
-                    window += limit - offset;
-                    source.doWindow(sourceId, limit - offset);
                     return limit;
                 }
                 else
@@ -352,8 +356,6 @@ public final class SourceInputStreamFactory
                 buffer.putBytes(0, payload, offset, length);
                 slotPosition = length;
                 decoderState = this::defragmentHttpBegin;
-                this.window += length;
-                source.doWindow(sourceId, length);
                 return limit;
             }
             else
@@ -421,23 +423,15 @@ public final class SourceInputStreamFactory
                             this.decoderState = this::decodeHttpData;
                         }
 
-                        if (hasUpgrade || contentRemaining != 0)
-                        {
-                            // content stream
-                            this.target = newTarget;
-                            this.targetId = newTargetId;
-                            this.throttleState = this::throttleNextWindow;
-                            this.sourceUpdateDeferred = length;
-                        }
-                        else
+                        sourceUpdateDeferred += length;
+                        this.target = newTarget;
+                        this.targetId = newTargetId;
+                        this.throttleState = this::throttleDoWindow;
+
+                        if (!hasUpgrade && contentRemaining == 0)
                         {
                             // no content
                             newTarget.doHttpEnd(newTargetId);
-                            source.doWindow(sourceId, length);
-
-                            this.target = newTarget;
-                            this.targetId = newTargetId;
-                            this.throttleState = this::throttleSkipNextWindow;
                         }
                     }
                     else
@@ -510,13 +504,7 @@ public final class SourceInputStreamFactory
             {
                 target.doHttpEnd(targetId);
 
-                if (sourceUpdateDeferred != 0)
-                {
-                    source.doWindow(sourceId, sourceUpdateDeferred);
-                    sourceUpdateDeferred = 0;
-                }
-
-                this.throttleState = this::throttleSkipNextWindow;
+                this.throttleState = this::throttleDoWindow;
             }
 
             return offset + length;
@@ -561,7 +549,24 @@ public final class SourceInputStreamFactory
             throttleState.onMessage(msgTypeId, buffer, index, length);
         }
 
-        private void throttleSkipNextWindow(
+        private void throttleResetOnly(
+            int msgTypeId,
+            DirectBuffer buffer,
+            int index,
+            int length)
+        {
+            switch (msgTypeId)
+            {
+            case ResetFW.TYPE_ID:
+                processReset(buffer, index, length);
+                break;
+            default:
+                // ignore
+                break;
+            }
+        }
+
+        private void throttleDoWindow(
             int msgTypeId,
             DirectBuffer buffer,
             int index,
@@ -570,7 +575,7 @@ public final class SourceInputStreamFactory
             switch (msgTypeId)
             {
             case WindowFW.TYPE_ID:
-                processSkipNextWindow(buffer, index, length);
+                processDoWindow(buffer, index, length);
                 break;
             case ResetFW.TYPE_ID:
                 processReset(buffer, index, length);
@@ -581,37 +586,7 @@ public final class SourceInputStreamFactory
             }
         }
 
-        private void throttleNextWindow(
-            int msgTypeId,
-            DirectBuffer buffer,
-            int index,
-            int length)
-        {
-            switch (msgTypeId)
-            {
-            case WindowFW.TYPE_ID:
-                processNextWindow(buffer, index, length);
-                break;
-            case ResetFW.TYPE_ID:
-                processReset(buffer, index, length);
-                break;
-            default:
-                // ignore
-                break;
-            }
-        }
-
-        private void processSkipNextWindow(
-            DirectBuffer buffer,
-            int index,
-            int length)
-        {
-            windowRO.wrap(buffer, index, index + length);
-
-            throttleState = this::throttleNextWindow;
-        }
-
-        private void processNextWindow(
+        private void processDoWindow(
             DirectBuffer buffer,
             int index,
             int length)
@@ -619,15 +594,18 @@ public final class SourceInputStreamFactory
             windowRO.wrap(buffer, index, index + length);
 
             int update = windowRO.update();
+            doSourceWindow(update);
+        }
 
-            if (sourceUpdateDeferred != 0)
+        private void doSourceWindow(int update)
+        {
+            sourceUpdateDeferred += update;
+            if (sourceUpdateDeferred > 0)
             {
-                update += sourceUpdateDeferred;
+                window += sourceUpdateDeferred;
+                source.doWindow(sourceId, sourceUpdateDeferred + framing(sourceUpdateDeferred));
                 sourceUpdateDeferred = 0;
             }
-
-            window += update;
-            source.doWindow(sourceId, update + framing(update));
         }
 
 
