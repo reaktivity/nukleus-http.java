@@ -28,6 +28,7 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.logging.Logger;
 
+import org.agrona.BitUtil;
 import org.agrona.ErrorHandler;
 import org.agrona.concurrent.AtomicBuffer;
 import org.agrona.concurrent.IdleStrategy;
@@ -40,12 +41,24 @@ import org.reaktivity.nukleus.http.internal.layouts.ControlLayout;
 
 public final class Context implements Closeable
 {
+    // Maximum size for the header portion of an HTTP request or response (the portion up to and including CRLFCRLF).
+    // Must be a positive power of two.
+    public static final String MAXIMUM_HEADERS_SIZE_PROPERTY_NAME = "nukleus.http.maximum.headers.size";
+
+    // Maximum memory to be used by all streams from each source for decoding purposes.
+    // Must be a positive power of two.
+    public static final String MEMORY_FOR_DECODE_PROPERTY_NAME = "nukleus.http.available.memory.for.decode";
+
+    private static final int MAXIMUM_HEADERS_SIZE_DEFAULT = 8192;
+
     private final ControlLayout.Builder controlRW = new ControlLayout.Builder();
 
     private boolean readonly;
     private Path configDirectory;
     private ControlLayout controlRO;
     private int maximumStreamsCount;
+    private int maximumHeadersSize;
+    private int memoryForDecode;
     private int streamsBufferCapacity;
     private int throttleBufferCapacity;
     private Function<String, Path> sourceStreamsPath;
@@ -79,6 +92,16 @@ public final class Context implements Closeable
     public int maximumStreamsCount()
     {
         return maximumStreamsCount;
+    }
+
+    public int maximumHeadersSize()
+    {
+        return maximumHeadersSize;
+    }
+
+    public int memoryForDecode()
+    {
+        return memoryForDecode;
     }
 
     public int streamsBufferCapacity()
@@ -284,6 +307,16 @@ public final class Context implements Closeable
             conductorResponses(new BroadcastTransmitter(conductorResponseBuffer()));
 
             concludeCounters();
+
+            maximumHeadersSize = Integer.getInteger(MAXIMUM_HEADERS_SIZE_PROPERTY_NAME, MAXIMUM_HEADERS_SIZE_DEFAULT);
+            Integer memoryForDecode = Integer.getInteger(MEMORY_FOR_DECODE_PROPERTY_NAME);
+            if (memoryForDecode == null)
+            {
+                int maxStreamsWithIncompleteRequest = maximumStreamsCount < 1024 ? maximumStreamsCount
+                        : maximumStreamsCount / 8;
+                memoryForDecode = BitUtil.findNextPositivePowerOfTwo(maximumHeadersSize * maxStreamsWithIncompleteRequest / 2);
+            }
+            this.memoryForDecode = memoryForDecode;
         }
         catch (Exception ex)
         {

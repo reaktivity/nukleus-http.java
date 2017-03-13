@@ -121,7 +121,7 @@ public final class SourceInputStreamFactory
         private SourceInputStream()
         {
             this.streamState = this::streamBeforeBegin;
-            this.throttleState = this::throttleResetOnly;
+            this.throttleState = this::beforeReset;
         }
 
         private void handleStream(
@@ -241,7 +241,7 @@ public final class SourceInputStreamFactory
 
             this.decoderState = this::decodeHttpBegin;
             this.streamState = this::streamAfterReplyOrReset;
-            this.throttleState = this::throttleDoWindow;
+            this.throttleState = this::beforeWindowOrReset;
             window += requestBytes;
             source.doWindow(sourceId, requestBytes);
         }
@@ -426,7 +426,7 @@ public final class SourceInputStreamFactory
                         sourceUpdateDeferred += length;
                         this.target = newTarget;
                         this.targetId = newTargetId;
-                        this.throttleState = this::throttleDoWindow;
+                        this.throttleState = this::beforeWindowOrReset;
 
                         if (!hasUpgrade && contentRemaining == 0)
                         {
@@ -504,7 +504,7 @@ public final class SourceInputStreamFactory
             {
                 target.doHttpEnd(targetId);
 
-                this.throttleState = this::throttleDoWindow;
+                this.throttleState = this::beforeWindowOrReset;
             }
 
             return offset + length;
@@ -549,7 +549,7 @@ public final class SourceInputStreamFactory
             throttleState.onMessage(msgTypeId, buffer, index, length);
         }
 
-        private void throttleResetOnly(
+        private void beforeReset(
             int msgTypeId,
             DirectBuffer buffer,
             int index,
@@ -566,7 +566,7 @@ public final class SourceInputStreamFactory
             }
         }
 
-        private void throttleDoWindow(
+        private void beforeWindowOrReset(
             int msgTypeId,
             DirectBuffer buffer,
             int index,
@@ -575,7 +575,7 @@ public final class SourceInputStreamFactory
             switch (msgTypeId)
             {
             case WindowFW.TYPE_ID:
-                processDoWindow(buffer, index, length);
+                processWindow(buffer, index, length);
                 break;
             case ResetFW.TYPE_ID:
                 processReset(buffer, index, length);
@@ -586,7 +586,7 @@ public final class SourceInputStreamFactory
             }
         }
 
-        private void processDoWindow(
+        private void processWindow(
             DirectBuffer buffer,
             int index,
             int length)

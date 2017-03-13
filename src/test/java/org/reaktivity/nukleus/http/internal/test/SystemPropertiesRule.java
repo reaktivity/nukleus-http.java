@@ -20,15 +20,14 @@ import java.util.HashMap;
 import org.junit.rules.TestRule;
 import org.junit.runner.Description;
 import org.junit.runners.model.Statement;
-import org.reaktivity.nukleus.http.internal.InternalSystemProperty;
 
 public class SystemPropertiesRule implements TestRule
 {
     HashMap<String, String> properties = new HashMap<>();
 
-    public SystemPropertiesRule setProperty(InternalSystemProperty property, String value)
+    public SystemPropertiesRule setProperty(String propertyName, String value)
     {
-        properties.put(property.propertyName(), value);
+        properties.put(propertyName, value);
         return this;
     }
 

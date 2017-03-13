@@ -16,8 +16,6 @@
 package org.reaktivity.nukleus.http.internal.routable;
 
 import static java.util.Collections.emptyList;
-import static org.reaktivity.nukleus.http.internal.InternalSystemProperty.MAXIMUM_HEADERS_SIZE;
-import static org.reaktivity.nukleus.http.internal.InternalSystemProperty.MEMORY_FOR_DECODE;
 import static org.reaktivity.nukleus.http.internal.routable.Route.headersMatch;
 import static org.reaktivity.nukleus.http.internal.routable.Route.sourceMatches;
 import static org.reaktivity.nukleus.http.internal.routable.Route.sourceRefMatches;
@@ -32,7 +30,6 @@ import java.util.function.LongFunction;
 import java.util.function.LongSupplier;
 import java.util.function.Predicate;
 
-import org.agrona.BitUtil;
 import org.agrona.LangUtil;
 import org.agrona.collections.Long2ObjectHashMap;
 import org.agrona.concurrent.AtomicBuffer;
@@ -166,18 +163,10 @@ public final class Routable extends Nukleus.Composite
             .readonly(true)
             .build();
 
-        int maximumHeadersSize = MAXIMUM_HEADERS_SIZE.intValue();
-        int memoryForDecode = MEMORY_FOR_DECODE.intValue(() ->
-        {
-            int maxStreamsWithIncompleteRequest = context.maximumStreamsCount() < 1024 ? context.maximumStreamsCount()
-                    : context.maximumStreamsCount() / 8;
-            return BitUtil.findNextPositivePowerOfTwo(maximumHeadersSize * maxStreamsWithIncompleteRequest / 2);
-        });
-
         return include(new Source(sourceName, partitionName, layout, writeBuffer,
                                   this::supplyRoutes, supplyTargetId,
                                   this::supplyTarget, correlateNew, lookupEstablished,
-                                  correlateEstablished, maximumHeadersSize, memoryForDecode));
+                                  correlateEstablished, context.maximumHeadersSize(), context.memoryForDecode()));
     }
 
     private Target supplyTarget(
