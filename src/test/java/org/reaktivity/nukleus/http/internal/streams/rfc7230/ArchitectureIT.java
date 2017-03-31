@@ -119,7 +119,7 @@ public class ArchitectureIT
     public void shouldRejectRequestWhenVersionMissing() throws Exception
     {
         k3po.start();
-        k3po.notifyBarrier("ROUTED_INPUT");
+        k3po.awaitBarrier("ROUTED_INPUT");
         k3po.notifyBarrier("ROUTED_OUTPUT");
         k3po.finish();
     }

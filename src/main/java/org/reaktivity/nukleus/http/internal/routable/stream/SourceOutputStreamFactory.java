@@ -18,7 +18,7 @@ package org.reaktivity.nukleus.http.internal.routable.stream;
 import static java.lang.Character.toUpperCase;
 import static java.nio.charset.StandardCharsets.US_ASCII;
 import static org.reaktivity.nukleus.http.internal.routable.Route.headersMatch;
-import static org.reaktivity.nukleus.http.internal.router.RouteKind.OUTPUT_ESTABLISHED;
+import static org.reaktivity.nukleus.http.internal.router.RouteKind.INPUT_ESTABLISHED;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -212,7 +212,7 @@ public final class SourceOutputStreamFactory
             {
                 targetId = supplyTargetId.getAsLong();
                 final long targetCorrelationId = targetId;
-                final Correlation correlation = new Correlation(correlationId, source.routableName(), OUTPUT_ESTABLISHED);
+                final Correlation correlation = new Correlation(correlationId, source.routableName(), INPUT_ESTABLISHED);
 
                 correlateNew.accept(targetCorrelationId, correlation);
 
@@ -258,14 +258,10 @@ public final class SourceOutputStreamFactory
                 {
                     processUnexpected(buffer, index, length);
                 }
-                if (pseudoHeaders[AUTHORITY] != null)
+
+                if (!hasHost[0])
                 {
-                    if (!hasHost[0])
-                    {
-                        headersChars.append("Host").append(": ").append(pseudoHeaders[AUTHORITY]).append("\r\n");
-                    }
-                    pseudoHeaders[PATH] = new StringBuilder().append(pseudoHeaders[SCHEME]).append("://")
-                            .append(pseudoHeaders[AUTHORITY]).append("/").append(pseudoHeaders[PATH]).toString();
+                    headersChars.append("Host").append(": ").append(pseudoHeaders[AUTHORITY]).append("\r\n");
                 }
 
                 String payloadChars =
