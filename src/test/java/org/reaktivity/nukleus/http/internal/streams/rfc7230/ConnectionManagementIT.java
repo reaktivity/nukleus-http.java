@@ -70,7 +70,7 @@ public class ConnectionManagementIT
     public void shouldSwitchProtocolAfterUpgradeClient() throws Exception
     {
         k3po.start();
-        k3po.notifyBarrier("ROUTED_OUTPUT");
+        k3po.awaitBarrier("ROUTED_OUTPUT");
         k3po.notifyBarrier("ROUTED_INPUT");
         k3po.finish();
     }

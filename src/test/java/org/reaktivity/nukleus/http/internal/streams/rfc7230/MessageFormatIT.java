@@ -109,8 +109,8 @@ public class MessageFormatIT
     public void shouldAcceptFragmentedResponse() throws Exception
     {
         k3po.start();
+        k3po.awaitBarrier("ROUTED_OUTPUT");
         k3po.notifyBarrier("ROUTED_INPUT");
-        k3po.notifyBarrier("ROUTED_OUTPUT");
         k3po.finish();
     }
 
@@ -122,8 +122,8 @@ public class MessageFormatIT
     public void shouldAcceptFragmentedResponseWithContentLength() throws Exception
     {
         k3po.start();
+        k3po.awaitBarrier("ROUTED_OUTPUT");
         k3po.notifyBarrier("ROUTED_INPUT");
-        k3po.notifyBarrier("ROUTED_OUTPUT");
         k3po.finish();
     }
 
@@ -135,8 +135,8 @@ public class MessageFormatIT
     public void shouldAcceptResponseWithContentLength() throws Exception
     {
         k3po.start();
+        k3po.awaitBarrier("ROUTED_OUTPUT");
         k3po.notifyBarrier("ROUTED_INPUT");
-        k3po.notifyBarrier("ROUTED_OUTPUT");
         k3po.finish();
     }
 
@@ -148,7 +148,7 @@ public class MessageFormatIT
     public void shouldAcceptResponseWithHeaders() throws Exception
     {
         k3po.start();
-        k3po.notifyBarrier("ROUTED_OUTPUT");
+        k3po.awaitBarrier("ROUTED_OUTPUT");
         k3po.notifyBarrier("ROUTED_INPUT");
         k3po.finish();
     }

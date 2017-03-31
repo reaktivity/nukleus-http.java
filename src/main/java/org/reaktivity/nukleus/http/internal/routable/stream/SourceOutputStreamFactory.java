@@ -15,29 +15,58 @@
  */
 package org.reaktivity.nukleus.http.internal.routable.stream;
 
+import static java.lang.Character.toUpperCase;
+import static java.nio.charset.StandardCharsets.US_ASCII;
+import static org.reaktivity.nukleus.http.internal.routable.Route.headersMatch;
+import static org.reaktivity.nukleus.http.internal.router.RouteKind.OUTPUT_ESTABLISHED;
+
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.function.LongFunction;
 import java.util.function.LongSupplier;
+import java.util.function.Predicate;
 
 import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
 import org.agrona.concurrent.MessageHandler;
+import org.agrona.concurrent.UnsafeBuffer;
 import org.reaktivity.nukleus.http.internal.routable.Correlation;
 import org.reaktivity.nukleus.http.internal.routable.Route;
 import org.reaktivity.nukleus.http.internal.routable.Source;
+import org.reaktivity.nukleus.http.internal.routable.Target;
+import org.reaktivity.nukleus.http.internal.types.OctetsFW;
 import org.reaktivity.nukleus.http.internal.types.stream.BeginFW;
 import org.reaktivity.nukleus.http.internal.types.stream.DataFW;
 import org.reaktivity.nukleus.http.internal.types.stream.EndFW;
 import org.reaktivity.nukleus.http.internal.types.stream.FrameFW;
+import org.reaktivity.nukleus.http.internal.types.stream.HttpBeginExFW;
+import org.reaktivity.nukleus.http.internal.types.stream.ResetFW;
+import org.reaktivity.nukleus.http.internal.types.stream.WindowFW;
 import org.reaktivity.nukleus.http.internal.util.function.LongObjectBiConsumer;
 
 public final class SourceOutputStreamFactory
 {
+    private static final Map<String, String> EMPTY_HEADERS = Collections.emptyMap();
+
+    // Pseudo-headers
+    private static final int METHOD = 0;
+    private static final int SCHEME = 1;
+    private static final int AUTHORITY = 2;
+    private static final int PATH = 3;
+
     private final FrameFW frameRO = new FrameFW();
 
     private final BeginFW beginRO = new BeginFW();
+    private final HttpBeginExFW beginExRO = new HttpBeginExFW();
+
     private final DataFW dataRO = new DataFW();
     private final EndFW endRO = new EndFW();
+
+    private final WindowFW windowRO = new WindowFW();
+    private final ResetFW resetRO = new ResetFW();
 
     private final Source source;
     private final LongSupplier supplyTargetId;
@@ -63,13 +92,20 @@ public final class SourceOutputStreamFactory
 
     private final class SourceOutputStream
     {
-        private MessageHandler currentState;
+        private MessageHandler streamState;
+        private MessageHandler throttleState;
 
         private long sourceId;
+        private long sourceRef;
+        private long correlationId;
+        private Target target;
+        private long targetId;
+        private int window;
 
         private SourceOutputStream()
         {
-            nextState(this::beforeBegin);
+            this.streamState = this::beforeBegin;
+            this.throttleState = this::throttleSkipNextWindow;
         }
 
         private void handleStream(
@@ -78,7 +114,7 @@ public final class SourceOutputStreamFactory
             int index,
             int length)
         {
-            currentState.onMessage(msgTypeId, buffer, index, length);
+            streamState.onMessage(msgTypeId, buffer, index, length);
         }
 
         private void beforeBegin(
@@ -146,7 +182,7 @@ public final class SourceOutputStreamFactory
 
                 source.removeStream(streamId);
 
-                nextState(this::afterEnd);
+                this.streamState = this::afterEnd;
             }
         }
 
@@ -156,8 +192,98 @@ public final class SourceOutputStreamFactory
             int length)
         {
             beginRO.wrap(buffer, index, index + length);
+            this.sourceId = beginRO.streamId();
+            this.sourceRef = beginRO.referenceId();
+            this.correlationId = beginRO.correlationId();
+            final OctetsFW extension = beginRO.extension();
 
-            nextState(this::afterBeginOrData);
+            // TODO: avoid object creation
+            Map<String, String> headers = EMPTY_HEADERS;
+            if (extension.sizeof() > 0)
+            {
+                final HttpBeginExFW beginEx = extension.get(beginExRO::wrap);
+                Map<String, String> headers0 = new LinkedHashMap<>();
+                beginEx.headers().forEach(h -> headers0.put(h.name().asString(), h.value().asString()));
+                headers = headers0;
+            }
+            final Optional<Route> optional = resolveTarget(sourceRef, headers);
+
+            if (optional.isPresent())
+            {
+                targetId = supplyTargetId.getAsLong();
+                final long targetCorrelationId = targetId;
+                final Correlation correlation = new Correlation(correlationId, source.routableName(), OUTPUT_ESTABLISHED);
+
+                correlateNew.accept(targetCorrelationId, correlation);
+
+                final Route route = optional.get();
+                target = route.target();
+                final long targetRef = route.targetRef();
+                target.doBegin(targetId, targetRef, targetCorrelationId);
+                target.addThrottle(targetId, this::handleThrottle);
+
+                String[] pseudoHeaders = new String[4];
+                boolean[] hasHost = new boolean[]{false};
+
+                StringBuilder headersChars = new StringBuilder();
+                headers.forEach((name, value) ->
+                {
+                    switch(name.toLowerCase())
+                    {
+                    case ":method":
+                        pseudoHeaders[METHOD] = value;
+                        break;
+                    case ":scheme":
+                        pseudoHeaders[SCHEME] = value;
+                        break;
+                    case ":authority":
+                        pseudoHeaders[AUTHORITY] = value;
+                        break;
+                    case ":path":
+                        pseudoHeaders[PATH] = value;
+                        break;
+                    case "host":
+                        hasHost[0] = true;
+                        headersChars.append(toUpperCase(name.charAt(0))).append(name.substring(1))
+                        .append(": ").append(value).append("\r\n");
+                        break;
+                    default:
+                        headersChars.append(toUpperCase(name.charAt(0))).append(name.substring(1))
+                        .append(": ").append(value).append("\r\n");
+                    }
+                });
+
+                // Conforming to HTTP2 spec (rfc7540) section-8.1.2
+                if (pseudoHeaders[METHOD] == null || pseudoHeaders[SCHEME] == null || pseudoHeaders[PATH] == null)
+                {
+                    processUnexpected(buffer, index, length);
+                }
+                if (pseudoHeaders[AUTHORITY] != null)
+                {
+                    if (!hasHost[0])
+                    {
+                        headersChars.append("Host").append(": ").append(pseudoHeaders[AUTHORITY]).append("\r\n");
+                    }
+                    pseudoHeaders[PATH] = new StringBuilder().append(pseudoHeaders[SCHEME]).append("://")
+                            .append(pseudoHeaders[AUTHORITY]).append("/").append(pseudoHeaders[PATH]).toString();
+                }
+
+                String payloadChars =
+                        new StringBuilder().append(pseudoHeaders[METHOD]).append(" ").append(pseudoHeaders[PATH])
+                                           .append(" HTTP/1.1").append("\r\n")
+                                           .append(headersChars).append("\r\n").toString();
+
+                final DirectBuffer payload = new UnsafeBuffer(payloadChars.getBytes(US_ASCII));
+
+                target.doData(targetId, payload, 0, payload.capacity());
+
+                this.streamState = this::afterBeginOrData;
+                this.throttleState = this::throttleNextThenSkipWindow;
+            }
+            else
+            {
+                processUnexpected(buffer, index, length);
+            }
         }
 
         private void processData(
@@ -167,7 +293,16 @@ public final class SourceOutputStreamFactory
         {
             dataRO.wrap(buffer, index, index + length);
 
-            // TODO
+            window -= dataRO.length();
+            if (window < 0)
+            {
+                processUnexpected(buffer, index, length);
+            }
+            else
+            {
+                final OctetsFW payload = dataRO.payload();
+                target.doData(targetId, payload);
+            }
         }
 
         private void processEnd(
@@ -176,10 +311,9 @@ public final class SourceOutputStreamFactory
             int length)
         {
             endRO.wrap(buffer, index, index + length);
-
-            // TODO
-
-            nextState(this::afterEnd);
+            target.removeThrottle(targetId);
+            source.removeStream(sourceId);
+            this.streamState = this::afterEnd;
         }
 
         private void processUnexpected(
@@ -193,13 +327,136 @@ public final class SourceOutputStreamFactory
 
             source.doReset(streamId);
 
-            nextState(this::afterReplyOrReset);
+            this.streamState = this::afterReplyOrReset;
         }
 
-        private void nextState(
-            final MessageHandler nextState)
+        private void handleThrottle(
+            int msgTypeId,
+            MutableDirectBuffer buffer,
+            int index,
+            int length)
         {
-            this.currentState = nextState;
+            throttleState.onMessage(msgTypeId, buffer, index, length);
+        }
+
+
+
+        private void throttleNextThenSkipWindow(
+            int msgTypeId,
+            DirectBuffer buffer,
+            int index,
+            int length)
+        {
+            switch (msgTypeId)
+            {
+            case WindowFW.TYPE_ID:
+                processNextThenSkipWindow(buffer, index, length);
+                break;
+            case ResetFW.TYPE_ID:
+                processReset(buffer, index, length);
+                break;
+            default:
+                // ignore
+                break;
+            }
+        }
+
+        private void throttleSkipNextWindow(
+            int msgTypeId,
+            DirectBuffer buffer,
+            int index,
+            int length)
+        {
+            switch (msgTypeId)
+            {
+            case WindowFW.TYPE_ID:
+                processSkipNextWindow(buffer, index, length);
+                break;
+            case ResetFW.TYPE_ID:
+                processReset(buffer, index, length);
+                break;
+            default:
+                // ignore
+                break;
+            }
+        }
+
+        private void throttleNextWindow(
+            int msgTypeId,
+            DirectBuffer buffer,
+            int index,
+            int length)
+        {
+            switch (msgTypeId)
+            {
+            case WindowFW.TYPE_ID:
+                processNextWindow(buffer, index, length);
+                break;
+            case ResetFW.TYPE_ID:
+                processReset(buffer, index, length);
+                break;
+            default:
+                // ignore
+                break;
+            }
+        }
+
+        private void processSkipNextWindow(
+            DirectBuffer buffer,
+            int index,
+            int length)
+        {
+            windowRO.wrap(buffer, index, index + length);
+
+            throttleState = this::throttleNextWindow;
+        }
+
+        private void processNextWindow(
+            DirectBuffer buffer,
+            int index,
+            int length)
+        {
+            windowRO.wrap(buffer, index, index + length);
+
+            final int update = windowRO.update();
+
+            window += update;
+            source.doWindow(sourceId, update);
+        }
+
+        private void processNextThenSkipWindow(
+            DirectBuffer buffer,
+            int index,
+            int length)
+        {
+            windowRO.wrap(buffer, index, index + length);
+
+            final int update = windowRO.update();
+
+            window += update;
+            source.doWindow(sourceId, update);
+
+            throttleState = this::throttleSkipNextWindow;
+        }
+
+        private void processReset(
+            DirectBuffer buffer,
+            int index,
+            int length)
+        {
+            resetRO.wrap(buffer, index, index + length);
+
+            source.doReset(sourceId);
+        }
+
+        private Optional<Route> resolveTarget(
+            long sourceRef,
+            Map<String, String> headers)
+        {
+            final List<Route> routes = supplyRoutes.apply(sourceRef);
+            final Predicate<Route> predicate = headersMatch(headers);
+
+            return routes.stream().filter(predicate).findFirst();
         }
     }
 }
