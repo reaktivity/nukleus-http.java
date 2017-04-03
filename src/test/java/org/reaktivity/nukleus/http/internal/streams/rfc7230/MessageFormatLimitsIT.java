@@ -77,8 +77,7 @@ public class MessageFormatLimitsIT
     public void shouldRejectResponseExceedingMaximumHeadersSize() throws Exception
     {
         k3po.start();
-        k3po.notifyBarrier("ROUTED_OUTPUT");
-        k3po.notifyBarrier("ROUTED_INPUT");
+        k3po.awaitBarrier("ROUTED_OUTPUT");
         k3po.finish();
     }
 
@@ -101,12 +100,12 @@ public class MessageFormatLimitsIT
         "${route}/output/new/controller",
         "${streams}/response.fragmented.with.content.length/client/source",
         "${streams}/response.fragmented.with.content.length/client/target" })
-    @ScriptProperty("targetInputInitialWindow [0x40 0x00 0x00 0x00]") // 64 bytes, same as max headers size
+    @ScriptProperty("sourceInputInitialWindow [0x40 0x00 0x00 0x00]") // 64 bytes, same as max headers size
     public void shouldAcceptFragmentedResponseWithDataWhenOnlyDataExceedsMaxHttpHeadersSize() throws Exception
     {
         k3po.start();
+        k3po.awaitBarrier("ROUTED_OUTPUT");
         k3po.notifyBarrier("ROUTED_INPUT");
-        k3po.notifyBarrier("ROUTED_OUTPUT");
         k3po.finish();
     }
 

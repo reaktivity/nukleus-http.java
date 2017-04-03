@@ -374,6 +374,12 @@ public final class SourceInputStreamFactory
             String[] lines = payload.getStringWithoutLengthUtf8(offset, length).split("\r\n");
             String[] start = lines[0].split("\\s+");
 
+            if (start.length != 3)
+            {
+                processInvalidRequest(length, "HTTP/1.1 400 Bad Request\r\n\r\n");
+                return;
+            }
+
             Pattern versionPattern = Pattern.compile("HTTP/1\\.(\\d)");
             Matcher versionMatcher = versionPattern.matcher(start[2]);
             if (!versionMatcher.matches())

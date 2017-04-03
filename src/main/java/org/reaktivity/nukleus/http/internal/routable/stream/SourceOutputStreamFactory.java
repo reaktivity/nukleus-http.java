@@ -223,7 +223,6 @@ public final class SourceOutputStreamFactory
                 target.addThrottle(targetId, this::handleThrottle);
 
                 String[] pseudoHeaders = new String[4];
-                boolean[] hasHost = new boolean[]{false};
 
                 StringBuilder headersChars = new StringBuilder();
                 headers.forEach((name, value) ->
@@ -243,9 +242,14 @@ public final class SourceOutputStreamFactory
                         pseudoHeaders[PATH] = value;
                         break;
                     case "host":
-                        hasHost[0] = true;
-                        headersChars.append(toUpperCase(name.charAt(0))).append(name.substring(1))
-                        .append(": ").append(value).append("\r\n");
+                        if (pseudoHeaders[AUTHORITY] == null)
+                        {
+                            pseudoHeaders[AUTHORITY] = value;
+                        }
+                        else if (!pseudoHeaders[AUTHORITY].equals(value))
+                        {
+                            processUnexpected(buffer, index, length);
+                        }
                         break;
                     default:
                         headersChars.append(toUpperCase(name.charAt(0))).append(name.substring(1))
@@ -259,14 +263,10 @@ public final class SourceOutputStreamFactory
                     processUnexpected(buffer, index, length);
                 }
 
-                if (!hasHost[0])
-                {
-                    headersChars.append("Host").append(": ").append(pseudoHeaders[AUTHORITY]).append("\r\n");
-                }
-
                 String payloadChars =
                         new StringBuilder().append(pseudoHeaders[METHOD]).append(" ").append(pseudoHeaders[PATH])
                                            .append(" HTTP/1.1").append("\r\n")
+                                           .append("Host").append(": ").append(pseudoHeaders[AUTHORITY]).append("\r\n")
                                            .append(headersChars).append("\r\n").toString();
 
                 final DirectBuffer payload = new UnsafeBuffer(payloadChars.getBytes(US_ASCII));
