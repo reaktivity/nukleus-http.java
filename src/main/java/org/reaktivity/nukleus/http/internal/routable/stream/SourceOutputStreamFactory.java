@@ -257,8 +257,8 @@ public final class SourceOutputStreamFactory
                     }
                 });
 
-                // Conforming to HTTP2 spec (rfc7540) section-8.1.2
-                if (pseudoHeaders[METHOD] == null || pseudoHeaders[SCHEME] == null || pseudoHeaders[PATH] == null)
+                if (pseudoHeaders[METHOD] == null || pseudoHeaders[SCHEME] == null || pseudoHeaders[PATH] == null
+                        || pseudoHeaders[AUTHORITY] == null)
                 {
                     processUnexpected(buffer, index, length);
                 }
