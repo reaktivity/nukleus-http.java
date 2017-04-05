@@ -13,27 +13,35 @@
  * License for the specific language governing permissions and limitations
  * under the License.
  */
-package org.reaktivity.nukleus.http.internal.streams.server.rfc7230;
+package org.reaktivity.nukleus.http.internal.streams.rfc7230;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.rules.RuleChain.outerRule;
+import static org.reaktivity.nukleus.http.internal.Context.MAXIMUM_HEADERS_SIZE_PROPERTY_NAME;
+import static org.reaktivity.nukleus.http.internal.Context.MEMORY_FOR_DECODE_PROPERTY_NAME;
 
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.DisableOnDebug;
 import org.junit.rules.TestRule;
 import org.junit.rules.Timeout;
+import org.kaazing.k3po.junit.annotation.ScriptProperty;
 import org.kaazing.k3po.junit.annotation.Specification;
 import org.kaazing.k3po.junit.rules.K3poRule;
+import org.reaktivity.nukleus.http.internal.test.SystemPropertiesRule;
 import org.reaktivity.reaktor.test.NukleusRule;
 
-public class MessageFormatIT
+public class MessageFormatLimitsIT
 {
     private final K3poRule k3po = new K3poRule()
             .addScriptRoot("route", "org/reaktivity/specification/nukleus/http/control/route")
             .addScriptRoot("streams", "org/reaktivity/specification/nukleus/http/streams/rfc7230/message.format");
 
     private final TestRule timeout = new DisableOnDebug(new Timeout(5, SECONDS));
+
+    private final TestRule properties = new SystemPropertiesRule()
+        .setProperty(MAXIMUM_HEADERS_SIZE_PROPERTY_NAME, "64")
+        .setProperty(MEMORY_FOR_DECODE_PROPERTY_NAME, "64");
 
     private final NukleusRule nukleus = new NukleusRule("http")
         .directory("target/nukleus-itests")
@@ -47,14 +55,13 @@ public class MessageFormatIT
         .streams("source", "http#target");
 
     @Rule
-    public final TestRule chain = outerRule(nukleus).around(k3po).around(timeout);
+    public final TestRule chain = outerRule(properties).around(nukleus).around(k3po).around(timeout);
 
     @Test
     @Specification({
         "${route}/input/new/controller",
-        "${streams}/request.with.content.length/server/source",
-        "${streams}/request.with.content.length/server/target" })
-    public void shouldAcceptRequestWithContentLength() throws Exception
+        "${streams}/request.headers.too.long/server/source" })
+    public void shouldRejectRequestExceedingMaximumHeadersSize() throws Exception
     {
         k3po.start();
         k3po.awaitBarrier("ROUTED_INPUT");
@@ -64,27 +71,13 @@ public class MessageFormatIT
 
     @Test
     @Specification({
-        "${route}/input/new/controller",
-        "${streams}/request.with.headers/server/source",
-        "${streams}/request.with.headers/server/target" })
-    public void shouldAcceptRequestWithHeaders() throws Exception
+        "${route}/output/new/controller",
+        "${streams}/response.headers.too.long/client/source",
+        "${streams}/response.headers.too.long/client/target"})
+    public void shouldRejectResponseExceedingMaximumHeadersSize() throws Exception
     {
         k3po.start();
-        k3po.awaitBarrier("ROUTED_INPUT");
-        k3po.notifyBarrier("ROUTED_OUTPUT");
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${route}/input/new/controller",
-        "${streams}/request.fragmented/server/source",
-        "${streams}/request.fragmented/server/target" })
-    public void shouldAcceptFragmentedRequest() throws Exception
-    {
-        k3po.start();
-        k3po.awaitBarrier("ROUTED_INPUT");
-        k3po.notifyBarrier("ROUTED_OUTPUT");
+        k3po.awaitBarrier("ROUTED_OUTPUT");
         k3po.finish();
     }
 
@@ -93,7 +86,8 @@ public class MessageFormatIT
         "${route}/input/new/controller",
         "${streams}/request.fragmented.with.content.length/server/source",
         "${streams}/request.fragmented.with.content.length/server/target" })
-    public void shouldAcceptFragmentedRequestWithData() throws Exception
+    @ScriptProperty("targetInputInitialWindow [0x40 0x00 0x00 0x00]") // 64 bytes, same as max headers size
+    public void shouldAcceptFragmentedRequestWithDataWhenOnlyDataExceedsMaxHttpHeadersSize() throws Exception
     {
         k3po.start();
         k3po.awaitBarrier("ROUTED_INPUT");
@@ -101,4 +95,19 @@ public class MessageFormatIT
         k3po.finish();
     }
 
+    @Test
+    @Specification({
+        "${route}/output/new/controller",
+        "${streams}/response.fragmented.with.content.length/client/source",
+        "${streams}/response.fragmented.with.content.length/client/target" })
+    @ScriptProperty("sourceInputInitialWindow [0x40 0x00 0x00 0x00]") // 64 bytes, same as max headers size
+    public void shouldAcceptFragmentedResponseWithDataWhenOnlyDataExceedsMaxHttpHeadersSize() throws Exception
+    {
+        k3po.start();
+        k3po.awaitBarrier("ROUTED_OUTPUT");
+        k3po.notifyBarrier("ROUTED_INPUT");
+        k3po.finish();
+    }
+
 }
+

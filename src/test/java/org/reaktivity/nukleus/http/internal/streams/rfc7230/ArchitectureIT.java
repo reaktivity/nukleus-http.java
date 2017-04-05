@@ -13,7 +13,7 @@
  * License for the specific language governing permissions and limitations
  * under the License.
  */
-package org.reaktivity.nukleus.http.internal.streams.server.rfc7230;
+package org.reaktivity.nukleus.http.internal.streams.rfc7230;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.rules.RuleChain.outerRule;
@@ -64,6 +64,19 @@ public class ArchitectureIT
 
     @Test
     @Specification({
+        "${route}/output/new/controller",
+        "${streams}/request.and.response/client/source",
+        "${streams}/request.and.response/client/target" })
+    public void shouldCorrelateRequestAndResponseClient() throws Exception
+    {
+        k3po.start();
+        k3po.awaitBarrier("ROUTED_OUTPUT");
+        k3po.notifyBarrier("ROUTED_INPUT");
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
         "${route}/input/new/controller",
         "${streams}/request.header.host.missing/server/source" })
     public void shouldRejectRequestWhenHostHeaderMissing() throws Exception
@@ -92,6 +105,18 @@ public class ArchitectureIT
         "${route}/input/new/controller",
         "${streams}/request.version.invalid/server/source" })
     public void shouldRejectRequestWhenVersionInvalid() throws Exception
+    {
+        k3po.start();
+        k3po.awaitBarrier("ROUTED_INPUT");
+        k3po.notifyBarrier("ROUTED_OUTPUT");
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/input/new/controller",
+        "${streams}/request.version.missing/server/source" })
+    public void shouldRejectRequestWhenVersionMissing() throws Exception
     {
         k3po.start();
         k3po.awaitBarrier("ROUTED_INPUT");
