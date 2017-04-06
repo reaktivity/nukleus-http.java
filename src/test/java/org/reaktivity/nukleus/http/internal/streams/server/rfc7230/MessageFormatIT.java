@@ -65,18 +65,6 @@ public class MessageFormatIT
     @Test
     @Specification({
         "${route}/input/new/controller",
-        "${streams}/request.with.content.length.no.target.window/server/source",
-        "${streams}/request.with.content.length.no.target.window/server/target" })
-    public void shouldNotWriteDataToTargetWithoutWindow() throws Exception
-    {
-        k3po.start();
-        k3po.awaitBarrier("ROUTED_INPUT");
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${route}/input/new/controller",
         "${streams}/request.with.headers/server/source",
         "${streams}/request.with.headers/server/target" })
     public void shouldAcceptRequestWithHeaders() throws Exception
@@ -112,5 +100,44 @@ public class MessageFormatIT
         k3po.notifyBarrier("ROUTED_OUTPUT");
         k3po.finish();
     }
+
+    @Test
+    @Specification({
+        "${route}/input/new/controller",
+        "${streams}/request.with.content.length.no.target.window/server/source",
+        "${streams}/request.with.content.length.no.target.window/server/target" })
+    public void shouldNotWriteDataToTargetWithoutWindow() throws Exception
+    {
+        k3po.start();
+        k3po.awaitBarrier("ROUTED_INPUT");
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/input/new/controller",
+        "${streams}/request.with.content.length.and.end.late.target.window/server/source",
+        "${streams}/request.with.content.length.and.end.late.target.window/server/target" })
+    public void shouldNotWriteEndToTargetBeforeGettingWindowAndWritingData() throws Exception
+    {
+        k3po.start();
+        k3po.awaitBarrier("ROUTED_INPUT");
+        k3po.notifyBarrier("ROUTED_OUTPUT");
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/input/new/controller",
+        "${streams}/request.fragmented.with.content.length.target.window.exhausted/server/source",
+        "${streams}/request.fragmented.with.content.length.target.window.exhausted/server/target" })
+    public void shouldRespectTargetWindow() throws Exception
+    {
+        k3po.start();
+        k3po.awaitBarrier("ROUTED_INPUT");
+        k3po.notifyBarrier("ROUTED_OUTPUT");
+        k3po.finish();
+    }
+
 
 }
