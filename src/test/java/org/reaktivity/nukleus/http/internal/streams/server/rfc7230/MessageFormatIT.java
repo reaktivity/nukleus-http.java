@@ -118,7 +118,7 @@ public class MessageFormatIT
         "${route}/input/new/controller",
         "${streams}/request.with.content.length.and.end.late.target.window/server/source",
         "${streams}/request.with.content.length.and.end.late.target.window/server/target" })
-    public void shouldNotWriteEndToTargetBeforeGettingWindowAndWritingData() throws Exception
+    public void shouldNotProcessSourceEndBeforeGettingWindowAndWritingData() throws Exception
     {
         k3po.start();
         k3po.awaitBarrier("ROUTED_INPUT");
@@ -135,7 +135,6 @@ public class MessageFormatIT
     {
         k3po.start();
         k3po.awaitBarrier("ROUTED_INPUT");
-        k3po.notifyBarrier("ROUTED_OUTPUT");
         k3po.finish();
     }
 
