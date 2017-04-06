@@ -17,6 +17,7 @@ package org.reaktivity.nukleus.http.internal.routable.stream;
 
 import static java.lang.Integer.parseInt;
 import static org.reaktivity.nukleus.http.internal.routable.Route.headersMatch;
+import static org.reaktivity.nukleus.http.internal.routable.stream.Slab.SLOT_NOT_AVAILABLE;
 import static org.reaktivity.nukleus.http.internal.router.RouteKind.OUTPUT_ESTABLISHED;
 import static org.reaktivity.nukleus.http.internal.util.BufferUtil.limitOfBytes;
 
@@ -98,8 +99,10 @@ public final class SourceInputStreamFactory
         private MessageHandler streamState;
         private MessageHandler throttleState;
         private DecoderState decoderState;
-        private int slotIndex;
+        private int slotIndex = SLOT_NOT_AVAILABLE;
+        private int slotOffset = 0;
         private int slotPosition;
+        private boolean endRequested;
 
         private long sourceId;
 
@@ -146,6 +149,26 @@ public final class SourceInputStreamFactory
             else
             {
                 processUnexpected(buffer, index, length);
+            }
+        }
+
+        private void streamAwaitingTargetWindow(
+            int msgTypeId,
+            DirectBuffer buffer,
+            int index,
+            int length)
+        {
+            switch (msgTypeId)
+            {
+            case DataFW.TYPE_ID:
+                deferData(buffer, index, length);
+                break;
+            case EndFW.TYPE_ID:
+                deferEnd(buffer, index, length);
+                break;
+            default:
+                processUnexpected(buffer, index, length);
+                break;
             }
         }
 
@@ -286,12 +309,16 @@ public final class SourceInputStreamFactory
             {
                 final OctetsFW payload = dataRO.payload();
                 final int limit = payload.limit();
-
                 int offset = payload.offset();
-                while (offset < limit)
-                {
-                    offset = decoderState.decode(buffer, offset, limit);
-                }
+                decode(payload.buffer(), offset, limit);
+            }
+        }
+
+        private void decode(DirectBuffer buffer, int offset, int limit)
+        {
+            while (offset < limit)
+            {
+                offset = decoderState.decode(buffer, offset, limit);
             }
         }
 
@@ -302,11 +329,46 @@ public final class SourceInputStreamFactory
         {
             endRO.wrap(buffer, index, index + length);
             final long streamId = endRO.streamId();
+            assert streamId == sourceId;
+            doEnd();
+        }
 
+        private void doEnd()
+        {
             decoderState = (b, o, l) -> o;
 
-            source.removeStream(streamId);
+            source.removeStream(sourceId);
             target.removeThrottle(targetId);
+            if (slotIndex != SLOT_NOT_AVAILABLE)
+            {
+                slab.release(slotIndex);
+            }
+        }
+
+        private void deferData(
+            DirectBuffer buffer,
+            int index,
+            int length)
+        {
+            dataRO.wrap(buffer, index, index + length);
+            final OctetsFW payload = dataRO.payload();
+            int offset = payload.offset();
+            final int dataLength = payload.limit() - offset;
+            MutableDirectBuffer store = slab.buffer(slotIndex);
+            store.putBytes(slotPosition, payload.buffer(), offset, dataLength);
+            slotPosition += dataLength;
+        }
+
+        private void deferEnd(
+            DirectBuffer buffer,
+            int index,
+            int length)
+        {
+            endRO.wrap(buffer, index, index + length);
+            final long streamId = endRO.streamId();
+            assert streamId == sourceId;
+
+            endRequested = true;
         }
 
         private int defragmentHttpBegin(
@@ -319,7 +381,6 @@ public final class SourceInputStreamFactory
             {
                 slab.release(slotIndex);
                 processInvalidRequest(limit - offset, "HTTP/1.1 431 Request Header Fields Too Large\r\n\r\n");
-                return limit;
             }
             else
             {
@@ -327,17 +388,27 @@ public final class SourceInputStreamFactory
                 MutableDirectBuffer buffer = slab.buffer(slotIndex);
                 buffer.putBytes(slotPosition, payload, offset, length);
                 slotPosition += length;
-                if (endOfHeadersAt == -1)
-                {
-                    return limit;
-                }
-                else
+                if (endOfHeadersAt != -1)
                 {
                     decodeCompleteHttpBegin(buffer, 0, slotPosition);
-                    slab.release(slotIndex);
-                    return endOfHeadersAt;
+                    if (endOfHeadersAt < limit)
+                    {
+                        // Not all source data was consumed, delay processing it until target gives us window
+                        slotPosition = slotOffset = 0;
+                        int dataLength = limit - endOfHeadersAt;
+                        assert dataLength <= buffer.capacity();
+                        buffer.putBytes(0, payload, endOfHeadersAt, dataLength);
+                        slotPosition = dataLength;
+                        streamState = this::streamAwaitingTargetWindow;
+                        throttleState = this::beforeInitialWindow;
+                    }
+                    else
+                    {
+                        slab.release(slotIndex);
+                    }
                 }
             }
+            return limit;
         }
 
         private int decodeHttpBegin(
@@ -349,20 +420,32 @@ public final class SourceInputStreamFactory
             if (endOfHeadersAt == -1)
             {
                 slotIndex = slab.acquire(sourceId);
-                slotPosition = 0;
+                slotPosition = slotOffset = 0;
                 int length = limit - offset;
                 MutableDirectBuffer buffer = slab.buffer(slotIndex);
                 assert length <= buffer.capacity();
                 buffer.putBytes(0, payload, offset, length);
                 slotPosition = length;
                 decoderState = this::defragmentHttpBegin;
-                return limit;
             }
             else
             {
                 decodeCompleteHttpBegin(payload, offset, endOfHeadersAt - offset);
-                return endOfHeadersAt;
+                if (endOfHeadersAt < limit)
+                {
+                    // Not all source data was consumed, delay processing it until target gives us window
+                    slotIndex = slab.acquire(sourceId);
+                    slotPosition = slotOffset = 0;
+                    int length = limit - endOfHeadersAt;
+                    MutableDirectBuffer buffer = slab.buffer(slotIndex);
+                    assert length <= buffer.capacity();
+                    buffer.putBytes(0, payload, endOfHeadersAt, length);
+                    slotPosition = length;
+                    streamState = this::streamAwaitingTargetWindow;
+                    throttleState = this::beforeInitialWindow;
+                }
             }
+            return limit;
         }
 
         private void decodeCompleteHttpBegin(
@@ -566,6 +649,26 @@ public final class SourceInputStreamFactory
             }
         }
 
+        private void beforeInitialWindow(
+            int msgTypeId,
+            DirectBuffer buffer,
+            int index,
+            int length)
+        {
+            switch (msgTypeId)
+            {
+            case WindowFW.TYPE_ID:
+                processInitialWindow(buffer, index, length);
+                break;
+            case ResetFW.TYPE_ID:
+                processReset(buffer, index, length);
+                break;
+            default:
+                // ignore
+                break;
+            }
+        }
+
         private void beforeWindowOrReset(
             int msgTypeId,
             DirectBuffer buffer,
@@ -583,6 +686,34 @@ public final class SourceInputStreamFactory
             default:
                 // ignore
                 break;
+            }
+        }
+
+        private void processInitialWindow(DirectBuffer buffer, int index, int length)
+        {
+            windowRO.wrap(buffer, index, index + length);
+            int update = windowRO.update();
+            doSourceWindow(update);
+
+            // Process any deferred source data
+            int dataLength = Math.min(slotPosition, update);
+            MutableDirectBuffer data = slab.buffer(slotIndex);
+            decode(data, slotOffset, dataLength);
+            if (dataLength < slotPosition)
+            {
+                slotOffset += dataLength;
+            }
+            else
+            {
+                slab.release(slotIndex);
+                slotIndex = SLOT_NOT_AVAILABLE;
+                if (endRequested)
+                {
+                    doEnd();
+                    return;
+                }
+                streamState = this::streamAfterBeginOrData;
+                throttleState = this::beforeWindowOrReset;
             }
         }
 
@@ -615,7 +746,10 @@ public final class SourceInputStreamFactory
             int length)
         {
             resetRO.wrap(buffer, index, index + length);
-
+            if (slotIndex != SLOT_NOT_AVAILABLE)
+            {
+                slab.release(slotIndex);
+            }
             source.doReset(sourceId);
         }
     }
