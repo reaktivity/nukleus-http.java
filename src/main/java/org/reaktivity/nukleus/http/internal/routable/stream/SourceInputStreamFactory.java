@@ -716,10 +716,12 @@ public final class SourceInputStreamFactory
                 if (endRequested)
                 {
                     doEnd();
-                    return;
                 }
-                streamState = this::streamAfterBeginOrData;
-                throttleState = this::beforeWindowOrReset;
+                else
+                {
+                    streamState = this::streamAfterBeginOrData;
+                    throttleState = this::beforeWindowOrReset;
+                }
             }
         }
 
