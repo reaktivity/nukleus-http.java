@@ -405,7 +405,7 @@ public final class SourceInputStreamFactory
                         buffer.putBytes(0, payload, endOfHeadersAt, dataLength);
                         slotPosition = dataLength;
                         streamState = this::streamBeforeWindowsAreAligned;
-                        throttleState = this::beforeeforeWindowsAreAligned;
+                        throttleState = this::beforeWindowsAreAligned;
                     }
                     else
                     {
@@ -447,7 +447,7 @@ public final class SourceInputStreamFactory
                     buffer.putBytes(0, payload, endOfHeadersAt, length);
                     slotPosition = length;
                     streamState = this::streamBeforeWindowsAreAligned;
-                    throttleState = this::beforeeforeWindowsAreAligned;
+                    throttleState = this::beforeWindowsAreAligned;
                 }
             }
             return limit;
@@ -660,7 +660,7 @@ public final class SourceInputStreamFactory
             }
         }
 
-        private void beforeeforeWindowsAreAligned(
+        private void beforeWindowsAreAligned(
             int msgTypeId,
             DirectBuffer buffer,
             int index,
