@@ -113,6 +113,30 @@ public class FlowControlIT
 
     @Test
     @Specification({
+        "${route}/input/new/controller",
+        "${streams}/request.and.flow.controlled.response/server/source",
+        "${streams}/request.and.flow.controlled.response/server/target" })
+    public void shouldAcceptRequestAndRespectSourceOutputEstablishedWindow() throws Exception
+    {
+        k3po.start();
+        k3po.awaitBarrier("ROUTED_INPUT");
+        k3po.notifyBarrier("ROUTED_OUTPUT");
+    }
+
+    @Test
+    @Specification({
+        "${route}/input/new/controller",
+        "${streams}/response.headers.too.long/server/source",
+        "${streams}/response.headers.too.long/server/target" })
+    public void shouldNotWriteResponseExceedingMaximumHeadersSize() throws Exception
+    {
+        k3po.start();
+        k3po.awaitBarrier("ROUTED_INPUT");
+        k3po.notifyBarrier("ROUTED_OUTPUT");
+    }
+
+    @Test
+    @Specification({
         "${route}/output/new/controller",
         "${streams}/response.fragmented/client/source",
         "${streams}/response.fragmented/client/target" })

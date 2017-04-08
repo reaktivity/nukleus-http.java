@@ -45,6 +45,9 @@ public final class TargetOutputEstablishedStreamFactory
 {
     private static final Map<String, String> EMPTY_HEADERS = Collections.emptyMap();
 
+    public static final byte[] RESPONSE_HEADERS_TOO_LONG_RESPONSE =
+            "HTTP/1.1  507 Insufficient Storage\r\n\r\n".getBytes(US_ASCII);
+
     private final FrameFW frameRO = new FrameFW();
 
     private final BeginFW beginRO = new BeginFW();
@@ -61,16 +64,23 @@ public final class TargetOutputEstablishedStreamFactory
     private final LongSupplier supplyStreamId;
     private final LongFunction<Correlation> correlateEstablished;
 
+    private int maximumHeadersSize;
+    private Slab slab;
+
     public TargetOutputEstablishedStreamFactory(
         Source source,
         Function<String, Target> supplyTarget,
         LongSupplier supplyStreamId,
-        LongFunction<Correlation> correlateEstablished)
+        LongFunction<Correlation> correlateEstablished,
+        int maximumHeadersSize,
+        int memoryForEncode)
     {
         this.source = source;
         this.supplyTarget = supplyTarget;
         this.supplyStreamId = supplyStreamId;
         this.correlateEstablished = correlateEstablished;
+        this.maximumHeadersSize = maximumHeadersSize;
+        this.slab = new Slab(memoryForEncode, maximumHeadersSize);
     }
 
     public MessageHandler newStream()
@@ -89,6 +99,8 @@ public final class TargetOutputEstablishedStreamFactory
         private long targetId;
 
         private int window;
+        private int slotIndex;
+        private int slotPosition;
 
         @Override
         public String toString()
@@ -258,12 +270,25 @@ public final class TargetOutputEstablishedStreamFactory
                         new StringBuilder().append("HTTP/1.1 ").append(status[0]).append(" ").append(status[1]).append("\r\n")
                                            .append(headersChars).append("\r\n").toString();
 
-                final DirectBuffer payload = new UnsafeBuffer(payloadChars.getBytes(US_ASCII));
-
-                target.doData(targetId, payload, 0, payload.capacity());
-
-                this.streamState = this::afterBeginOrData;
-                this.throttleState = this::throttleNextThenSkipWindow;
+                slotIndex = slab.acquire(sourceId);
+                slotPosition = 0;
+                MutableDirectBuffer slot = slab.buffer(slotIndex);
+                slotPosition = length;
+                if (payloadChars.length() > slot.capacity())
+                {
+                    slot.putBytes(0,  RESPONSE_HEADERS_TOO_LONG_RESPONSE);
+                    target.doData(newTargetId, slot, 0, RESPONSE_HEADERS_TOO_LONG_RESPONSE.length);
+                    target.doHttpEnd(newTargetId);
+                    source.doReset(sourceId);
+                    target.removeThrottle(newTargetId);
+                    source.removeStream(sourceId);
+                }
+                else
+                {
+                    slot.putBytes(0, payloadChars.getBytes(US_ASCII));
+                    this.streamState = this::beforeResponseHeadersWritten;
+                    this.throttleState = this::throttleBeforeResponseHeadersWritten;
+                }
             }
             else
             {
