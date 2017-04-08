@@ -113,6 +113,7 @@ public final class SourceInputStreamFactory
         private int window;
         private int contentRemaining;
         private int sourceUpdateDeferred;
+        private int availableTargetWindow;
 
         @Override
         public String toString()
@@ -357,6 +358,10 @@ public final class SourceInputStreamFactory
             MutableDirectBuffer store = slab.buffer(slotIndex);
             store.putBytes(slotPosition, payload.buffer(), offset, dataLength);
             slotPosition += dataLength;
+            if (availableTargetWindow > 0)
+            {
+                processDeferredData();
+            }
         }
 
         private void deferEnd(
@@ -700,16 +705,22 @@ public final class SourceInputStreamFactory
             windowRO.wrap(buffer, index, index + length);
             int update = windowRO.update();
             doSourceWindow(update);
+            availableTargetWindow += update;
+            processDeferredData();
+        }
 
-            // Process any deferred source data
-            int dataLength = Math.min(slotPosition, update);
+        private void processDeferredData()
+        {
+            int bytesToWrite = Math.min(slotPosition - slotOffset, availableTargetWindow);
             MutableDirectBuffer data = slab.buffer(slotIndex);
-            decode(data, slotOffset, dataLength);
-            if (dataLength < slotPosition)
-            {
-                slotOffset += dataLength;
-            }
-            else
+            decode(data, slotOffset, slotOffset + bytesToWrite);
+            availableTargetWindow -= bytesToWrite;
+
+            // Continue slabbing incoming data until available target window has caught up
+            // with the initial window we gave to source
+            slotOffset += bytesToWrite;
+            int bytesLeft = slotPosition - slotOffset;
+            if (sourceUpdateDeferred >= 0 && bytesLeft == 0)
             {
                 slab.release(slotIndex);
                 slotIndex = SLOT_NOT_AVAILABLE;

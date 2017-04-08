@@ -27,11 +27,11 @@ import org.kaazing.k3po.junit.annotation.Specification;
 import org.kaazing.k3po.junit.rules.K3poRule;
 import org.reaktivity.reaktor.test.NukleusRule;
 
-public class MessageFormatIT
+public class FlowControlIT
 {
     private final K3poRule k3po = new K3poRule()
             .addScriptRoot("route", "org/reaktivity/specification/nukleus/http/control/route")
-            .addScriptRoot("streams", "org/reaktivity/specification/nukleus/http/streams/rfc7230/message.format");
+            .addScriptRoot("streams", "org/reaktivity/specification/nukleus/http/streams/rfc7230/flow.control");
 
     private final TestRule timeout = new DisableOnDebug(new Timeout(5, SECONDS));
 
@@ -52,9 +52,9 @@ public class MessageFormatIT
     @Test
     @Specification({
         "${route}/input/new/controller",
-        "${streams}/request.with.content.length/server/source",
-        "${streams}/request.with.content.length/server/target" })
-    public void shouldAcceptRequestWithContentLength() throws Exception
+        "${streams}/request.fragmented/server/source",
+        "${streams}/request.fragmented/server/target" })
+    public void shouldAcceptFragmentedRequest() throws Exception
     {
         k3po.start();
         k3po.awaitBarrier("ROUTED_INPUT");
@@ -65,9 +65,9 @@ public class MessageFormatIT
     @Test
     @Specification({
         "${route}/input/new/controller",
-        "${streams}/request.with.headers/server/source",
-        "${streams}/request.with.headers/server/target" })
-    public void shouldAcceptRequestWithHeaders() throws Exception
+        "${streams}/request.fragmented.with.content.length/server/source",
+        "${streams}/request.fragmented.with.content.length/server/target" })
+    public void shouldAcceptFragmentedRequestWithContentLength() throws Exception
     {
         k3po.start();
         k3po.awaitBarrier("ROUTED_INPUT");
@@ -77,10 +77,46 @@ public class MessageFormatIT
 
     @Test
     @Specification({
+        "${route}/input/new/controller",
+        "${streams}/request.with.content.fragmented.by.target.window/server/source",
+        "${streams}/request.with.content.fragmented.by.target.window/server/target" })
+    public void shouldSplitRequestDataToRespectTargetWindow() throws Exception
+    {
+        k3po.start();
+        k3po.awaitBarrier("ROUTED_INPUT");
+        k3po.notifyBarrier("ROUTED_OUTPUT");
+    }
+
+    @Test
+    @Specification({
+        "${route}/input/new/controller",
+        "${streams}/request.with.fragmented.content.flow.controlled.by.target/server/source",
+        "${streams}/request.with.fragmented.content.flow.controlled.by.target/server/target" })
+    public void shouldSlabDataWhenTargetWindowStillNegative() throws Exception
+    {
+        k3po.start();
+        k3po.awaitBarrier("ROUTED_INPUT");
+        k3po.notifyBarrier("ROUTED_OUTPUT");
+    }
+
+    @Test
+    @Specification({
+        "${route}/input/new/controller",
+        "${streams}/request.with.content.length.and.end.late.target.window/server/source",
+        "${streams}/request.with.content.length.and.end.late.target.window/server/target" })
+    public void shouldNotProcessSourceEndBeforeGettingWindowAndWritingData() throws Exception
+    {
+        k3po.start();
+        k3po.awaitBarrier("ROUTED_INPUT");
+        k3po.notifyBarrier("ROUTED_OUTPUT");
+    }
+
+    @Test
+    @Specification({
         "${route}/output/new/controller",
-        "${streams}/response.with.content.length/client/source",
-        "${streams}/response.with.content.length/client/target" })
-    public void shouldAcceptResponseWithContentLength() throws Exception
+        "${streams}/response.fragmented/client/source",
+        "${streams}/response.fragmented/client/target" })
+    public void shouldAcceptFragmentedResponse() throws Exception
     {
         k3po.start();
         k3po.awaitBarrier("ROUTED_OUTPUT");
@@ -91,9 +127,9 @@ public class MessageFormatIT
     @Test
     @Specification({
         "${route}/output/new/controller",
-        "${streams}/response.with.headers/client/source",
-        "${streams}/response.with.headers/client/target" })
-    public void shouldAcceptResponseWithHeaders() throws Exception
+        "${streams}/response.fragmented.with.content.length/client/source",
+        "${streams}/response.fragmented.with.content.length/client/target" })
+    public void shouldAcceptFragmentedResponseWithContentLength() throws Exception
     {
         k3po.start();
         k3po.awaitBarrier("ROUTED_OUTPUT");
