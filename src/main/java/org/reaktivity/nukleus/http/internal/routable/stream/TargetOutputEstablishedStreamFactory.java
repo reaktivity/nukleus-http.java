@@ -17,6 +17,7 @@ package org.reaktivity.nukleus.http.internal.routable.stream;
 
 import static java.lang.Character.toUpperCase;
 import static java.nio.charset.StandardCharsets.US_ASCII;
+import static org.reaktivity.nukleus.http.internal.routable.stream.Slab.SLOT_NOT_AVAILABLE;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -28,7 +29,6 @@ import java.util.function.LongSupplier;
 import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
 import org.agrona.concurrent.MessageHandler;
-import org.agrona.concurrent.UnsafeBuffer;
 import org.reaktivity.nukleus.http.internal.routable.Correlation;
 import org.reaktivity.nukleus.http.internal.routable.Source;
 import org.reaktivity.nukleus.http.internal.routable.Target;
@@ -46,7 +46,7 @@ public final class TargetOutputEstablishedStreamFactory
     private static final Map<String, String> EMPTY_HEADERS = Collections.emptyMap();
 
     public static final byte[] RESPONSE_HEADERS_TOO_LONG_RESPONSE =
-            "HTTP/1.1  507 Insufficient Storage\r\n\r\n".getBytes(US_ASCII);
+            "HTTP/1.1 507 Insufficient Storage\r\n\r\n".getBytes(US_ASCII);
 
     private final FrameFW frameRO = new FrameFW();
 
@@ -64,7 +64,6 @@ public final class TargetOutputEstablishedStreamFactory
     private final LongSupplier supplyStreamId;
     private final LongFunction<Correlation> correlateEstablished;
 
-    private int maximumHeadersSize;
     private Slab slab;
 
     public TargetOutputEstablishedStreamFactory(
@@ -79,7 +78,6 @@ public final class TargetOutputEstablishedStreamFactory
         this.supplyTarget = supplyTarget;
         this.supplyStreamId = supplyStreamId;
         this.correlateEstablished = correlateEstablished;
-        this.maximumHeadersSize = maximumHeadersSize;
         this.slab = new Slab(memoryForEncode, maximumHeadersSize);
     }
 
@@ -101,6 +99,8 @@ public final class TargetOutputEstablishedStreamFactory
         private int window;
         private int slotIndex;
         private int slotPosition;
+        private int slotOffset;
+        private boolean endRequested;
 
         @Override
         public String toString()
@@ -111,8 +111,8 @@ public final class TargetOutputEstablishedStreamFactory
 
         private TargetOutputEstablishedStream()
         {
-            this.streamState = this::beforeBegin;
-            this.throttleState = this::throttleSkipNextWindow;
+            this.streamState = this::streamBeforeBegin;
+            this.throttleState = this::throttleBeforeBegin;
         }
 
         private void handleStream(
@@ -124,7 +124,7 @@ public final class TargetOutputEstablishedStreamFactory
             streamState.onMessage(msgTypeId, buffer, index, length);
         }
 
-        private void beforeBegin(
+        private void streamBeforeBegin(
             int msgTypeId,
             DirectBuffer buffer,
             int index,
@@ -140,7 +140,28 @@ public final class TargetOutputEstablishedStreamFactory
             }
         }
 
-        private void afterBeginOrData(
+        private void streamBeforeHeadersWritten(
+            int msgTypeId,
+            DirectBuffer buffer,
+            int index,
+            int length)
+        {
+            switch (msgTypeId)
+            {
+            case EndFW.TYPE_ID:
+                endRequested = true;
+                break;
+            default:
+                if (slotIndex != SLOT_NOT_AVAILABLE)
+                {
+                    slab.release(slotIndex);
+                }
+                processUnexpected(buffer, index, length);
+                break;
+            }
+        }
+
+        private void streamAfterBeginOrData(
             int msgTypeId,
             DirectBuffer buffer,
             int index,
@@ -160,7 +181,7 @@ public final class TargetOutputEstablishedStreamFactory
             }
         }
 
-        private void afterEnd(
+        private void streamAfterEnd(
             int msgTypeId,
             DirectBuffer buffer,
             int index,
@@ -169,7 +190,7 @@ public final class TargetOutputEstablishedStreamFactory
             processUnexpected(buffer, index, length);
         }
 
-        private void afterRejectOrReset(
+        private void streamAfterRejectOrReset(
             int msgTypeId,
             MutableDirectBuffer buffer,
             int index,
@@ -189,7 +210,7 @@ public final class TargetOutputEstablishedStreamFactory
 
                 source.removeStream(streamId);
 
-                this.streamState = this::afterEnd;
+                this.streamState = this::streamAfterEnd;
             }
         }
 
@@ -204,7 +225,7 @@ public final class TargetOutputEstablishedStreamFactory
 
             source.doReset(streamId);
 
-            this.streamState = this::afterRejectOrReset;
+            this.streamState = this::streamAfterRejectOrReset;
         }
 
         private void processBegin(
@@ -273,21 +294,22 @@ public final class TargetOutputEstablishedStreamFactory
                 slotIndex = slab.acquire(sourceId);
                 slotPosition = 0;
                 MutableDirectBuffer slot = slab.buffer(slotIndex);
-                slotPosition = length;
                 if (payloadChars.length() > slot.capacity())
                 {
                     slot.putBytes(0,  RESPONSE_HEADERS_TOO_LONG_RESPONSE);
                     target.doData(newTargetId, slot, 0, RESPONSE_HEADERS_TOO_LONG_RESPONSE.length);
-                    target.doHttpEnd(newTargetId);
                     source.doReset(sourceId);
                     target.removeThrottle(newTargetId);
                     source.removeStream(sourceId);
                 }
                 else
                 {
-                    slot.putBytes(0, payloadChars.getBytes(US_ASCII));
-                    this.streamState = this::beforeResponseHeadersWritten;
-                    this.throttleState = this::throttleBeforeResponseHeadersWritten;
+                    byte[] bytes = payloadChars.getBytes(US_ASCII);
+                    slot.putBytes(0, bytes);
+                    slotPosition = bytes.length;
+                    slotOffset = 0;
+                    this.streamState = this::streamBeforeHeadersWritten;
+                    this.throttleState = this::throttleBeforeHeadersWritten;
                 }
             }
             else
@@ -324,7 +346,10 @@ public final class TargetOutputEstablishedStreamFactory
             int length)
         {
             endRO.wrap(buffer, index, index + length);
+        }
 
+        private void doEnd()
+        {
             target.removeThrottle(targetId);
             source.removeStream(sourceId);
         }
@@ -338,7 +363,7 @@ public final class TargetOutputEstablishedStreamFactory
             throttleState.onMessage(msgTypeId, buffer, index, length);
         }
 
-        private void throttleNextThenSkipWindow(
+        private void throttleBeforeBegin(
             int msgTypeId,
             DirectBuffer buffer,
             int index,
@@ -346,9 +371,6 @@ public final class TargetOutputEstablishedStreamFactory
         {
             switch (msgTypeId)
             {
-            case WindowFW.TYPE_ID:
-                processNextThenSkipWindow(buffer, index, length);
-                break;
             case ResetFW.TYPE_ID:
                 processReset(buffer, index, length);
                 break;
@@ -358,7 +380,7 @@ public final class TargetOutputEstablishedStreamFactory
             }
         }
 
-        private void throttleSkipNextWindow(
+        private void throttleBeforeHeadersWritten(
             int msgTypeId,
             DirectBuffer buffer,
             int index,
@@ -367,7 +389,7 @@ public final class TargetOutputEstablishedStreamFactory
             switch (msgTypeId)
             {
             case WindowFW.TYPE_ID:
-                processSkipNextWindow(buffer, index, length);
+                processWindowToWriteResponseHeaders(buffer, index, length);
                 break;
             case ResetFW.TYPE_ID:
                 processReset(buffer, index, length);
@@ -387,7 +409,7 @@ public final class TargetOutputEstablishedStreamFactory
             switch (msgTypeId)
             {
             case WindowFW.TYPE_ID:
-                processNextWindow(buffer, index, length);
+                processWindow(buffer, index, length);
                 break;
             case ResetFW.TYPE_ID:
                 processReset(buffer, index, length);
@@ -398,17 +420,40 @@ public final class TargetOutputEstablishedStreamFactory
             }
         }
 
-        private void processSkipNextWindow(
+        private void processWindowToWriteResponseHeaders(
             DirectBuffer buffer,
             int index,
             int length)
         {
             windowRO.wrap(buffer, index, index + length);
-
-            throttleState = this::throttleNextWindow;
+            int update = windowRO.update();
+            int bytesToWrite = Math.min(slotPosition - slotOffset, update);
+            MutableDirectBuffer slot = slab.buffer(slotIndex);
+            target.doData(targetId, slot, slotOffset, bytesToWrite);
+            slotOffset += bytesToWrite;
+            int bytesLeft = slotPosition - slotOffset;
+            if (bytesLeft == 0)
+            {
+                slab.release(slotIndex);
+                slotIndex = SLOT_NOT_AVAILABLE;
+                if (endRequested)
+                {
+                    doEnd();
+                }
+                else
+                {
+                    streamState = this::streamAfterBeginOrData;
+                    throttleState = this::throttleNextWindow;
+                }
+                int windowRemaining = update - bytesToWrite;
+                if (windowRemaining > 0)
+                {
+                    doWindow(windowRemaining);
+                }
+            }
         }
 
-        private void processNextWindow(
+        private void processWindow(
             DirectBuffer buffer,
             int index,
             int length)
@@ -416,24 +461,13 @@ public final class TargetOutputEstablishedStreamFactory
             windowRO.wrap(buffer, index, index + length);
 
             final int update = windowRO.update();
-
-            window += update;
-            source.doWindow(sourceId, update);
+            doWindow(update);
         }
 
-        private void processNextThenSkipWindow(
-            DirectBuffer buffer,
-            int index,
-            int length)
+        private void doWindow(int update)
         {
-            windowRO.wrap(buffer, index, index + length);
-
-            final int update = windowRO.update();
-
             window += update;
             source.doWindow(sourceId, update);
-
-            throttleState = this::throttleSkipNextWindow;
         }
 
         private void processReset(
@@ -442,7 +476,10 @@ public final class TargetOutputEstablishedStreamFactory
             int length)
         {
             resetRO.wrap(buffer, index, index + length);
-
+            if (slotIndex != SLOT_NOT_AVAILABLE)
+            {
+                slab.release(slotIndex);
+            }
             source.doReset(sourceId);
         }
     }

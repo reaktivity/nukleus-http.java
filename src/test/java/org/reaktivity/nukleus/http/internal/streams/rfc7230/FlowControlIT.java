@@ -85,6 +85,7 @@ public class FlowControlIT
         k3po.start();
         k3po.awaitBarrier("ROUTED_INPUT");
         k3po.notifyBarrier("ROUTED_OUTPUT");
+        k3po.finish();
     }
 
     @Test
@@ -97,6 +98,7 @@ public class FlowControlIT
         k3po.start();
         k3po.awaitBarrier("ROUTED_INPUT");
         k3po.notifyBarrier("ROUTED_OUTPUT");
+        k3po.finish();
     }
 
     @Test
@@ -109,6 +111,7 @@ public class FlowControlIT
         k3po.start();
         k3po.awaitBarrier("ROUTED_INPUT");
         k3po.notifyBarrier("ROUTED_OUTPUT");
+        k3po.finish();
     }
 
     @Test
@@ -121,18 +124,7 @@ public class FlowControlIT
         k3po.start();
         k3po.awaitBarrier("ROUTED_INPUT");
         k3po.notifyBarrier("ROUTED_OUTPUT");
-    }
-
-    @Test
-    @Specification({
-        "${route}/input/new/controller",
-        "${streams}/response.headers.too.long/server/source",
-        "${streams}/response.headers.too.long/server/target" })
-    public void shouldNotWriteResponseExceedingMaximumHeadersSize() throws Exception
-    {
-        k3po.start();
-        k3po.awaitBarrier("ROUTED_INPUT");
-        k3po.notifyBarrier("ROUTED_OUTPUT");
+        k3po.finish();
     }
 
     @Test
