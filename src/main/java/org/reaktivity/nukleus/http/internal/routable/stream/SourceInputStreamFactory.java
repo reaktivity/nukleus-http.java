@@ -153,7 +153,7 @@ public final class SourceInputStreamFactory
             }
         }
 
-        private void streamAwaitingTargetWindow(
+        private void streamBeforeWindowsAreAligned(
             int msgTypeId,
             DirectBuffer buffer,
             int index,
@@ -404,8 +404,8 @@ public final class SourceInputStreamFactory
                         assert dataLength <= buffer.capacity();
                         buffer.putBytes(0, payload, endOfHeadersAt, dataLength);
                         slotPosition = dataLength;
-                        streamState = this::streamAwaitingTargetWindow;
-                        throttleState = this::beforeInitialWindow;
+                        streamState = this::streamBeforeWindowsAreAligned;
+                        throttleState = this::beforeeforeWindowsAreAligned;
                     }
                     else
                     {
@@ -446,8 +446,8 @@ public final class SourceInputStreamFactory
                     assert length <= buffer.capacity();
                     buffer.putBytes(0, payload, endOfHeadersAt, length);
                     slotPosition = length;
-                    streamState = this::streamAwaitingTargetWindow;
-                    throttleState = this::beforeInitialWindow;
+                    streamState = this::streamBeforeWindowsAreAligned;
+                    throttleState = this::beforeeforeWindowsAreAligned;
                 }
             }
             return limit;
@@ -660,7 +660,7 @@ public final class SourceInputStreamFactory
             }
         }
 
-        private void beforeInitialWindow(
+        private void beforeeforeWindowsAreAligned(
             int msgTypeId,
             DirectBuffer buffer,
             int index,
@@ -669,7 +669,7 @@ public final class SourceInputStreamFactory
             switch (msgTypeId)
             {
             case WindowFW.TYPE_ID:
-                processInitialWindow(buffer, index, length);
+                processWindowBeforeAlignment(buffer, index, length);
                 break;
             case ResetFW.TYPE_ID:
                 processReset(buffer, index, length);
@@ -700,7 +700,7 @@ public final class SourceInputStreamFactory
             }
         }
 
-        private void processInitialWindow(DirectBuffer buffer, int index, int length)
+        private void processWindowBeforeAlignment(DirectBuffer buffer, int index, int length)
         {
             windowRO.wrap(buffer, index, index + length);
             int update = windowRO.update();
@@ -716,7 +716,7 @@ public final class SourceInputStreamFactory
             decode(data, slotOffset, slotOffset + bytesToWrite);
             availableTargetWindow -= bytesToWrite;
 
-            // Continue slabbing incoming data until available target window has caught up
+            // Continue slabbing incoming data until target window updates have caught up
             // with the initial window we gave to source
             slotOffset += bytesToWrite;
             int bytesLeft = slotPosition - slotOffset;
