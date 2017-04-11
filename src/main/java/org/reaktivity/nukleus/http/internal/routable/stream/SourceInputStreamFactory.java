@@ -711,16 +711,17 @@ public final class SourceInputStreamFactory
 
         private void processDeferredData()
         {
-            int bytesToWrite = Math.min(slotPosition - slotOffset, availableTargetWindow);
+            int bytesDeferred = slotPosition - slotOffset;
+            int writableBytes = Math.min(bytesDeferred, availableTargetWindow);
             MutableDirectBuffer data = slab.buffer(slotIndex);
-            decode(data, slotOffset, slotOffset + bytesToWrite);
-            availableTargetWindow -= bytesToWrite;
+            decode(data, slotOffset, slotOffset + writableBytes);
+            availableTargetWindow -= writableBytes;
 
             // Continue slabbing incoming data until target window updates have caught up
             // with the initial window we gave to source
-            slotOffset += bytesToWrite;
-            int bytesLeft = slotPosition - slotOffset;
-            if (sourceUpdateDeferred >= 0 && bytesLeft == 0)
+            slotOffset += writableBytes;
+            bytesDeferred -= writableBytes;
+            if (sourceUpdateDeferred >= 0 && bytesDeferred == 0)
             {
                 slab.release(slotIndex);
                 slotIndex = SLOT_NOT_AVAILABLE;
