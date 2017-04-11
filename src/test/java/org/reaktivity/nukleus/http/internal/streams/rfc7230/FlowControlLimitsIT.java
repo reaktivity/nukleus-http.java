@@ -31,11 +31,11 @@ import org.kaazing.k3po.junit.rules.K3poRule;
 import org.reaktivity.nukleus.http.internal.test.SystemPropertiesRule;
 import org.reaktivity.reaktor.test.NukleusRule;
 
-public class MessageFormatLimitsIT
+public class FlowControlLimitsIT
 {
     private final K3poRule k3po = new K3poRule()
             .addScriptRoot("route", "org/reaktivity/specification/nukleus/http/control/route")
-            .addScriptRoot("streams", "org/reaktivity/specification/nukleus/http/streams/rfc7230/message.format");
+            .addScriptRoot("streams", "org/reaktivity/specification/nukleus/http/streams/rfc7230/flow.control");
 
     private final TestRule timeout = new DisableOnDebug(new Timeout(5, SECONDS));
 
