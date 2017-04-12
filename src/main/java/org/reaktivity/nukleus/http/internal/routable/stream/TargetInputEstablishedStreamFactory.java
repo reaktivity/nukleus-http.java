@@ -16,7 +16,7 @@
 package org.reaktivity.nukleus.http.internal.routable.stream;
 
 import static java.lang.Integer.parseInt;
-import static org.reaktivity.nukleus.http.internal.routable.stream.Slab.SLOT_NOT_AVAILABLE;
+import static org.reaktivity.nukleus.http.internal.routable.stream.Slab.NO_SLOT;
 import static org.reaktivity.nukleus.http.internal.util.BufferUtil.limitOfBytes;
 
 import java.nio.charset.StandardCharsets;
@@ -88,7 +88,7 @@ public final class TargetInputEstablishedStreamFactory
         private MessageHandler streamState;
         private MessageHandler throttleState;
         private DecoderState decoderState;
-        private int slotIndex = SLOT_NOT_AVAILABLE;
+        private int slotIndex = NO_SLOT;
         private int slotOffset = 0;
         private int slotPosition;
         private boolean endRequested;
@@ -316,7 +316,7 @@ public final class TargetInputEstablishedStreamFactory
 
             source.removeStream(sourceId);
             target.removeThrottle(targetId);
-            if (slotIndex != SLOT_NOT_AVAILABLE)
+            if (slotIndex != NO_SLOT)
             {
                 slab.release(slotIndex);
             }
@@ -633,7 +633,7 @@ public final class TargetInputEstablishedStreamFactory
             if (sourceUpdateDeferred >= 0 && bytesDeferred == 0)
             {
                 slab.release(slotIndex);
-                slotIndex = SLOT_NOT_AVAILABLE;
+                slotIndex = NO_SLOT;
                 if (endRequested)
                 {
                     doEnd();
@@ -675,7 +675,7 @@ public final class TargetInputEstablishedStreamFactory
             int length)
         {
             resetRO.wrap(buffer, index, index + length);
-            if (slotIndex != SLOT_NOT_AVAILABLE)
+            if (slotIndex != NO_SLOT)
             {
                 slab.release(slotIndex);
             }
