@@ -166,4 +166,43 @@ public class FlowControlIT
         k3po.finish();
     }
 
+    @Test
+    @Specification({
+        "${route}/output/new/controller",
+        "${streams}/response.with.content.flow.controlled/client/source",
+        "${streams}/response.with.content.flow.controlled/client/target" })
+    public void shouldSplitResponseDataToRespectTargetWindow() throws Exception
+    {
+        k3po.start();
+        k3po.awaitBarrier("ROUTED_OUTPUT");
+        k3po.notifyBarrier("ROUTED_INPUT");
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/output/new/controller",
+        "${streams}/response.with.fragmented.content.flow.controlled/client/source",
+        "${streams}/response.with.fragmented.content.flow.controlled/client/target" })
+    public void shouldSlabResponseDataWhenTargetWindowStillNegative() throws Exception
+    {
+        k3po.start();
+        k3po.awaitBarrier("ROUTED_OUTPUT");
+        k3po.notifyBarrier("ROUTED_INPUT");
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/output/new/controller",
+        "${streams}/response.with.content.length.and.end.late.target.window/client/source",
+        "${streams}/response.with.content.length.and.end.late.target.window/client/target" })
+    public void shouldWaitForSourceWindowAndWriteDataBeforeProcessingTargetEnd() throws Exception
+    {
+        k3po.start();
+        k3po.awaitBarrier("ROUTED_OUTPUT");
+        k3po.notifyBarrier("ROUTED_INPUT");
+        k3po.finish();
+    }
+
 }
