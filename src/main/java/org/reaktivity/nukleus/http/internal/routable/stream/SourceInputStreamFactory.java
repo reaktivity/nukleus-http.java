@@ -102,7 +102,7 @@ public final class SourceInputStreamFactory
         private int slotIndex = NO_SLOT;
         private int slotOffset = 0;
         private int slotPosition;
-        private boolean endRequested;
+        private boolean endDeferred;
 
         private long sourceId;
 
@@ -370,7 +370,7 @@ public final class SourceInputStreamFactory
             final long streamId = endRO.streamId();
             assert streamId == sourceId;
 
-            endRequested = true;
+            endDeferred = true;
         }
 
         private int defragmentHttpBegin(
@@ -708,20 +708,20 @@ public final class SourceInputStreamFactory
 
         private void processDeferredData()
         {
-            int bytesToWrite = Math.min(slotPosition - slotOffset, availableTargetWindow);
+            int writableBytes = Math.min(slotPosition - slotOffset, availableTargetWindow);
             MutableDirectBuffer data = slab.buffer(slotIndex);
-            decode(data, slotOffset, slotOffset + bytesToWrite);
-            availableTargetWindow -= bytesToWrite;
+            decode(data, slotOffset, slotOffset + writableBytes);
+            availableTargetWindow -= writableBytes;
 
             // Continue slabbing incoming data until target window updates have caught up
             // with the initial window we gave to source
-            slotOffset += bytesToWrite;
-            int bytesLeft = slotPosition - slotOffset;
-            if (sourceUpdateDeferred >= 0 && bytesLeft == 0)
+            slotOffset += writableBytes;
+            int bytesDeferred = slotPosition - slotOffset;
+            if (sourceUpdateDeferred >= 0 && bytesDeferred == 0)
             {
                 slab.release(slotIndex);
                 slotIndex = NO_SLOT;
-                if (endRequested)
+                if (endDeferred)
                 {
                     doEnd();
                 }
