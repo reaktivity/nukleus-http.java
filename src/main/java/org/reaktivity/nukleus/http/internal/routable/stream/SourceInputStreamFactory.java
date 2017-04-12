@@ -17,7 +17,7 @@ package org.reaktivity.nukleus.http.internal.routable.stream;
 
 import static java.lang.Integer.parseInt;
 import static org.reaktivity.nukleus.http.internal.routable.Route.headersMatch;
-import static org.reaktivity.nukleus.http.internal.routable.stream.Slab.SLOT_NOT_AVAILABLE;
+import static org.reaktivity.nukleus.http.internal.routable.stream.Slab.NO_SLOT;
 import static org.reaktivity.nukleus.http.internal.router.RouteKind.OUTPUT_ESTABLISHED;
 import static org.reaktivity.nukleus.http.internal.util.BufferUtil.limitOfBytes;
 
@@ -99,7 +99,7 @@ public final class SourceInputStreamFactory
         private MessageHandler streamState;
         private MessageHandler throttleState;
         private DecoderState decoderState;
-        private int slotIndex = SLOT_NOT_AVAILABLE;
+        private int slotIndex = NO_SLOT;
         private int slotOffset = 0;
         private int slotPosition;
         private boolean endRequested;
@@ -340,10 +340,7 @@ public final class SourceInputStreamFactory
 
             source.removeStream(sourceId);
             target.removeThrottle(targetId);
-            if (slotIndex != SLOT_NOT_AVAILABLE)
-            {
-                slab.release(slotIndex);
-            }
+            slab.release(slotIndex);
         }
 
         private void deferData(
@@ -724,7 +721,7 @@ public final class SourceInputStreamFactory
             if (sourceUpdateDeferred >= 0 && bytesDeferred == 0)
             {
                 slab.release(slotIndex);
-                slotIndex = SLOT_NOT_AVAILABLE;
+                slotIndex = NO_SLOT;
                 if (endRequested)
                 {
                     doEnd();
@@ -766,10 +763,7 @@ public final class SourceInputStreamFactory
             int length)
         {
             resetRO.wrap(buffer, index, index + length);
-            if (slotIndex != SLOT_NOT_AVAILABLE)
-            {
-                slab.release(slotIndex);
-            }
+            slab.release(slotIndex);
             source.doReset(sourceId);
         }
     }

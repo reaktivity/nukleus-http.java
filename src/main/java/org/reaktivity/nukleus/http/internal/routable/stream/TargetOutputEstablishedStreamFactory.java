@@ -17,7 +17,7 @@ package org.reaktivity.nukleus.http.internal.routable.stream;
 
 import static java.lang.Character.toUpperCase;
 import static java.nio.charset.StandardCharsets.US_ASCII;
-import static org.reaktivity.nukleus.http.internal.routable.stream.Slab.SLOT_NOT_AVAILABLE;
+import static org.reaktivity.nukleus.http.internal.routable.stream.Slab.NO_SLOT;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -64,7 +64,7 @@ public final class TargetOutputEstablishedStreamFactory
     private final LongSupplier supplyStreamId;
     private final LongFunction<Correlation> correlateEstablished;
 
-    private Slab slab;
+    private final Slab slab;
 
     public TargetOutputEstablishedStreamFactory(
         Source source,
@@ -100,7 +100,7 @@ public final class TargetOutputEstablishedStreamFactory
         private int slotIndex;
         private int slotPosition;
         private int slotOffset;
-        private boolean endRequested;
+        private boolean endDeferred;
 
         @Override
         public String toString()
@@ -149,13 +149,10 @@ public final class TargetOutputEstablishedStreamFactory
             switch (msgTypeId)
             {
             case EndFW.TYPE_ID:
-                endRequested = true;
+                endDeferred = true;
                 break;
             default:
-                if (slotIndex != SLOT_NOT_AVAILABLE)
-                {
-                    slab.release(slotIndex);
-                }
+                slab.release(slotIndex);
                 processUnexpected(buffer, index, length);
                 break;
             }
@@ -427,16 +424,16 @@ public final class TargetOutputEstablishedStreamFactory
         {
             windowRO.wrap(buffer, index, index + length);
             int update = windowRO.update();
-            int bytesToWrite = Math.min(slotPosition - slotOffset, update);
+            int writableBytes = Math.min(slotPosition - slotOffset, update);
             MutableDirectBuffer slot = slab.buffer(slotIndex);
-            target.doData(targetId, slot, slotOffset, bytesToWrite);
-            slotOffset += bytesToWrite;
-            int bytesLeft = slotPosition - slotOffset;
-            if (bytesLeft == 0)
+            target.doData(targetId, slot, slotOffset, writableBytes);
+            slotOffset += writableBytes;
+            int bytesDeferred = slotPosition - slotOffset;
+            if (bytesDeferred == 0)
             {
                 slab.release(slotIndex);
-                slotIndex = SLOT_NOT_AVAILABLE;
-                if (endRequested)
+                slotIndex = NO_SLOT;
+                if (endDeferred)
                 {
                     doEnd();
                 }
@@ -445,10 +442,10 @@ public final class TargetOutputEstablishedStreamFactory
                     streamState = this::streamAfterBeginOrData;
                     throttleState = this::throttleNextWindow;
                 }
-                int windowRemaining = update - bytesToWrite;
-                if (windowRemaining > 0)
+                update -= writableBytes;
+                if (update > 0)
                 {
-                    doWindow(windowRemaining);
+                    doWindow(update);
                 }
             }
         }
@@ -476,10 +473,7 @@ public final class TargetOutputEstablishedStreamFactory
             int length)
         {
             resetRO.wrap(buffer, index, index + length);
-            if (slotIndex != SLOT_NOT_AVAILABLE)
-            {
-                slab.release(slotIndex);
-            }
+            slab.release(slotIndex);
             source.doReset(sourceId);
         }
     }
