@@ -85,6 +85,7 @@ public class FlowControlIT
         k3po.start();
         k3po.awaitBarrier("ROUTED_INPUT");
         k3po.notifyBarrier("ROUTED_OUTPUT");
+        k3po.finish();
     }
 
     @Test
@@ -97,6 +98,7 @@ public class FlowControlIT
         k3po.start();
         k3po.awaitBarrier("ROUTED_INPUT");
         k3po.notifyBarrier("ROUTED_OUTPUT");
+        k3po.finish();
     }
 
     @Test
@@ -109,6 +111,33 @@ public class FlowControlIT
         k3po.start();
         k3po.awaitBarrier("ROUTED_INPUT");
         k3po.notifyBarrier("ROUTED_OUTPUT");
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/input/new/controller",
+        "${streams}/response.flow.controlled/server/source",
+        "${streams}/response.flow.controlled/server/target" })
+    public void shouldFlowControlResponse() throws Exception
+    {
+        k3po.start();
+        k3po.awaitBarrier("ROUTED_INPUT");
+        k3po.notifyBarrier("ROUTED_OUTPUT");
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/input/new/controller",
+        "${streams}/response.with.content.flow.controlled/server/source",
+        "${streams}/response.with.content.flow.controlled/server/target" })
+    public void shouldFlowControlResponseWithContent() throws Exception
+    {
+        k3po.start();
+        k3po.awaitBarrier("ROUTED_INPUT");
+        k3po.notifyBarrier("ROUTED_OUTPUT");
+        k3po.finish();
     }
 
     @Test
@@ -130,6 +159,71 @@ public class FlowControlIT
         "${streams}/response.fragmented.with.content.length/client/source",
         "${streams}/response.fragmented.with.content.length/client/target" })
     public void shouldAcceptFragmentedResponseWithContentLength() throws Exception
+    {
+        k3po.start();
+        k3po.awaitBarrier("ROUTED_OUTPUT");
+        k3po.notifyBarrier("ROUTED_INPUT");
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/output/new/controller",
+        "${streams}/response.with.content.flow.controlled/client/source",
+        "${streams}/response.with.content.flow.controlled/client/target" })
+    public void shouldSplitResponseDataToRespectTargetWindow() throws Exception
+    {
+        k3po.start();
+        k3po.awaitBarrier("ROUTED_OUTPUT");
+        k3po.notifyBarrier("ROUTED_INPUT");
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/output/new/controller",
+        "${streams}/response.with.fragmented.content.flow.controlled/client/source",
+        "${streams}/response.with.fragmented.content.flow.controlled/client/target" })
+    public void shouldSlabResponseDataWhenTargetWindowStillNegative() throws Exception
+    {
+        k3po.start();
+        k3po.awaitBarrier("ROUTED_OUTPUT");
+        k3po.notifyBarrier("ROUTED_INPUT");
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/output/new/controller",
+        "${streams}/response.with.content.length.and.end.late.target.window/client/source",
+        "${streams}/response.with.content.length.and.end.late.target.window/client/target" })
+    public void shouldWaitForSourceWindowAndWriteDataBeforeProcessingTargetEnd() throws Exception
+    {
+        k3po.start();
+        k3po.awaitBarrier("ROUTED_OUTPUT");
+        k3po.notifyBarrier("ROUTED_INPUT");
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/output/new/controller",
+        "${streams}/request.flow.controlled/client/source",
+        "${streams}/request.flow.controlled/client/target" })
+    public void shouldFlowControlRequest() throws Exception
+    {
+        k3po.start();
+        k3po.awaitBarrier("ROUTED_OUTPUT");
+        k3po.notifyBarrier("ROUTED_INPUT");
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/output/new/controller",
+        "${streams}/request.with.content.flow.controlled/client/source",
+        "${streams}/request.with.content.flow.controlled/client/target" })
+    public void shouldFlowControlRequestWithContent() throws Exception
     {
         k3po.start();
         k3po.awaitBarrier("ROUTED_OUTPUT");

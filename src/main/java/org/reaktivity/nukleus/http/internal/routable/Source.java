@@ -29,6 +29,7 @@ import org.agrona.concurrent.MessageHandler;
 import org.agrona.concurrent.ringbuffer.RingBuffer;
 import org.reaktivity.nukleus.Nukleus;
 import org.reaktivity.nukleus.http.internal.layouts.StreamsLayout;
+import org.reaktivity.nukleus.http.internal.routable.stream.Slab;
 import org.reaktivity.nukleus.http.internal.routable.stream.SourceInputStreamFactory;
 import org.reaktivity.nukleus.http.internal.routable.stream.SourceOutputStreamFactory;
 import org.reaktivity.nukleus.http.internal.routable.stream.TargetInputEstablishedStreamFactory;
@@ -71,7 +72,7 @@ public final class Source implements Nukleus
         LongFunction<Correlation> correlateEstablished,
         LongFunction<Correlation> lookupEstablished,
         int maximumHeadersSize,
-        int memoryForDecode)
+        int memoryForDecodeEncode)
     {
         this.sourceName = sourceName;
         this.partitionName = partitionName;
@@ -84,14 +85,17 @@ public final class Source implements Nukleus
 
         Target rejectTarget = supplyTarget.apply(sourceName);
         this.streamFactories = new EnumMap<>(RouteKind.class);
+        Slab slab = new Slab(memoryForDecodeEncode, maximumHeadersSize);
         this.streamFactories.put(RouteKind.INPUT, new SourceInputStreamFactory(this, supplyRoutes, supplyTargetId,
-                rejectTarget, correlateNew, maximumHeadersSize, memoryForDecode)::newStream);
+                rejectTarget, correlateNew, slab)::newStream);
         this.streamFactories.put(RouteKind.OUTPUT_ESTABLISHED,
-                new TargetOutputEstablishedStreamFactory(this, supplyTarget, supplyTargetId, correlateEstablished)::newStream);
+                new TargetOutputEstablishedStreamFactory(this, supplyTarget, supplyTargetId, correlateEstablished,
+                        slab)::newStream);
         this.streamFactories.put(RouteKind.OUTPUT,
-                new SourceOutputStreamFactory(this, supplyRoutes, supplyTargetId, correlateNew)::newStream);
+                new SourceOutputStreamFactory(this, supplyRoutes, supplyTargetId,
+                        correlateNew, slab)::newStream);
         this.streamFactories.put(RouteKind.INPUT_ESTABLISHED, new TargetInputEstablishedStreamFactory(this, supplyTarget,
-                supplyTargetId, correlateEstablished, maximumHeadersSize, memoryForDecode)::newStream);
+                supplyTargetId, correlateEstablished, slab)::newStream);
 
         this.lookupEstablished = lookupEstablished;
     }

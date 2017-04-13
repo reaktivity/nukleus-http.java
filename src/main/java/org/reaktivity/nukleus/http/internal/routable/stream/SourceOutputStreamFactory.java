@@ -18,6 +18,7 @@ package org.reaktivity.nukleus.http.internal.routable.stream;
 import static java.lang.Character.toUpperCase;
 import static java.nio.charset.StandardCharsets.US_ASCII;
 import static org.reaktivity.nukleus.http.internal.routable.Route.headersMatch;
+import static org.reaktivity.nukleus.http.internal.routable.stream.Slab.NO_SLOT;
 import static org.reaktivity.nukleus.http.internal.router.RouteKind.INPUT_ESTABLISHED;
 
 import java.util.Collections;
@@ -32,7 +33,6 @@ import java.util.function.Predicate;
 import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
 import org.agrona.concurrent.MessageHandler;
-import org.agrona.concurrent.UnsafeBuffer;
 import org.reaktivity.nukleus.http.internal.routable.Correlation;
 import org.reaktivity.nukleus.http.internal.routable.Route;
 import org.reaktivity.nukleus.http.internal.routable.Source;
@@ -73,16 +73,20 @@ public final class SourceOutputStreamFactory
     private final LongFunction<List<Route>> supplyRoutes;
     private final LongObjectBiConsumer<Correlation> correlateNew;
 
+    private final Slab slab;
+
     public SourceOutputStreamFactory(
         Source source,
         LongFunction<List<Route>> supplyRoutes,
         LongSupplier supplyTargetId,
-        LongObjectBiConsumer<Correlation> correlateNew)
+        LongObjectBiConsumer<Correlation> correlateNew,
+        Slab slab)
     {
         this.source = source;
         this.supplyTargetId = supplyTargetId;
         this.supplyRoutes = supplyRoutes;
         this.correlateNew = correlateNew;
+        this.slab = slab;
     }
 
     public MessageHandler newStream()
@@ -101,11 +105,15 @@ public final class SourceOutputStreamFactory
         private Target target;
         private long targetId;
         private int window;
+        private int slotIndex;
+        private int slotPosition;
+        private int slotOffset;
+        private boolean endDeferred;
 
         private SourceOutputStream()
         {
-            this.streamState = this::beforeBegin;
-            this.throttleState = this::throttleSkipNextWindow;
+            this.streamState = this::streamBeforeBegin;
+            this.throttleState = this::throttleBeforeBegin;
         }
 
         private void handleStream(
@@ -117,9 +125,9 @@ public final class SourceOutputStreamFactory
             streamState.onMessage(msgTypeId, buffer, index, length);
         }
 
-        private void beforeBegin(
+        private void streamBeforeBegin(
             int msgTypeId,
-            MutableDirectBuffer buffer,
+            DirectBuffer buffer,
             int index,
             int length)
         {
@@ -133,7 +141,25 @@ public final class SourceOutputStreamFactory
             }
         }
 
-        private void afterBeginOrData(
+        private void streamBeforeHeadersWritten(
+            int msgTypeId,
+            DirectBuffer buffer,
+            int index,
+            int length)
+        {
+            switch (msgTypeId)
+            {
+            case EndFW.TYPE_ID:
+                endDeferred = true;
+                break;
+            default:
+                slab.release(slotIndex);
+                processUnexpected(buffer, index, length);
+                break;
+            }
+        }
+
+        private void streamAfterBeginOrData(
             int msgTypeId,
             DirectBuffer buffer,
             int index,
@@ -153,7 +179,7 @@ public final class SourceOutputStreamFactory
             }
         }
 
-        private void afterEnd(
+        private void streamAfterEnd(
             int msgTypeId,
             DirectBuffer buffer,
             int index,
@@ -162,7 +188,7 @@ public final class SourceOutputStreamFactory
             processUnexpected(buffer, index, length);
         }
 
-        private void afterReplyOrReset(
+        private void streamAfterReplyOrReset(
             int msgTypeId,
             MutableDirectBuffer buffer,
             int index,
@@ -182,7 +208,7 @@ public final class SourceOutputStreamFactory
 
                 source.removeStream(streamId);
 
-                this.streamState = this::afterEnd;
+                this.streamState = this::streamAfterEnd;
             }
         }
 
@@ -268,13 +294,25 @@ public final class SourceOutputStreamFactory
                                            .append(" HTTP/1.1").append("\r\n")
                                            .append("Host").append(": ").append(pseudoHeaders[AUTHORITY]).append("\r\n")
                                            .append(headersChars).append("\r\n").toString();
-
-                final DirectBuffer payload = new UnsafeBuffer(payloadChars.getBytes(US_ASCII));
-
-                target.doData(targetId, payload, 0, payload.capacity());
-
-                this.streamState = this::afterBeginOrData;
-                this.throttleState = this::throttleNextThenSkipWindow;
+                slotIndex = slab.acquire(sourceId);
+                slotPosition = 0;
+                MutableDirectBuffer slot = slab.buffer(slotIndex);
+                if (payloadChars.length() > slot.capacity())
+                {
+                    // TODO: diagnostics (reset reason?)
+                    source.doReset(sourceId);
+                    target.removeThrottle(targetId);
+                    source.removeStream(sourceId);
+                }
+                else
+                {
+                    byte[] bytes = payloadChars.getBytes(US_ASCII);
+                    slot.putBytes(0, bytes);
+                    slotPosition = bytes.length;
+                    slotOffset = 0;
+                    this.streamState = this::streamBeforeHeadersWritten;
+                    this.throttleState = this::throttleBeforeHeadersWritten;
+                }
             }
             else
             {
@@ -307,9 +345,14 @@ public final class SourceOutputStreamFactory
             int length)
         {
             endRO.wrap(buffer, index, index + length);
+            doEnd();
+        }
+
+        private void doEnd()
+        {
             target.removeThrottle(targetId);
             source.removeStream(sourceId);
-            this.streamState = this::afterEnd;
+            this.streamState = this::streamAfterEnd;
         }
 
         private void processUnexpected(
@@ -323,7 +366,7 @@ public final class SourceOutputStreamFactory
 
             source.doReset(streamId);
 
-            this.streamState = this::afterReplyOrReset;
+            this.streamState = this::streamAfterReplyOrReset;
         }
 
         private void handleThrottle(
@@ -335,9 +378,7 @@ public final class SourceOutputStreamFactory
             throttleState.onMessage(msgTypeId, buffer, index, length);
         }
 
-
-
-        private void throttleNextThenSkipWindow(
+        private void throttleBeforeBegin(
             int msgTypeId,
             DirectBuffer buffer,
             int index,
@@ -345,9 +386,6 @@ public final class SourceOutputStreamFactory
         {
             switch (msgTypeId)
             {
-            case WindowFW.TYPE_ID:
-                processNextThenSkipWindow(buffer, index, length);
-                break;
             case ResetFW.TYPE_ID:
                 processReset(buffer, index, length);
                 break;
@@ -357,7 +395,7 @@ public final class SourceOutputStreamFactory
             }
         }
 
-        private void throttleSkipNextWindow(
+        private void throttleBeforeHeadersWritten(
             int msgTypeId,
             DirectBuffer buffer,
             int index,
@@ -366,7 +404,7 @@ public final class SourceOutputStreamFactory
             switch (msgTypeId)
             {
             case WindowFW.TYPE_ID:
-                processSkipNextWindow(buffer, index, length);
+                processWindowToWriteRequestHeaders(buffer, index, length);
                 break;
             case ResetFW.TYPE_ID:
                 processReset(buffer, index, length);
@@ -386,7 +424,7 @@ public final class SourceOutputStreamFactory
             switch (msgTypeId)
             {
             case WindowFW.TYPE_ID:
-                processNextWindow(buffer, index, length);
+                processWindow(buffer, index, length);
                 break;
             case ResetFW.TYPE_ID:
                 processReset(buffer, index, length);
@@ -397,17 +435,40 @@ public final class SourceOutputStreamFactory
             }
         }
 
-        private void processSkipNextWindow(
+        private void processWindowToWriteRequestHeaders(
             DirectBuffer buffer,
             int index,
             int length)
         {
             windowRO.wrap(buffer, index, index + length);
-
-            throttleState = this::throttleNextWindow;
+            int update = windowRO.update();
+            int writableBytes = Math.min(slotPosition - slotOffset, update);
+            MutableDirectBuffer slot = slab.buffer(slotIndex);
+            target.doData(targetId, slot, slotOffset, writableBytes);
+            slotOffset += writableBytes;
+            int bytesDeferred = slotPosition - slotOffset;
+            if (bytesDeferred == 0)
+            {
+                slab.release(slotIndex);
+                slotIndex = NO_SLOT;
+                if (endDeferred)
+                {
+                    doEnd();
+                }
+                else
+                {
+                    streamState = this::streamAfterBeginOrData;
+                    throttleState = this::throttleNextWindow;
+                    update -= writableBytes;
+                    if (update > 0)
+                    {
+                        doWindow(update);
+                    }
+                }
+            }
         }
 
-        private void processNextWindow(
+        private void processWindow(
             DirectBuffer buffer,
             int index,
             int length)
@@ -415,24 +476,13 @@ public final class SourceOutputStreamFactory
             windowRO.wrap(buffer, index, index + length);
 
             final int update = windowRO.update();
-
-            window += update;
-            source.doWindow(sourceId, update);
+            doWindow(update);
         }
 
-        private void processNextThenSkipWindow(
-            DirectBuffer buffer,
-            int index,
-            int length)
+        private void doWindow(int update)
         {
-            windowRO.wrap(buffer, index, index + length);
-
-            final int update = windowRO.update();
-
             window += update;
             source.doWindow(sourceId, update);
-
-            throttleState = this::throttleSkipNextWindow;
         }
 
         private void processReset(
@@ -441,7 +491,7 @@ public final class SourceOutputStreamFactory
             int length)
         {
             resetRO.wrap(buffer, index, index + length);
-
+            slab.release(slotIndex);
             source.doReset(sourceId);
         }
 
