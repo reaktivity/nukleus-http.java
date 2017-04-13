@@ -85,6 +85,7 @@ public class FlowControlIT
         k3po.start();
         k3po.awaitBarrier("ROUTED_INPUT");
         k3po.notifyBarrier("ROUTED_OUTPUT");
+        k3po.finish();
     }
 
     @Test
@@ -97,6 +98,7 @@ public class FlowControlIT
         k3po.start();
         k3po.awaitBarrier("ROUTED_INPUT");
         k3po.notifyBarrier("ROUTED_OUTPUT");
+        k3po.finish();
     }
 
     @Test
@@ -109,6 +111,33 @@ public class FlowControlIT
         k3po.start();
         k3po.awaitBarrier("ROUTED_INPUT");
         k3po.notifyBarrier("ROUTED_OUTPUT");
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/input/new/controller",
+        "${streams}/response.flow.controlled/server/source",
+        "${streams}/response.flow.controlled/server/target" })
+    public void shouldFlowControlResponse() throws Exception
+    {
+        k3po.start();
+        k3po.awaitBarrier("ROUTED_INPUT");
+        k3po.notifyBarrier("ROUTED_OUTPUT");
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/input/new/controller",
+        "${streams}/response.with.content.flow.controlled/server/source",
+        "${streams}/response.with.content.flow.controlled/server/target" })
+    public void shouldFlowControlResponseWithContent() throws Exception
+    {
+        k3po.start();
+        k3po.awaitBarrier("ROUTED_INPUT");
+        k3po.notifyBarrier("ROUTED_OUTPUT");
+        k3po.finish();
     }
 
     @Test

@@ -58,7 +58,7 @@ public final class Context implements Closeable
     private ControlLayout controlRO;
     private int maximumStreamsCount;
     private int maximumHeadersSize;
-    private int memoryForDecode;
+    private int memoryForDecodeEncode;
     private int streamsBufferCapacity;
     private int throttleBufferCapacity;
     private Function<String, Path> sourceStreamsPath;
@@ -99,9 +99,9 @@ public final class Context implements Closeable
         return maximumHeadersSize;
     }
 
-    public int memoryForDecode()
+    public int memoryForDecodeEncode()
     {
-        return memoryForDecode;
+        return memoryForDecodeEncode;
     }
 
     public int streamsBufferCapacity()
@@ -316,7 +316,7 @@ public final class Context implements Closeable
                         : maximumStreamsCount / 8;
                 memoryForDecode = BitUtil.findNextPositivePowerOfTwo(maximumHeadersSize * maxStreamsWithIncompleteRequest / 2);
             }
-            this.memoryForDecode = memoryForDecode;
+            this.memoryForDecodeEncode = memoryForDecode;
         }
         catch (Exception ex)
         {

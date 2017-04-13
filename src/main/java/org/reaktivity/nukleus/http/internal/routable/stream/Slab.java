@@ -32,7 +32,7 @@ import org.agrona.concurrent.UnsafeBuffer;
  */
 public class Slab
 {
-    static final int SLOT_NOT_AVAILABLE = -1;
+    public static final int NO_SLOT = -1;
 
     private final MutableDirectBuffer mutableFW = new UnsafeBuffer(new byte[0]);
 
@@ -70,13 +70,13 @@ public class Slab
     /**
      * Reserves a slot for use by the given stream
      * @param streamId - Stream id
-     * @return Id of the acquired slot, or SLOT_NOT_AVAILABLE if all slots are in use
+     * @return Id of the acquired slot, or NO_SLOT if all slots are in use
      */
     public int acquire(long streamId)
     {
         if (availableSlots == 0)
         {
-            return SLOT_NOT_AVAILABLE;
+            return NO_SLOT;
         }
         int slot = Hashing.hash(streamId, mask);
         while (used.get(slot))
@@ -107,9 +107,12 @@ public class Slab
      */
     public void release(int slot)
     {
-        assert used.get(slot);
-        used.clear(slot);
-        availableSlots++;
+        if (slot != NO_SLOT)
+        {
+            assert used.get(slot);
+            used.clear(slot);
+            availableSlots++;
+        }
     }
 
 }

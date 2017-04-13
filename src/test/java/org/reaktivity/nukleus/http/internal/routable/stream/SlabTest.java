@@ -89,7 +89,7 @@ public class SlabTest
             assertTrue(slot >= 0);
         }
         slot = slab.acquire(111 + i);
-        assertEquals(Slab.SLOT_NOT_AVAILABLE, slot);
+        assertEquals(Slab.NO_SLOT, slot);
     }
 
     @Test
@@ -116,10 +116,10 @@ public class SlabTest
             assertTrue(slot >= 0);
         }
         int slotBad = slab.acquire(111 + i);
-        assertEquals(Slab.SLOT_NOT_AVAILABLE, slotBad);
+        assertEquals(Slab.NO_SLOT, slotBad);
         slab.release(slot);
         slot = slab.acquire(111 + i);
-        assertNotEquals(Slab.SLOT_NOT_AVAILABLE, slot);
+        assertNotEquals(Slab.NO_SLOT, slot);
     }
 
 }
