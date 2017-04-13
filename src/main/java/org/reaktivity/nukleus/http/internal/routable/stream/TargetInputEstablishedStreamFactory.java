@@ -315,10 +315,7 @@ public final class TargetInputEstablishedStreamFactory
 
             source.removeStream(sourceId);
             target.removeThrottle(targetId);
-            if (slotIndex != NO_SLOT)
-            {
-                slab.release(slotIndex);
-            }
+            slab.release(slotIndex);
         }
 
         private void deferData(
@@ -674,10 +671,7 @@ public final class TargetInputEstablishedStreamFactory
             int length)
         {
             resetRO.wrap(buffer, index, index + length);
-            if (slotIndex != NO_SLOT)
-            {
-                slab.release(slotIndex);
-            }
+            slab.release(slotIndex);
             source.doReset(sourceId);
         }
     }
