@@ -80,14 +80,13 @@ public final class SourceOutputStreamFactory
         LongFunction<List<Route>> supplyRoutes,
         LongSupplier supplyTargetId,
         LongObjectBiConsumer<Correlation> correlateNew,
-        int maximumHeadersSize,
-        int memoryForEncode)
+        Slab slab)
     {
         this.source = source;
         this.supplyTargetId = supplyTargetId;
         this.supplyRoutes = supplyRoutes;
         this.correlateNew = correlateNew;
-        this.slab = new Slab(memoryForEncode, maximumHeadersSize);
+        this.slab = slab;
     }
 
     public MessageHandler newStream()

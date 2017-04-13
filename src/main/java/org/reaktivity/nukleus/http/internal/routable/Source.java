@@ -29,6 +29,7 @@ import org.agrona.concurrent.MessageHandler;
 import org.agrona.concurrent.ringbuffer.RingBuffer;
 import org.reaktivity.nukleus.Nukleus;
 import org.reaktivity.nukleus.http.internal.layouts.StreamsLayout;
+import org.reaktivity.nukleus.http.internal.routable.stream.Slab;
 import org.reaktivity.nukleus.http.internal.routable.stream.SourceInputStreamFactory;
 import org.reaktivity.nukleus.http.internal.routable.stream.SourceOutputStreamFactory;
 import org.reaktivity.nukleus.http.internal.routable.stream.TargetInputEstablishedStreamFactory;
@@ -84,16 +85,17 @@ public final class Source implements Nukleus
 
         Target rejectTarget = supplyTarget.apply(sourceName);
         this.streamFactories = new EnumMap<>(RouteKind.class);
+        Slab slab = new Slab(memoryForDecodeEncode, maximumHeadersSize);
         this.streamFactories.put(RouteKind.INPUT, new SourceInputStreamFactory(this, supplyRoutes, supplyTargetId,
-                rejectTarget, correlateNew, maximumHeadersSize, memoryForDecodeEncode)::newStream);
+                rejectTarget, correlateNew, slab)::newStream);
         this.streamFactories.put(RouteKind.OUTPUT_ESTABLISHED,
                 new TargetOutputEstablishedStreamFactory(this, supplyTarget, supplyTargetId, correlateEstablished,
-                        maximumHeadersSize, memoryForDecodeEncode)::newStream);
+                        slab)::newStream);
         this.streamFactories.put(RouteKind.OUTPUT,
                 new SourceOutputStreamFactory(this, supplyRoutes, supplyTargetId,
-                        correlateNew, maximumHeadersSize, memoryForDecodeEncode)::newStream);
+                        correlateNew, slab)::newStream);
         this.streamFactories.put(RouteKind.INPUT_ESTABLISHED, new TargetInputEstablishedStreamFactory(this, supplyTarget,
-                supplyTargetId, correlateEstablished, maximumHeadersSize, memoryForDecodeEncode)::newStream);
+                supplyTargetId, correlateEstablished, slab)::newStream);
 
         this.lookupEstablished = lookupEstablished;
     }

@@ -30,7 +30,7 @@ import org.agrona.concurrent.UnsafeBuffer;
  * to store data in it, and releasing the slot once it is no longer needed.
  * <b>Each instance of this class is assumed to be used by one and only one thread.</b>
  */
-public class Slab
+public final class Slab
 {
     public static final int NO_SLOT = -1;
 
@@ -113,6 +113,11 @@ public class Slab
             used.clear(slot);
             availableSlots++;
         }
+    }
+
+    public int slotCapacity()
+    {
+        return slotCapacity;
     }
 
 }

@@ -77,16 +77,15 @@ public final class SourceInputStreamFactory
         LongSupplier supplyStreamId,
         Target rejectTarget,
         LongObjectBiConsumer<Correlation> correlateNew,
-        int maximumHeadersSize,
-        int memoryForDecode)
+        Slab slab)
     {
         this.source = source;
         this.supplyRoutes = supplyRoutes;
         this.supplyStreamId = supplyStreamId;
         this.rejectTarget = rejectTarget;
         this.correlateNew = correlateNew;
-        this.maximumHeadersSize = maximumHeadersSize;
-        this.slab = new Slab(memoryForDecode, maximumHeadersSize);
+        this.slab = slab;
+        this.maximumHeadersSize = slab.slotCapacity();
     }
 
     public MessageHandler newStream()

@@ -71,14 +71,13 @@ public final class TargetOutputEstablishedStreamFactory
         Function<String, Target> supplyTarget,
         LongSupplier supplyStreamId,
         LongFunction<Correlation> correlateEstablished,
-        int maximumHeadersSize,
-        int memoryForEncode)
+        Slab slab)
     {
         this.source = source;
         this.supplyTarget = supplyTarget;
         this.supplyStreamId = supplyStreamId;
         this.correlateEstablished = correlateEstablished;
-        this.slab = new Slab(memoryForEncode, maximumHeadersSize);
+        this.slab = slab;
     }
 
     public MessageHandler newStream()
