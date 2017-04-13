@@ -71,14 +71,13 @@ public final class TargetOutputEstablishedStreamFactory
         Function<String, Target> supplyTarget,
         LongSupplier supplyStreamId,
         LongFunction<Correlation> correlateEstablished,
-        int maximumHeadersSize,
-        int memoryForEncode)
+        Slab slab)
     {
         this.source = source;
         this.supplyTarget = supplyTarget;
         this.supplyStreamId = supplyStreamId;
         this.correlateEstablished = correlateEstablished;
-        this.slab = new Slab(memoryForEncode, maximumHeadersSize);
+        this.slab = slab;
     }
 
     public MessageHandler newStream()
@@ -211,20 +210,6 @@ public final class TargetOutputEstablishedStreamFactory
             }
         }
 
-        private void processUnexpected(
-            DirectBuffer buffer,
-            int index,
-            int length)
-        {
-            frameRO.wrap(buffer, index, index + length);
-
-            final long streamId = frameRO.streamId();
-
-            source.doReset(streamId);
-
-            this.streamState = this::streamAfterRejectOrReset;
-        }
-
         private void processBegin(
             DirectBuffer buffer,
             int index,
@@ -332,7 +317,6 @@ public final class TargetOutputEstablishedStreamFactory
             else
             {
                 final OctetsFW payload = dataRO.payload();
-
                 target.doData(targetId, payload);
             }
         }
@@ -343,12 +327,28 @@ public final class TargetOutputEstablishedStreamFactory
             int length)
         {
             endRO.wrap(buffer, index, index + length);
+            doEnd();
         }
 
         private void doEnd()
         {
             target.removeThrottle(targetId);
             source.removeStream(sourceId);
+            this.streamState = this::streamAfterEnd;
+        }
+
+        private void processUnexpected(
+            DirectBuffer buffer,
+            int index,
+            int length)
+        {
+            frameRO.wrap(buffer, index, index + length);
+
+            final long streamId = frameRO.streamId();
+
+            source.doReset(streamId);
+
+            this.streamState = this::streamAfterRejectOrReset;
         }
 
         private void handleThrottle(
@@ -441,11 +441,11 @@ public final class TargetOutputEstablishedStreamFactory
                 {
                     streamState = this::streamAfterBeginOrData;
                     throttleState = this::throttleNextWindow;
-                }
-                update -= writableBytes;
-                if (update > 0)
-                {
-                    doWindow(update);
+                    update -= writableBytes;
+                    if (update > 0)
+                    {
+                        doWindow(update);
+                    }
                 }
             }
         }

@@ -114,4 +114,30 @@ public class MessageFormatIT
         k3po.finish();
     }
 
+    @Test
+    @Specification({
+        "${route}/output/new/controller",
+        "${streams}/request.with.headers/client/source",
+        "${streams}/request.with.headers/client/target" })
+    public void shouldWriteRequestWithHeaders() throws Exception
+    {
+        k3po.start();
+        k3po.awaitBarrier("ROUTED_OUTPUT");
+        k3po.notifyBarrier("ROUTED_INPUT");
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/output/new/controller",
+        "${streams}/request.with.content.length/client/source",
+        "${streams}/request.with.content.length/client/target" })
+    public void shouldWriteRequestWithContentLength() throws Exception
+    {
+        k3po.start();
+        k3po.awaitBarrier("ROUTED_OUTPUT");
+        k3po.notifyBarrier("ROUTED_INPUT");
+        k3po.finish();
+    }
+
 }
