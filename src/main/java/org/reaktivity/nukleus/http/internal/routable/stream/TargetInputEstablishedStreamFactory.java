@@ -91,7 +91,7 @@ public final class TargetInputEstablishedStreamFactory
         private int slotIndex = NO_SLOT;
         private int slotOffset = 0;
         private int slotPosition;
-        private boolean endRequested;
+        private boolean endDeferred;
 
         private long sourceId;
 
@@ -349,7 +349,7 @@ public final class TargetInputEstablishedStreamFactory
             final long streamId = endRO.streamId();
             assert streamId == sourceId;
 
-            endRequested = true;
+            endDeferred = true;
         }
 
         private int defragmentHttpBegin(
@@ -634,7 +634,7 @@ public final class TargetInputEstablishedStreamFactory
             {
                 slab.release(slotIndex);
                 slotIndex = NO_SLOT;
-                if (endRequested)
+                if (endDeferred)
                 {
                     doEnd();
                 }

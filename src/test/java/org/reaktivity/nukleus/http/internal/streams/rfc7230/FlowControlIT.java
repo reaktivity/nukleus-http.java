@@ -231,15 +231,4 @@ public class FlowControlIT
         k3po.finish();
     }
 
-    @Test
-    @Specification({
-        "${route}/output/new/controller",
-        "${streams}/request.headers.too.long/client/source" })
-    public void shouldNotWriteRequestExceedingMaximumHeadersSize() throws Exception
-    {
-        k3po.start();
-        k3po.awaitBarrier("ROUTED_OUTPUT");
-        k3po.finish();
-    }
-
 }

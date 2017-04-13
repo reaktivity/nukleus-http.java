@@ -131,7 +131,6 @@ public class MessageFormatIT
     @Specification({
         "${route}/output/new/controller",
         "${streams}/request.with.content.length/client/source",
-
         "${streams}/request.with.content.length/client/target" })
     public void shouldWriteRequestWithContentLength() throws Exception
     {
