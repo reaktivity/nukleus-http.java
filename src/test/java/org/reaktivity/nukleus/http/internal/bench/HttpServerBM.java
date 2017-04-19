@@ -117,7 +117,6 @@ public class HttpServerBM
         private MutableDirectBuffer throttleBuffer;
 
         private long sourceInputRef;
-        private long targetInputRef;
 
         private long sourceInputId;
         private DataFW data;
@@ -187,7 +186,7 @@ public class HttpServerBM
                     }
                 }
                 int result = read();
-                System.out.println("reint(): result: " + result);
+                System.out.println("reinit(): result: " + result);
             }
             else
             {
@@ -201,7 +200,7 @@ public class HttpServerBM
         {
             HttpController controller = reaktor.controller(HttpController.class);
 
-            controller.unrouteInputNew("source", sourceInputRef, "target", targetInputRef, null).get();
+            controller.unrouteInputNew("source", sourceInputRef, "http", 0L, null).get();
 
             this.sourceInputStreams.close();
             this.sourceInputStreams = null;
@@ -217,6 +216,15 @@ public class HttpServerBM
 
         private boolean write()
         {
+            try
+            {
+                Thread.sleep(5000);
+            }
+            catch (InterruptedException e)
+            {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+            }
             sourceInputStreams.readThrottle(this::sourceInputThrottle);
             boolean result = availableSourceInputWindow >= data.length();
             if (result)
@@ -225,7 +233,7 @@ public class HttpServerBM
                 if (result)
                 {
                     availableSourceInputWindow -= data.length();
-                    //System.out.println(format("write: %d bytes written", data.length()));
+                    System.out.println(format("write: %d bytes written", data.length()));
                 }
                 else
                 {
@@ -246,6 +254,8 @@ public class HttpServerBM
             case WindowFW.TYPE_ID:
                 windowRO.wrap(buffer, index, index + length);
                 availableSourceInputWindow += windowRO.update();
+                System.out.println(format("sourceInputThrottle: received window update %d, availableSourceInputWindow=%d",
+                        windowRO.update(), availableSourceInputWindow));
                 break;
             case ResetFW.TYPE_ID:
                 System.out.println("ERROR: reset detected in sourceInputThrottle");
@@ -337,6 +347,8 @@ public class HttpServerBM
                 .include(HttpServerBM.class.getSimpleName())
                 .forks(0)
                 .threads(1)
+                .warmupIterations(0)
+                .measurementIterations(1)
                 .build();
 
         new Runner(opt).run();
