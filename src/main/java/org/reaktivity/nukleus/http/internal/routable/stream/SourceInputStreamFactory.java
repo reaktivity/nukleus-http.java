@@ -16,6 +16,7 @@
 package org.reaktivity.nukleus.http.internal.routable.stream;
 
 import static java.lang.Integer.parseInt;
+import static java.lang.String.format;
 import static org.reaktivity.nukleus.http.internal.routable.Route.headersMatch;
 import static org.reaktivity.nukleus.http.internal.routable.stream.Slab.NO_SLOT;
 import static org.reaktivity.nukleus.http.internal.router.RouteKind.OUTPUT_ESTABLISHED;
@@ -238,6 +239,7 @@ public final class SourceInputStreamFactory
             long streamId = frameRO.streamId();
 
             processUnexpected(streamId);
+            new RuntimeException("processUnexpected").printStackTrace();
         }
 
         private void processUnexpected(
@@ -271,6 +273,8 @@ public final class SourceInputStreamFactory
             this.throttleState = this::throttleBeforeWindowOrReset;
             window += requestBytes;
             source.doWindow(sourceId, requestBytes);
+            new RuntimeException(format("processInvalidRequest (requestBytes=%d, payloadChars = %s",
+                    requestBytes, payloadChars)).printStackTrace();
         }
 
         private void processBegin(
@@ -791,6 +795,16 @@ public final class SourceInputStreamFactory
 
         private void borrowSourceWindow(int update)
         {
+            if (update > 0)
+            {
+                new RuntimeException(format("borrowSourceWindow: window=%d, sourceUpdateDeferred=%d, update=%d",
+                        window, sourceUpdateDeferred, update)).printStackTrace();
+            }
+            else
+            {
+                System.out.println(format("borrowSourceWindow: window=%d, sourceUpdateDeferred=%d, update=%d",
+                        window, sourceUpdateDeferred, update));
+            }
             this.window += update;
 
             // Make sure we don't advertise more window to the source than the available target window
@@ -803,10 +817,21 @@ public final class SourceInputStreamFactory
 
         private void doSourceWindow(int update)
         {
+            if (sourceUpdateDeferred + update > Integer.MIN_VALUE)
+            {
+                new RuntimeException(format("doSourceWindow: window=%d, sourceUpdateDeferred=%d, update=%d",
+                        window, sourceUpdateDeferred, update)).printStackTrace();
+            }
+            else
+            {
+                System.out.println(format("doSourceWindow: window=%d, sourceUpdateDeferred=%d, update=%d",
+                        window, sourceUpdateDeferred, update));
+            }
             sourceUpdateDeferred += update;
             if (sourceUpdateDeferred > 0)
             {
                 window += sourceUpdateDeferred;
+
                 source.doWindow(sourceId, sourceUpdateDeferred + framing(sourceUpdateDeferred));
                 sourceUpdateDeferred = 0;
             }
