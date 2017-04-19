@@ -447,7 +447,7 @@ public final class TargetInputEstablishedStreamFactory
 
                 target.doHttpBegin(targetId, 0L, sourceCorrelationId,
                         hs -> headers.forEach((k, v) -> hs.item(i -> i.name(k).value(v))));
-                target.addThrottle(targetId, this::handleThrottle);
+                target.setThrottle(targetId, this::handleThrottle);
 
                 boolean hasUpgrade = headers.containsKey("upgrade");
 

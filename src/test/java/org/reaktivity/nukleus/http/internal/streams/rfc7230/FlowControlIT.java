@@ -142,6 +142,45 @@ public class FlowControlIT
 
     @Test
     @Specification({
+        "${route}/input/new/controller",
+        "${streams}/multiple.requests.combined/server/source",
+        "${streams}/multiple.requests.combined/server/target" })
+    public void shouldAcceptMultipleRequestsInSameDataFrame() throws Exception
+    {
+        k3po.start();
+        k3po.awaitBarrier("ROUTED_INPUT");
+        k3po.notifyBarrier("ROUTED_OUTPUT");
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/input/new/controller",
+        "${streams}/multiple.requests.combined.fragmented/server/source",
+        "${streams}/multiple.requests.combined.fragmented/server/target" })
+    public void shouldAcceptMultipleRequestsInSameDataFrameFragmented() throws Exception
+    {
+        k3po.start();
+        k3po.awaitBarrier("ROUTED_INPUT");
+        k3po.notifyBarrier("ROUTED_OUTPUT");
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/input/new/controller",
+        "${streams}/multiple.requests.with.content.length.combined.fragmented/server/source",
+        "${streams}/multiple.requests.with.content.length.combined.fragmented/server/target" })
+    public void shouldAcceptMultipleRequestsWithContentLengthCombinedFragmented() throws Exception
+    {
+        k3po.start();
+        k3po.awaitBarrier("ROUTED_INPUT");
+        k3po.notifyBarrier("ROUTED_OUTPUT");
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
         "${route}/output/new/controller",
         "${streams}/response.fragmented/client/source",
         "${streams}/response.fragmented/client/target" })

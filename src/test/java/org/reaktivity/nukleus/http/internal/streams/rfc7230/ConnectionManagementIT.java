@@ -74,4 +74,17 @@ public class ConnectionManagementIT
         k3po.notifyBarrier("ROUTED_INPUT");
         k3po.finish();
     }
+
+    @Test
+    @Specification({
+        "${route}/input/new/controller",
+        "${streams}/multiple.requests/server/source",
+        "${streams}/multiple.requests/server/target" })
+    public void shouldAcceptMultipleRequests() throws Exception
+    {
+        k3po.start();
+        k3po.awaitBarrier("ROUTED_INPUT");
+        k3po.notifyBarrier("ROUTED_OUTPUT");
+        k3po.finish();
+    }
 }
