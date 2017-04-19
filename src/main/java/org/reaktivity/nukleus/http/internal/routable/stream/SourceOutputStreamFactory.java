@@ -246,7 +246,7 @@ public final class SourceOutputStreamFactory
                 target = route.target();
                 final long targetRef = route.targetRef();
                 target.doBegin(targetId, targetRef, targetCorrelationId);
-                target.addThrottle(targetId, this::handleThrottle);
+                target.setThrottle(targetId, this::handleThrottle);
 
                 String[] pseudoHeaders = new String[4];
 

@@ -90,7 +90,7 @@ public final class Target implements Nukleus
         return name;
     }
 
-    public void addThrottle(
+    public void setThrottle(
         long streamId,
         MessageHandler throttle)
     {
