@@ -114,7 +114,6 @@ public final class SourceInputStreamFactory
         private long correlationId;
         private int window;
         private int contentRemaining;
-        private int sourceUpdateDeferred;
         private int availableTargetWindow;
         private boolean hasUpgrade;
 
@@ -269,8 +268,7 @@ public final class SourceInputStreamFactory
             this.decoderState = this::decodeHttpBegin;
             this.streamState = this::streamAfterReplyOrReset;
             this.throttleState = this::throttleBeforeWindowOrReset;
-            window += requestBytes;
-            source.doWindow(sourceId, requestBytes);
+            doSourceWindow(requestBytes);
         }
 
         private void processBegin(
@@ -287,7 +285,7 @@ public final class SourceInputStreamFactory
             this.streamState = this::streamAfterBeginOrData;
             this.decoderState = this::decodeHttpBegin;
 
-            borrowSourceWindow(maximumHeadersSize);
+            doSourceWindow(maximumHeadersSize);
         }
 
         private void processData(
@@ -336,11 +334,7 @@ public final class SourceInputStreamFactory
             this.streamState = this::streamAfterBeginOrData;
             this.decoderState = this::decodeHttpBegin;
             this.throttleState = this::throttleBeforeReset;
-            int update = maximumHeadersSize - window;
-            if (update > 0)
-            {
-                borrowSourceWindow(update);
-            }
+            availableTargetWindow = 0;
             if (slotIndex != NO_SLOT)
             {
                 int bytesDeferred = slotPosition - slotOffset;
@@ -349,6 +343,15 @@ public final class SourceInputStreamFactory
                 slab.release(slotIndex);
                 slotIndex = NO_SLOT;
                 decode(pipelinedRequestBuffer, 0, bytesDeferred);
+            }
+            else
+            {
+                // Make sure we can receive the largest permitted request headers
+                int update = maximumHeadersSize - window;
+                if (update > 0)
+                {
+                    doSourceWindow(update);
+                }
             }
         }
 
@@ -430,6 +433,12 @@ public final class SourceInputStreamFactory
                     else
                     {
                         slab.release(slotIndex);
+                        slotIndex = NO_SLOT;
+                        if (!hasUpgrade && contentRemaining == 0)
+                        {
+                            // no content
+                            processNextRequest();
+                        }
                     }
                 }
             }
@@ -456,6 +465,13 @@ public final class SourceInputStreamFactory
                 buffer.putBytes(0, payload, offset, length);
                 slotPosition = length;
                 decoderState = this::defragmentHttpBegin;
+
+                // Make sure we can receive the largest permitted request headers
+                int update = maximumHeadersSize - window - length;
+                if (update > 0)
+                {
+                    doSourceWindow(update);
+                }
             }
             else
             {
@@ -476,6 +492,11 @@ public final class SourceInputStreamFactory
                     slotPosition = length;
                     streamState = this::streamBeforeWindowsAreAligned;
                     throttleState = this::throttleBeforeWindowsAreAligned;
+                }
+                else
+                {
+                    streamState = this::streamAfterBeginOrData;
+                    throttleState = this::throttleBeforeWindowOrReset;
                 }
                 if (!hasUpgrade && contentRemaining == 0)
                 {
@@ -549,10 +570,8 @@ public final class SourceInputStreamFactory
                             this.decoderState = this::decodeHttpData;
                         }
 
-                        sourceUpdateDeferred += length;
                         this.target = newTarget;
                         this.targetId = newTargetId;
-                        this.throttleState = this::throttleBeforeWindowOrReset;
                         if (!hasUpgrade && contentRemaining == 0)
                         {
                             // no content
@@ -622,6 +641,7 @@ public final class SourceInputStreamFactory
 
             // TODO: consider chunks
             target.doHttpData(targetId, payload, offset, length);
+            availableTargetWindow -= length;
 
             contentRemaining -= length;
 
@@ -650,7 +670,9 @@ public final class SourceInputStreamFactory
             int offset,
             int limit)
         {
-            target.doData(targetId, payload, offset, limit - offset);
+            final int length = limit - offset;
+            target.doData(targetId, payload, offset, length);
+            availableTargetWindow -= length;
             return limit;
         }
 
@@ -730,7 +752,7 @@ public final class SourceInputStreamFactory
             switch (msgTypeId)
             {
             case WindowFW.TYPE_ID:
-                processWindow(buffer, index, length);
+                propagateWindow(buffer, index, length);
                 break;
             case ResetFW.TYPE_ID:
                 processReset(buffer, index, length);
@@ -745,7 +767,6 @@ public final class SourceInputStreamFactory
         {
             windowRO.wrap(buffer, index, index + length);
             int update = windowRO.update();
-            doSourceWindow(update);
             availableTargetWindow += update;
             processDeferredData();
         }
@@ -756,13 +777,12 @@ public final class SourceInputStreamFactory
             int writableBytes = Math.min(bytesDeferred, availableTargetWindow);
             MutableDirectBuffer data = slab.buffer(slotIndex);
             decode(data, slotOffset, slotOffset + writableBytes);
-            availableTargetWindow -= writableBytes;
 
             // Continue slabbing incoming data until target window updates have caught up
             // with the initial window we gave to source
             slotOffset += writableBytes;
             bytesDeferred -= writableBytes;
-            if (sourceUpdateDeferred >= 0 && bytesDeferred == 0)
+            if (availableTargetWindow >= window && bytesDeferred == 0)
             {
                 slab.release(slotIndex);
                 slotIndex = NO_SLOT;
@@ -778,7 +798,7 @@ public final class SourceInputStreamFactory
             }
         }
 
-        private void processWindow(
+        private void propagateWindow(
             DirectBuffer buffer,
             int index,
             int length)
@@ -786,30 +806,19 @@ public final class SourceInputStreamFactory
             windowRO.wrap(buffer, index, index + length);
 
             int update = windowRO.update();
-            doSourceWindow(update);
-        }
-
-        private void borrowSourceWindow(int update)
-        {
-            this.window += update;
-
-            // Make sure we don't advertise more window to the source than the available target window
-            // once we have started the stream on the target. sourceUpdateDeferred will remain negative
-            // until we catch up with available target window.
-            this.sourceUpdateDeferred -= update;
-
-            source.doWindow(sourceId, update);
+            availableTargetWindow += update;
+            int desiredWindow = Math.min(availableTargetWindow, slab.slotCapacity());
+            if (desiredWindow > window)
+            {
+                int sourceUpdate = desiredWindow - window;
+                doSourceWindow(sourceUpdate);
+            }
         }
 
         private void doSourceWindow(int update)
         {
-            sourceUpdateDeferred += update;
-            if (sourceUpdateDeferred > 0)
-            {
-                window += sourceUpdateDeferred;
-                source.doWindow(sourceId, sourceUpdateDeferred + framing(sourceUpdateDeferred));
-                sourceUpdateDeferred = 0;
-            }
+            this.window += update;
+            source.doWindow(sourceId, update);
         }
 
         private void processReset(
@@ -821,13 +830,6 @@ public final class SourceInputStreamFactory
             slab.release(slotIndex);
             source.doReset(sourceId);
         }
-    }
-
-    private static int framing(
-        int payloadSize)
-    {
-        // TODO: consider chunks
-        return 0;
     }
 
     @FunctionalInterface
