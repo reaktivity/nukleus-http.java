@@ -127,7 +127,7 @@ public final class SourceInputStreamFactory
         private SourceInputStream()
         {
             this.streamState = this::streamBeforeBegin;
-            this.throttleState = this::throttleBeforeReset;
+            this.throttleState = this::throttleIgnoreWindow;
         }
 
         private void handleStream(
@@ -507,12 +507,12 @@ public final class SourceInputStreamFactory
                         {
                             // TODO: wait for 101 first
                             decoderState = this::decodeHttpDataAfterUpgrade;
-                            throttleState = this::throttleBeforeWindowsAreAligned;
+                            throttleState = this::throttleForHttpDataAfterUpgrade;
                         }
                         else if ((contentRemaining = parseInt(headers.getOrDefault("content-length", "0"))) > 0)
                         {
                             decoderState = this::decodeHttpData;
-                            throttleState = this::throttleBeforeWindowsAreAligned;
+                            throttleState = this::throttleForHttpData;
                         }
                         else
                         {
@@ -604,7 +604,7 @@ public final class SourceInputStreamFactory
             {
                 target.doHttpEnd(targetId);
                 decoderState = this::decodeHttpBegin;
-                throttleState = this::throttleBeforeReset;
+                throttleState = this::throttleIgnoreWindow;
                 if (writableBytes < length)
                 {
                     processDeferredData();
@@ -667,7 +667,7 @@ public final class SourceInputStreamFactory
             throttleState.onMessage(msgTypeId, buffer, index, length);
         }
 
-        private void throttleBeforeReset(
+        private void throttleIgnoreWindow(
             int msgTypeId,
             DirectBuffer buffer,
             int index,
@@ -684,7 +684,7 @@ public final class SourceInputStreamFactory
             }
         }
 
-        private void throttleBeforeWindowsAreAligned(
+        private void throttleForHttpData(
             int msgTypeId,
             DirectBuffer buffer,
             int index,
@@ -693,7 +693,27 @@ public final class SourceInputStreamFactory
             switch (msgTypeId)
             {
             case WindowFW.TYPE_ID:
-                processWindowBeforeAlignment(buffer, index, length);
+                processWindowForHttpData(buffer, index, length);
+                break;
+            case ResetFW.TYPE_ID:
+                processReset(buffer, index, length);
+                break;
+            default:
+                // ignore
+                break;
+            }
+        }
+
+        private void throttleForHttpDataAfterUpgrade(
+            int msgTypeId,
+            DirectBuffer buffer,
+            int index,
+            int length)
+        {
+            switch (msgTypeId)
+            {
+            case WindowFW.TYPE_ID:
+                processWindowForHttpDataAfterUpgrade(buffer, index, length);
                 break;
             case ResetFW.TYPE_ID:
                 processReset(buffer, index, length);
@@ -724,7 +744,7 @@ public final class SourceInputStreamFactory
             }
         }
 
-        private void processWindowBeforeAlignment(DirectBuffer buffer, int index, int length)
+        private void processWindowForHttpData(DirectBuffer buffer, int index, int length)
         {
             windowRO.wrap(buffer, index, index + length);
             int update = windowRO.update();
@@ -736,6 +756,25 @@ public final class SourceInputStreamFactory
             ensureSourceWindow(Math.min(availableTargetWindow, slab.slotCapacity()));
         }
 
+        private void processWindowForHttpDataAfterUpgrade(DirectBuffer buffer, int index, int length)
+        {
+            windowRO.wrap(buffer, index, index + length);
+            int update = windowRO.update();
+            availableTargetWindow += update;
+            if (slotIndex != NO_SLOT)
+            {
+                processDeferredData();
+            }
+            if (slotIndex == NO_SLOT)
+            {
+                ensureSourceWindow(availableTargetWindow);
+                if (window == availableTargetWindow)
+                {
+                    throttleState = this::throttlePropagateWindow;
+                }
+            }
+        }
+
         private void propagateWindow(
             DirectBuffer buffer,
             int index,
@@ -743,6 +782,7 @@ public final class SourceInputStreamFactory
         {
             windowRO.wrap(buffer, index, index + length);
             int update = windowRO.update();
+            availableTargetWindow += update;
             doSourceWindow(update);
         }
 
