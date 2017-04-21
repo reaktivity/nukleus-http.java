@@ -64,7 +64,21 @@ public class FlowControlAfterUpgradeIT
         "${streams}/request.with.upgrade.and.data/server/source",
         "${streams}/request.with.upgrade.and.data/server/target" })
     @ScriptProperty("targetInputInitialWindow [0x80 0x00 0x00 0x00]") // 128 bytes, same as max headers size
-    public void shouldFlowControlDataAfterUpgradeAndAlignWindows() throws Exception
+    public void shouldFlowControlRequestDataAfterUpgrade() throws Exception
+    {
+        k3po.start();
+        k3po.awaitBarrier("ROUTED_INPUT");
+        k3po.notifyBarrier("ROUTED_OUTPUT");
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/input/new/controller",
+        "${streams}/response.with.upgrade.and.data/server/source",
+        "${streams}/response.with.upgrade.and.data/server/target" })
+    @ScriptProperty("sourceOutputInitialWindow [0x80 0x00 0x00 0x00]") // 128 bytes, same as max headers size
+    public void shouldFlowControlResponseDataAfterUpgrade() throws Exception
     {
         k3po.start();
         k3po.awaitBarrier("ROUTED_INPUT");
