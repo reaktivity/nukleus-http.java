@@ -16,7 +16,6 @@
 package org.reaktivity.nukleus.http.internal.routable.stream;
 
 import static java.lang.Character.toUpperCase;
-import static java.lang.String.format;
 import static java.nio.charset.StandardCharsets.US_ASCII;
 import static org.reaktivity.nukleus.http.internal.routable.stream.Slab.NO_SLOT;
 
@@ -490,8 +489,6 @@ public final class TargetOutputEstablishedStreamFactory
 
         private void doWindow(int update)
         {
-            new RuntimeException(format("TargetOutputEstablishedStream.doWindow: targetStream.window=%d, update=%d",
-                    targetStream.window, update)).printStackTrace();
             targetStream.window += update;
             source.doWindow(sourceId, update);
         }
