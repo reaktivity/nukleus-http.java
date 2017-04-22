@@ -181,6 +181,19 @@ public class FlowControlIT
 
     @Test
     @Specification({
+        "${route}/input/new/controller",
+        "${streams}/multiple.requests.with.response.flow.control/server/source",
+        "${streams}/multiple.requests.with.response.flow.control/server/target" })
+    public void shouldFlowControlMultipleResponses() throws Exception
+    {
+        k3po.start();
+        k3po.awaitBarrier("ROUTED_INPUT");
+        k3po.notifyBarrier("ROUTED_OUTPUT");
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
         "${route}/output/new/controller",
         "${streams}/response.fragmented/client/source",
         "${streams}/response.fragmented/client/target" })

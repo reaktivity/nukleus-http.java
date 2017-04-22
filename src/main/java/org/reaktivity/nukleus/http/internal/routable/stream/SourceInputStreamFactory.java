@@ -495,6 +495,7 @@ public final class SourceInputStreamFactory
                         final Target newTarget = route.target();
                         final long targetRef = route.targetRef();
 
+                        availableTargetWindow = 0;
                         newTarget.doHttpBegin(newTargetId, targetRef, targetCorrelationId,
                                 hs -> headers.forEach((k, v) -> hs.item(i -> i.name(k).value(v))));
                         newTarget.setThrottle(newTargetId, this::handleThrottle);
@@ -664,7 +665,13 @@ public final class SourceInputStreamFactory
             int index,
             int length)
         {
-            throttleState.onMessage(msgTypeId, buffer, index, length);
+            // Ignore frames from a previous target input stream that has now ended
+            frameRO.wrap(buffer, index, index + length);
+            long streamId = frameRO.streamId();
+            if (streamId == targetId)
+            {
+                throttleState.onMessage(msgTypeId, buffer, index, length);
+            }
         }
 
         private void throttleIgnoreWindow(
@@ -748,6 +755,7 @@ public final class SourceInputStreamFactory
         {
             windowRO.wrap(buffer, index, index + length);
             int update = windowRO.update();
+
             availableTargetWindow += update;
             if (slotIndex != NO_SLOT)
             {

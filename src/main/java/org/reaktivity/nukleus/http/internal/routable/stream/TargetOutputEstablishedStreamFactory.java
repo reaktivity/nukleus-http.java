@@ -314,11 +314,9 @@ public final class TargetOutputEstablishedStreamFactory
                     slotOffset = 0;
                     this.streamState = this::streamBeforeHeadersWritten;
                     this.throttleState = this::throttleBeforeHeadersWritten;
-                    int update = targetStream.window;
-                    targetStream.window = 0;
-                    if (update > 0)
+                    if (targetStream.window > 0)
                     {
-                        useWindowToWriteResponseHeaders(update);
+                        useTargetWindowToWriteResponseHeaders();
                     }
                 }
             }
@@ -336,9 +334,7 @@ public final class TargetOutputEstablishedStreamFactory
 
             dataRO.wrap(buffer, index, index + length);
 
-            targetStream.window -= dataRO.length();
-
-            if (targetStream.window < 0)
+            if (targetStream.window < dataRO.length())
             {
                 processUnexpected(buffer, index, length);
             }
@@ -346,6 +342,7 @@ public final class TargetOutputEstablishedStreamFactory
             {
                 final OctetsFW payload = dataRO.payload();
                 target.doData(targetStream.streamId, payload);
+                targetStream.window -= dataRO.length();
             }
         }
 
@@ -416,7 +413,8 @@ public final class TargetOutputEstablishedStreamFactory
             case WindowFW.TYPE_ID:
                 windowRO.wrap(buffer, index, index + length);
                 int update = windowRO.update();
-                useWindowToWriteResponseHeaders(update);
+                targetStream.window += update;
+                useTargetWindowToWriteResponseHeaders();
                 break;
             case ResetFW.TYPE_ID:
                 processReset(buffer, index, length);
@@ -447,12 +445,13 @@ public final class TargetOutputEstablishedStreamFactory
             }
         }
 
-        private void useWindowToWriteResponseHeaders(int update)
+        private void useTargetWindowToWriteResponseHeaders()
         {
             int bytesDeferred = slotPosition - slotOffset;
-            int writableBytes = Math.min(bytesDeferred, update);
+            int writableBytes = Math.min(bytesDeferred, targetStream.window);
             MutableDirectBuffer slot = slab.buffer(slotIndex);
             target.doData(targetStream.streamId, slot, slotOffset, writableBytes);
+            targetStream.window -= writableBytes;
             slotOffset += writableBytes;
             bytesDeferred -= writableBytes;
             if (bytesDeferred == 0)
@@ -467,10 +466,9 @@ public final class TargetOutputEstablishedStreamFactory
                 {
                     streamState = this::streamAfterBeginOrData;
                     throttleState = this::throttleNextWindow;
-                    update -= writableBytes;
-                    if (update > 0)
+                    if (targetStream.window > 0)
                     {
-                        doWindow(update);
+                        doSourceWindow(targetStream.window);
                     }
                 }
             }
@@ -482,14 +480,13 @@ public final class TargetOutputEstablishedStreamFactory
             int length)
         {
             windowRO.wrap(buffer, index, index + length);
-
             final int update = windowRO.update();
-            doWindow(update);
+            targetStream.window += update;
+            doSourceWindow(update);
         }
 
-        private void doWindow(int update)
+        private void doSourceWindow(int update)
         {
-            targetStream.window += update;
             source.doWindow(sourceId, update);
         }
 
