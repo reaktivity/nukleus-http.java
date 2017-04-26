@@ -53,6 +53,7 @@ import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
+import org.openjdk.jmh.infra.Control;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
@@ -82,7 +83,6 @@ public class HttpServerBM
         private final Reaktor reaktor;
 
         {
-            System.out.println(format("HttpServerBM.GroupState<init>: thread %s instance %s", Thread.currentThread(), this));
             Properties properties = new Properties();
             properties.setProperty(DIRECTORY_PROPERTY_NAME, "target/nukleus-benchmarks");
             properties.setProperty(STREAMS_BUFFER_CAPACITY_PROPERTY_NAME, Long.toString(1024L * 1024L * 16L));
@@ -130,7 +130,6 @@ public class HttpServerBM
         @Setup(Level.Trial)
         public void reinit() throws Exception
         {
-            System.out.println(format("HttpServerBM.GroupState.reInit(): thread %s instance %s", Thread.currentThread(), this));
             final Random random = new Random();
             final HttpController controller = reaktor.controller(HttpController.class);
 
@@ -189,11 +188,14 @@ public class HttpServerBM
                     }
                 }
                 int result = read();
-                System.out.println("reinit(): result: " + result);
+                if (result <= 0)
+                {
+                    throw new RuntimeException("reinit: read() failed");
+                }
             }
             else
             {
-                throw new RuntimeException("write() failed");
+                throw new RuntimeException("reinit: write() failed");
             }
 
         }
@@ -210,8 +212,6 @@ public class HttpServerBM
 
             this.sourceOutputEstStreams.close();
             this.sourceOutputEstStreams = null;
-            System.out.println(format("readFails: %d, writeFails: %d", readFails, writeFails));
-            readFails = writeFails = 0;
         }
 
         private int read()
@@ -278,7 +278,6 @@ public class HttpServerBM
             int length)
         {
             beginRO.wrap(buffer, index, index + length);
-            System.out.println("processBegin: " +  beginRO);
             final long streamId = beginRO.streamId();
             doWindow(streamId, 8192);
 
@@ -312,17 +311,12 @@ public class HttpServerBM
     @Benchmark
     @Group("throughput")
     @GroupThreads(1)
-    public int writer(final GroupState state) throws Exception
+    public int writer(final GroupState state, final Control control) throws Exception
     {
         boolean result;
-        int tries = 0;
-        while (!(result = state.write()) && tries++ < 1000)
+        while (!(result = state.write()) && !control.stopMeasurement)
         {
             Thread.yield();
-        }
-        if (!result)
-        {
-            state.writeFails++;
         }
         return result ? 1 : 0;
     }
@@ -330,17 +324,12 @@ public class HttpServerBM
     @Benchmark
     @Group("throughput")
     @GroupThreads(1)
-    public int reader(final GroupState state) throws Exception
+    public int reader(final GroupState state, final Control control) throws Exception
     {
         int result;
-        int tries = 0;
-        while ((result = state.read()) == 0 && tries++ < 1000)
+        while ((result = state.read()) == 0 && !control.stopMeasurement)
         {
             Thread.yield();
-        }
-        if (result == 0)
-        {
-            state.readFails++;
         }
         return result;
     }
