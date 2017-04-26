@@ -89,7 +89,7 @@ public final class TargetOutputEstablishedStreamFactory
         private long sourceId;
 
         private Target target;
-        private OutputEstablishedState targetStream;
+        private ServerConnectionState targetStream;
 
         private int slotIndex;
         private int slotPosition;
@@ -218,8 +218,8 @@ public final class TargetOutputEstablishedStreamFactory
             final OctetsFW extension = beginRO.extension();
 
             @SuppressWarnings("unchecked")
-            final Correlation<OutputEstablishedState> correlation =
-                         (Correlation<OutputEstablishedState>) correlateEstablished.apply(targetCorrelationId);
+            final Correlation<ServerConnectionState> correlation =
+                         (Correlation<ServerConnectionState>) correlateEstablished.apply(targetCorrelationId);
 
             if (sourceRef == 0L && correlation != null)
             {

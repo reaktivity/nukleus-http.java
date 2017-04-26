@@ -117,7 +117,7 @@ public final class SourceInputStreamFactory
         private int contentRemaining;
         private int availableTargetWindow;
         private boolean hasUpgrade;
-        private Correlation<OutputEstablishedState> correlation;
+        private Correlation<ServerConnectionState> correlation;
 
         @Override
         public String toString()
@@ -528,9 +528,9 @@ public final class SourceInputStreamFactory
                         if (correlation == null)
                         {
                             long newOutputEstablishedStreamId = supplyStreamId.getAsLong();
-                            OutputEstablishedState state = new OutputEstablishedState(newOutputEstablishedStreamId,
+                            ServerConnectionState state = new ServerConnectionState(newOutputEstablishedStreamId,
                                     newTarget.name());
-                            this.correlation = new Correlation<OutputEstablishedState>(sourceCorrelationId, source.routableName(),
+                            this.correlation = new Correlation<ServerConnectionState>(sourceCorrelationId, source.routableName(),
                                     OUTPUT_ESTABLISHED, state);
                         }
                         else

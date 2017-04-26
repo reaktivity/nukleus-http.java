@@ -19,7 +19,7 @@ import java.util.function.Function;
 
 import org.reaktivity.nukleus.http.internal.routable.Target;
 
-final class OutputEstablishedState
+final class ServerConnectionState
 {
     final long streamId;
     String target;
@@ -28,7 +28,7 @@ final class OutputEstablishedState
     int pendingRequests;
     public boolean endRequested;
 
-    OutputEstablishedState(long streamId, String target)
+    ServerConnectionState(long streamId, String target)
     {
         this.streamId = streamId;
         this.target = target;

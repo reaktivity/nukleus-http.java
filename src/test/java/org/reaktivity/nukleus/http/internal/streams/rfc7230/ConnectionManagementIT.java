@@ -64,6 +64,19 @@ public class ConnectionManagementIT
 
     @Test
     @Specification({
+        "${route}/input/new/controller",
+        "${streams}/multiple.requests/server/source",
+        "${streams}/multiple.requests/server/target" })
+    public void shouldAcceptMultipleRequests() throws Exception
+    {
+        k3po.start();
+        k3po.awaitBarrier("ROUTED_INPUT");
+        k3po.notifyBarrier("ROUTED_OUTPUT");
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
         "${route}/output/new/controller",
         "${streams}/response.status.101.with.upgrade/client/source",
         "${streams}/response.status.101.with.upgrade/client/target" })
@@ -77,14 +90,14 @@ public class ConnectionManagementIT
 
     @Test
     @Specification({
-        "${route}/input/new/controller",
-        "${streams}/multiple.requests/server/source",
-        "${streams}/multiple.requests/server/target" })
-    public void shouldAcceptMultipleRequests() throws Exception
+        "${route}/output/new/controller",
+        "${streams}/multiple.requests/client/source",
+        "${streams}/multiple.requests/client/target" })
+    public void shouldAcceptMultipleRequestsClient() throws Exception
     {
         k3po.start();
-        k3po.awaitBarrier("ROUTED_INPUT");
-        k3po.notifyBarrier("ROUTED_OUTPUT");
+        k3po.awaitBarrier("ROUTED_OUTPUT");
+        k3po.notifyBarrier("ROUTED_INPUT");
         k3po.finish();
     }
 }
