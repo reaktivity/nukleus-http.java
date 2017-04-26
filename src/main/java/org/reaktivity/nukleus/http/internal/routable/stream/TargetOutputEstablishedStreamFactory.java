@@ -24,11 +24,9 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.function.LongFunction;
-import java.util.function.LongSupplier;
 
 import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
-import org.agrona.collections.Long2ObjectHashMap;
 import org.agrona.concurrent.MessageHandler;
 import org.reaktivity.nukleus.http.internal.routable.Correlation;
 import org.reaktivity.nukleus.http.internal.routable.Source;
@@ -62,43 +60,20 @@ public final class TargetOutputEstablishedStreamFactory
 
     private final Source source;
     private final Function<String, Target> supplyTarget;
-    private final LongSupplier supplyStreamId;
-    private final LongFunction<Correlation> correlateEstablished;
+    private final LongFunction<Correlation<?>> correlateEstablished;
 
     private final Slab slab;
-    private final Long2ObjectHashMap<OutputStream> targetStreamsBySourceCorrelationId;
-
-    private final class OutputStream
-    {
-        private final long streamId;
-        private int window;
-
-        private OutputStream(long streamId)
-        {
-            this.streamId = streamId;
-        }
-
-        @Override
-        public String toString()
-        {
-            return String.format("[streamId=%016x, window=%d]",
-                    getClass().getSimpleName(), streamId, window);
-        }
-    }
 
     public TargetOutputEstablishedStreamFactory(
         Source source,
         Function<String, Target> supplyTarget,
-        LongSupplier supplyStreamId,
-        LongFunction<Correlation> correlateEstablished,
+        LongFunction<Correlation<?>> correlateEstablished,
         Slab slab)
     {
         this.source = source;
         this.supplyTarget = supplyTarget;
-        this.supplyStreamId = supplyStreamId;
         this.correlateEstablished = correlateEstablished;
         this.slab = slab;
-        this.targetStreamsBySourceCorrelationId = new Long2ObjectHashMap<OutputStream>();
     }
 
     public MessageHandler newStream()
@@ -114,7 +89,7 @@ public final class TargetOutputEstablishedStreamFactory
         private long sourceId;
 
         private Target target;
-        private OutputStream targetStream;
+        private OutputEstablishedState targetStream;
 
         private int slotIndex;
         private int slotPosition;
@@ -242,13 +217,14 @@ public final class TargetOutputEstablishedStreamFactory
             final long targetCorrelationId = beginRO.correlationId();
             final OctetsFW extension = beginRO.extension();
 
-            final Correlation correlation = correlateEstablished.apply(targetCorrelationId);
+            @SuppressWarnings("unchecked")
+            final Correlation<OutputEstablishedState> correlation =
+                         (Correlation<OutputEstablishedState>) correlateEstablished.apply(targetCorrelationId);
 
             if (sourceRef == 0L && correlation != null)
             {
                 target = supplyTarget.apply(correlation.source());
-                final long sourceCorrelationId = correlation.id();
-                targetStream = targetStreamsBySourceCorrelationId.get(sourceCorrelationId);
+                targetStream = correlation.state();
 
                 Map<String, String> headers = EMPTY_HEADERS;
                 if (extension.sizeof() > 0)
@@ -259,12 +235,10 @@ public final class TargetOutputEstablishedStreamFactory
                     headers = headers0;
                 }
 
-                if (targetStream == null)
+                if (!targetStream.started)
                 {
-                    long targetId = supplyStreamId.getAsLong();
-                    targetStream = new OutputStream(targetId);
-                    targetStreamsBySourceCorrelationId.put(sourceCorrelationId, targetStream);
-                    target.doBegin(targetId, 0L, sourceCorrelationId);
+                    target.doBegin(targetStream.streamId, 0L, correlation.id());
+                    targetStream.started = true;
                 }
                 target.setThrottle(targetStream.streamId, this::handleThrottle);
 
@@ -357,9 +331,18 @@ public final class TargetOutputEstablishedStreamFactory
 
         private void doEnd()
         {
-            target.removeThrottle(targetStream.streamId);
+            if (targetStream != null && targetStream.endRequested && --targetStream.pendingRequests == 0)
+            {
+                target.doEnd(targetStream.streamId);
+                target.removeThrottle(targetStream.streamId);
+                this.streamState = this::streamAfterEnd;
+            }
+            else
+            {
+                throttleState = this::throttleBetweenResponses;
+                streamState = this::streamBeforeBegin;
+            }
             source.removeStream(sourceId);
-            this.streamState = this::streamAfterEnd;
         }
 
         private void processUnexpected(
@@ -415,6 +398,28 @@ public final class TargetOutputEstablishedStreamFactory
                 int update = windowRO.update();
                 targetStream.window += update;
                 useTargetWindowToWriteResponseHeaders();
+                break;
+            case ResetFW.TYPE_ID:
+                processReset(buffer, index, length);
+                break;
+            default:
+                // ignore
+                break;
+            }
+        }
+
+        private void throttleBetweenResponses(
+            int msgTypeId,
+            DirectBuffer buffer,
+            int index,
+            int length)
+        {
+            switch (msgTypeId)
+            {
+            case WindowFW.TYPE_ID:
+                windowRO.wrap(buffer, index, index + length);
+                int update = windowRO.update();
+                targetStream.window += update;
                 break;
             case ResetFW.TYPE_ID:
                 processReset(buffer, index, length);

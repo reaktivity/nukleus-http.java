@@ -28,6 +28,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
 import java.util.function.LongFunction;
 import java.util.function.LongSupplier;
 import java.util.function.Predicate;
@@ -67,8 +68,8 @@ public final class SourceInputStreamFactory
     private final Source source;
     private final LongFunction<List<Route>> supplyRoutes;
     private final LongSupplier supplyStreamId;
-    private final Target rejectTarget;
-    private final LongObjectBiConsumer<Correlation> correlateNew;
+    private final Function<String, Target> supplyTarget;
+    private final LongObjectBiConsumer<Correlation<?>> correlateNew;
     private final int maximumHeadersSize;
     private final Slab slab;
     private final MutableDirectBuffer temporarySlot;
@@ -77,14 +78,14 @@ public final class SourceInputStreamFactory
         Source source,
         LongFunction<List<Route>> supplyRoutes,
         LongSupplier supplyStreamId,
-        Target rejectTarget,
-        LongObjectBiConsumer<Correlation> correlateNew,
+        Function<String, Target> supplyTarget,
+        LongObjectBiConsumer<Correlation<?>> correlateNew,
         Slab slab)
     {
         this.source = source;
         this.supplyRoutes = supplyRoutes;
         this.supplyStreamId = supplyStreamId;
-        this.rejectTarget = rejectTarget;
+        this.supplyTarget = supplyTarget;
         this.correlateNew = correlateNew;
         this.slab = slab;
         this.maximumHeadersSize = slab.slotCapacity();
@@ -107,15 +108,16 @@ public final class SourceInputStreamFactory
         private boolean endDeferred;
 
         private long sourceId;
+        private long sourceCorrelationId;
 
         private Target target;
         private long targetId;
         private long sourceRef;
-        private long correlationId;
         private int window;
         private int contentRemaining;
         private int availableTargetWindow;
         private boolean hasUpgrade;
+        private Correlation<OutputEstablishedState> correlation;
 
         @Override
         public String toString()
@@ -255,23 +257,49 @@ public final class SourceInputStreamFactory
             int requestBytes,
             String payloadChars)
         {
+            Target rejectTarget = supplyTarget.apply(source.name());
             this.target = rejectTarget;
 
             final long newTargetId = supplyStreamId.getAsLong();
 
             // TODO: replace with connection pool (start)
-            target.doBegin(newTargetId, 0L, correlationId);
-            //target.addThrottle(newTargetId, this::handleThrottle);
+            rejectTarget.doBegin(newTargetId, 0L, sourceCorrelationId);
+            rejectTarget.setThrottle(newTargetId, this::handleThrottle);
             // TODO: replace with connection pool (end)
 
-            // TODO: acquire slab for response if targetWindow requires partial write, defer the write till
-            //       we have available (reject) targetWindow
             DirectBuffer payload = new UnsafeBuffer(payloadChars.getBytes(StandardCharsets.UTF_8));
-            target.doData(newTargetId, payload, 0, payload.capacity());
 
             this.decoderState = this::decodeHttpBegin;
             this.streamState = this::streamAfterRejectOrReset;
-            this.throttleState = this::throttlePropagateWindow;
+            this.throttleState = new MessageHandler()
+            {
+                int offset = 0;
+
+                @Override
+                public void onMessage(int msgTypeId, MutableDirectBuffer buffer, int index, int length)
+                {
+                    switch (msgTypeId)
+                    {
+                    case WindowFW.TYPE_ID:
+                        windowRO.wrap(buffer, index, index + length);
+                        int update = windowRO.update();
+                        int writableBytes = Math.min(update, payload.capacity() - offset);
+                        rejectTarget.doData(newTargetId, payload, offset, writableBytes);
+                        offset += writableBytes;
+                        if (offset == payload.capacity())
+                        {
+                            throttleState = SourceInputStream.this::throttleIgnoreWindow;
+                        }
+                        break;
+                    case ResetFW.TYPE_ID:
+                        processReset(buffer, index, length);
+                        break;
+                    default:
+                        // ignore
+                        break;
+                    }
+                }
+            };
             doSourceWindow(requestBytes);
         }
 
@@ -284,7 +312,7 @@ public final class SourceInputStreamFactory
 
             this.sourceId = beginRO.streamId();
             this.sourceRef = beginRO.referenceId();
-            this.correlationId = beginRO.correlationId();
+            this.sourceCorrelationId = beginRO.correlationId();
 
             this.streamState = this::streamAfterBeginOrData;
             this.decoderState = this::decodeHttpBegin;
@@ -341,6 +369,11 @@ public final class SourceInputStreamFactory
             source.removeStream(sourceId);
             target.removeThrottle(targetId);
             slab.release(slotIndex);
+
+            if (correlation != null)
+            {
+                correlation.state().doEnd(supplyTarget);
+            }
         }
 
         private void deferAndProcessData(
@@ -437,6 +470,7 @@ public final class SourceInputStreamFactory
                     {
                         slab.release(slotIndex);
                         processInvalidRequest(limit - offset, "HTTP/1.1 431 Request Header Fields Too Large\r\n\r\n");
+                        source.doReset(sourceId);
                     }
                 }
             }
@@ -485,18 +519,30 @@ public final class SourceInputStreamFactory
                     final Optional<Route> optional = resolveTarget(sourceRef, headers);
                     if (optional.isPresent())
                     {
-                        final long newTargetId = supplyStreamId.getAsLong();
-                        final long targetCorrelationId = newTargetId;
-                        final Correlation correlation = new Correlation(correlationId, source.routableName(), OUTPUT_ESTABLISHED);
-
-                        correlateNew.accept(targetCorrelationId, correlation);
 
                         final Route route = optional.get();
                         final Target newTarget = route.target();
                         final long targetRef = route.targetRef();
+                        final long newTargetId = supplyStreamId.getAsLong();
+
+                        if (correlation == null)
+                        {
+                            long newOutputEstablishedStreamId = supplyStreamId.getAsLong();
+                            OutputEstablishedState state = new OutputEstablishedState(newOutputEstablishedStreamId,
+                                    newTarget.name());
+                            this.correlation = new Correlation<OutputEstablishedState>(sourceCorrelationId, source.routableName(),
+                                    OUTPUT_ESTABLISHED, state);
+                        }
+                        else
+                        {
+                            correlation.state().target = newTarget.name();
+                        }
+                        final long targetCorrelationId = newTargetId;
+                        correlation.state().pendingRequests++;
+                        correlateNew.accept(targetCorrelationId, correlation);
 
                         availableTargetWindow = 0;
-                        newTarget.doHttpBegin(newTargetId, targetRef, targetCorrelationId,
+                        newTarget.doHttpBegin(newTargetId, targetRef, newTargetId,
                                 hs -> headers.forEach((k, v) -> hs.item(i -> i.name(k).value(v))));
                         newTarget.setThrottle(newTargetId, this::handleThrottle);
 

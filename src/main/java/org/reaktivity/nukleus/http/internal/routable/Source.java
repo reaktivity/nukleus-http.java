@@ -58,7 +58,7 @@ public final class Source implements Nukleus
     private final Long2ObjectHashMap<MessageHandler> streams;
 
     private final EnumMap<RouteKind, Supplier<MessageHandler>> streamFactories;
-    private final LongFunction<Correlation> lookupEstablished;
+    private final LongFunction<Correlation<?>> lookupEstablished;
 
     Source(
         String sourceName,
@@ -68,9 +68,9 @@ public final class Source implements Nukleus
         LongFunction<List<Route>> supplyRoutes,
         LongSupplier supplyTargetId,
         Function<String, Target> supplyTarget,
-        LongObjectBiConsumer<Correlation> correlateNew,
-        LongFunction<Correlation> correlateEstablished,
-        LongFunction<Correlation> lookupEstablished,
+        LongObjectBiConsumer<Correlation<?>> correlateNew,
+        LongFunction<Correlation<?>> correlateEstablished,
+        LongFunction<Correlation<?>> lookupEstablished,
         int maximumHeadersSize,
         int memoryForDecodeEncode)
     {
@@ -83,13 +83,12 @@ public final class Source implements Nukleus
         this.throttleBuffer = layout.throttleBuffer();
         this.streams = new Long2ObjectHashMap<>();
 
-        Target rejectTarget = supplyTarget.apply(sourceName);
         this.streamFactories = new EnumMap<>(RouteKind.class);
         Slab slab = new Slab(memoryForDecodeEncode, maximumHeadersSize);
         this.streamFactories.put(RouteKind.INPUT, new SourceInputStreamFactory(this, supplyRoutes, supplyTargetId,
-                rejectTarget, correlateNew, slab)::newStream);
+                supplyTarget, correlateNew, slab)::newStream);
         this.streamFactories.put(RouteKind.OUTPUT_ESTABLISHED,
-                new TargetOutputEstablishedStreamFactory(this, supplyTarget, supplyTargetId, correlateEstablished,
+                new TargetOutputEstablishedStreamFactory(this, supplyTarget, correlateEstablished,
                         slab)::newStream);
         this.streamFactories.put(RouteKind.OUTPUT,
                 new SourceOutputStreamFactory(this, supplyRoutes, supplyTargetId,
@@ -230,7 +229,7 @@ public final class Source implements Nukleus
 
         if (sourceRef == 0L)
         {
-            final Correlation correlation = lookupEstablished.apply(correlationId);
+            final Correlation<?> correlation = lookupEstablished.apply(correlationId);
             if (correlation != null)
             {
                 routeKind = correlation.established();

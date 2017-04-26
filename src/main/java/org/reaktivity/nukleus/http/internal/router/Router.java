@@ -39,7 +39,7 @@ public final class Router extends Nukleus.Composite
 
     private final Context context;
     private final Map<String, Routable> routables;
-    private final Long2ObjectHashMap<Correlation> correlations;
+    private final Long2ObjectHashMap<Correlation<?>> correlations;
     private final AtomicCounter routesSourced;
 
     private Conductor conductor;
