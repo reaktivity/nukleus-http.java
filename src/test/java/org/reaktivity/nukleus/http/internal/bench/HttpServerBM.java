@@ -57,6 +57,7 @@ import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
+import org.openjdk.jmh.runner.options.TimeValue;
 import org.reaktivity.nukleus.Configuration;
 import org.reaktivity.nukleus.http.internal.HttpController;
 import org.reaktivity.nukleus.http.internal.HttpStreams;
@@ -69,8 +70,8 @@ import org.reaktivity.reaktor.internal.Reaktor;
 @State(Scope.Benchmark)
 @BenchmarkMode(Mode.Throughput)
 @Fork(3)
-@Warmup(iterations = 1, time = 1, timeUnit = SECONDS)
-@Measurement(iterations = 1, time = 1, timeUnit = SECONDS)
+@Warmup(iterations = 1, time = 10, timeUnit = SECONDS)
+@Measurement(iterations = 3, time = 10, timeUnit = SECONDS)
 @OutputTimeUnit(SECONDS)
 public class HttpServerBM
 {
@@ -123,6 +124,8 @@ public class HttpServerBM
 
         private MessageHandler sourceOutputEstHandler;
         int availableSourceInputWindow = 0;
+        public int writeFails;
+        public int readFails;
 
         @Setup(Level.Trial)
         public void reinit() throws Exception
@@ -207,6 +210,8 @@ public class HttpServerBM
 
             this.sourceOutputEstStreams.close();
             this.sourceOutputEstStreams = null;
+            System.out.println(format("readFails: %d, writeFails: %d", readFails, writeFails));
+            readFails = writeFails = 0;
         }
 
         private int read()
@@ -216,15 +221,6 @@ public class HttpServerBM
 
         private boolean write()
         {
-            try
-            {
-                Thread.sleep(10);
-            }
-            catch (InterruptedException e)
-            {
-                // TODO Auto-generated catch block
-                e.printStackTrace();
-            }
             sourceInputStreams.readThrottle(this::sourceInputThrottle);
             boolean result = availableSourceInputWindow >= data.length();
             if (result)
@@ -233,7 +229,6 @@ public class HttpServerBM
                 if (result)
                 {
                     availableSourceInputWindow -= data.length();
-                    System.out.println(format("write: %d bytes written", data.length()));
                 }
                 else
                 {
@@ -254,8 +249,8 @@ public class HttpServerBM
             case WindowFW.TYPE_ID:
                 windowRO.wrap(buffer, index, index + length);
                 availableSourceInputWindow += windowRO.update();
-                System.out.println(format("sourceInputThrottle: received window update %d, availableSourceInputWindow=%d",
-                        windowRO.update(), availableSourceInputWindow));
+//                System.out.println(format("sourceInputThrottle: received window update %d, availableSourceInputWindow=%d",
+//                        windowRO.update(), availableSourceInputWindow));
                 break;
             case ResetFW.TYPE_ID:
                 System.out.println("ERROR: reset detected in sourceInputThrottle");
@@ -297,7 +292,6 @@ public class HttpServerBM
             int length)
         {
             dataRO.wrap(buffer, index, index + length);
-            System.out.println("processData: " +  dataRO);
             final long streamId = dataRO.streamId();
             final int update = dataRO.length();
             doWindow(streamId, update);
@@ -311,7 +305,6 @@ public class HttpServerBM
                     .streamId(streamId)
                     .update(update)
                     .build();
-            System.out.println(format("Offering window: %d", update));
             sourceOutputEstStreams.writeThrottle(window.typeId(), window.buffer(), window.offset(), window.sizeof());
         }
     }
@@ -321,11 +314,17 @@ public class HttpServerBM
     @GroupThreads(1)
     public int writer(final GroupState state) throws Exception
     {
-        while (!state.write())
+        boolean result;
+        int tries = 0;
+        while (!(result = state.write()) && tries++ < 1000)
         {
             Thread.yield();
         }
-        return 1;
+        if (!result)
+        {
+            state.writeFails++;
+        }
+        return result ? 1 : 0;
     }
 
     @Benchmark
@@ -334,9 +333,14 @@ public class HttpServerBM
     public int reader(final GroupState state) throws Exception
     {
         int result;
-        while ((result = state.read()) == 0)
+        int tries = 0;
+        while ((result = state.read()) == 0 && tries++ < 1000)
         {
             Thread.yield();
+        }
+        if (result == 0)
+        {
+            state.readFails++;
         }
         return result;
     }
@@ -349,6 +353,7 @@ public class HttpServerBM
                 .threads(1)
                 .warmupIterations(0)
                 .measurementIterations(1)
+                .measurementTime(new TimeValue(10, SECONDS))
                 .build();
 
         new Runner(opt).run();
