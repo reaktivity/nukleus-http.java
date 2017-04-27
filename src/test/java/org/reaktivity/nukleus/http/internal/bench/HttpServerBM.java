@@ -249,8 +249,6 @@ public class HttpServerBM
             case WindowFW.TYPE_ID:
                 windowRO.wrap(buffer, index, index + length);
                 availableSourceInputWindow += windowRO.update();
-//                System.out.println(format("sourceInputThrottle: received window update %d, availableSourceInputWindow=%d",
-//                        windowRO.update(), availableSourceInputWindow));
                 break;
             case ResetFW.TYPE_ID:
                 System.out.println("ERROR: reset detected in sourceInputThrottle");
