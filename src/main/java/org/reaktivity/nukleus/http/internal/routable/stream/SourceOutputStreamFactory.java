@@ -351,7 +351,9 @@ public final class SourceOutputStreamFactory
 
         private void doEnd()
         {
+            // TODO: Return target stream to connection pool or call doEnd on it to free resources
             target.removeThrottle(targetId);
+
             source.removeStream(sourceId);
             this.streamState = this::streamAfterEnd;
         }
