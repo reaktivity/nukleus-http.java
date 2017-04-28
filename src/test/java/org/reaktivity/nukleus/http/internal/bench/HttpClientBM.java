@@ -76,7 +76,7 @@ import org.reaktivity.reaktor.internal.Reaktor;
 @BenchmarkMode(Mode.Throughput)
 @Fork(3)
 @Warmup(iterations = 1, time = 10, timeUnit = SECONDS)
-@Measurement(iterations = 3, time = 10, timeUnit = SECONDS)
+@Measurement(iterations = 3, time = 5, timeUnit = SECONDS)
 @OutputTimeUnit(SECONDS)
 public class HttpClientBM
 {
@@ -102,8 +102,7 @@ public class HttpClientBM
 
         private long clientAcceptRef;
         private volatile long streamsSourced;
-
-        int availableClientAcceptWindow = 0;
+        private long targetRef;
 
         {
             Properties properties = new Properties();
@@ -115,6 +114,7 @@ public class HttpClientBM
 
             try
             {
+                System.out.println("\nDeleting streams files\n");
                 Files.walk(configuration.directory(), FOLLOW_LINKS)
                      .map(Path::toFile)
                      .forEach(File::delete);
@@ -135,7 +135,7 @@ public class HttpClientBM
             this.streamsSourced = 0;
 
             final Random random = new Random();
-            final long targetRef = random.nextLong();
+            targetRef = random.nextLong();
 
             this.clientAcceptRef = controller.routeOutputNew("source", 0L, "target", targetRef, emptyMap()).get();
 
@@ -148,7 +148,7 @@ public class HttpClientBM
             RequestWriterState writer = new RequestWriterState();
             writer.reinit(this,  control);
             boolean done = false;
-            for (int i=0; i < 100 && !done; i++)
+            for (int i=0; i < 10 && !done; i++)
             {
                 Thread.sleep(100);
                 done = writer.writeRequestBegin();
@@ -163,7 +163,7 @@ public class HttpClientBM
             RemoteWriterState echoWriter = new RemoteWriterState();
             echoWriter.reinit(this, control);
             int rawRequestFramesProcessed = 0;
-            for (int i=0; i < 100 && rawRequestFramesProcessed < 1; i++)
+            for (int i=0; i < 10 && rawRequestFramesProcessed < 1; i++)
             {
                 Thread.sleep(100);
                 rawRequestFramesProcessed += echoReader.processRequests(echoWriter);
@@ -173,12 +173,13 @@ public class HttpClientBM
             {
                 throw new RuntimeException("SharedState.reinit: writer.writeRequest() failed");
             }
-            for (int i=0; i < 100 && rawRequestFramesProcessed < 2; i++)
+            rawRequestFramesProcessed = 0;
+            for (int i=0; i < 10 && rawRequestFramesProcessed < 1; i++)
             {
                 Thread.sleep(100);
                 rawRequestFramesProcessed += echoReader.processRequests(echoWriter);
             }
-            if (rawRequestFramesProcessed < 2)
+            if (rawRequestFramesProcessed < 1)
             {
                 throw new RuntimeException("SharedState.reinit: echoReader.processRequests() failed");
             }
@@ -197,7 +198,12 @@ public class HttpClientBM
             }
             ResponseReaderState reader = new ResponseReaderState();
             reader.reinit(this, control);
-            int result = reader.readResponse();
+            int result = 0;
+            for (int i=0; i < 10 && result < 1; i++)
+            {
+                Thread.sleep(100);
+                result = reader.readResponse();
+            }
             if (result <= 0)
             {
                 throw new RuntimeException("SharedState.reinit: reader.readResponse() failed");
@@ -209,7 +215,15 @@ public class HttpClientBM
         {
             HttpController controller = reaktor.controller(HttpController.class);
 
-            controller.unrouteInputNew("source", clientAcceptRef, "http", 0L, null).get();
+            try
+            {
+                controller.unrouteOutputNew("source", clientAcceptRef, "target", targetRef, null).get();
+            }
+            catch(Exception e)
+            {
+                System.out.println(format("\nException from unrouteOutputNew in reset(): %s\n", e));
+                e.printStackTrace();
+            }
 
             this.clientAcceptStreams.close();
             this.clientAcceptStreams = null;
@@ -327,8 +341,8 @@ public class HttpClientBM
                         System.out.println(error);
                         throw new RuntimeException(error);
                     }
+                    prepareNextStream();
                 }
-                prepareNextStream();
             }
             return result;
         }
@@ -373,7 +387,8 @@ public class HttpClientBM
         public void reinit(SharedState state, Control control) throws Exception
         {
             this.clientAcceptReplyStreams = state.clientAcceptReplyStreams;
-            this.clientAcceptReplyHandler = this::processResponseBegin;
+            this.clientAcceptReplyHandler = this::processResponseFrame;
+            this.throttleBuffer = new UnsafeBuffer(allocateDirect(SIZE_OF_LONG + SIZE_OF_INT));
         }
 
         int readResponse()
@@ -381,20 +396,7 @@ public class HttpClientBM
             return clientAcceptReplyStreams.readStreams(clientAcceptReplyHandler);
         }
 
-        private void processResponseBegin(
-            int msgTypeId,
-            MutableDirectBuffer buffer,
-            int index,
-            int length)
-        {
-            beginRO.wrap(buffer, index, index + length);
-            final long streamId = beginRO.streamId();
-            doWindow(streamId, 8192);
-
-            this.clientAcceptReplyHandler = this::processResponseDataOrEnd;
-        }
-
-        private void processResponseDataOrEnd(
+        private void processResponseFrame(
             int msgTypeId,
             MutableDirectBuffer buffer,
             int index,
@@ -402,14 +404,18 @@ public class HttpClientBM
         {
             switch (msgTypeId)
             {
+            case BeginFW.TYPE_ID:
+                beginRO.wrap(buffer, index, index + length);
+                long streamId = beginRO.streamId();
+                doWindow(streamId, 8192);
+                break;
             case DataFW.TYPE_ID:
                 dataRO.wrap(buffer, index, index + length);
-                final long streamId = dataRO.streamId();
+                streamId = dataRO.streamId();
                 final int update = dataRO.length();
                 doWindow(streamId, update);
                 break;
             case EndFW.TYPE_ID:
-                this.clientAcceptReplyHandler = this::processResponseBegin;
                 break;
             default:
                 String error = format("ResponseReader: read unexpected frame with msgTypeId=%d", msgTypeId);
@@ -440,7 +446,6 @@ public class HttpClientBM
         private MutableDirectBuffer throttleBuffer;
         private MessageHandler clientConnectHandler;
         long streamId;
-        long correlationId;
         private RemoteWriterState writer;
 
         @Setup(Level.Trial)
@@ -468,8 +473,9 @@ public class HttpClientBM
             case BeginFW.TYPE_ID:
                 beginRO.wrap(buffer, index, index + length);
                 streamId = beginRO.streamId();
-                correlationId = beginRO.correlationId();
+                long correlationId = beginRO.correlationId();
                 doWindow(streamId, 8192);
+                writer.writeBegin(correlationId);
                 break;
             case DataFW.TYPE_ID:
                 dataRO.wrap(buffer, index, index + length);
@@ -481,7 +487,7 @@ public class HttpClientBM
                 // in a separate data frame from the headers.
                 if (update == PAYLOAD.length)
                 {
-                    writer.writeResponse(correlationId);
+                    writer.writeResponse();
                 }
                 break;
             case EndFW.TYPE_ID:
@@ -526,6 +532,7 @@ public class HttpClientBM
         {
             this.clientConnectReplyStreams = state.clientConnectReplyStreams;
             this.trialEnded = () -> control.stopMeasurement;
+            this.supplyStreamId = state.supplyStreamId();
 
             final AtomicBuffer outputBeginBuffer = new UnsafeBuffer(new byte[256]);
             beginRW.wrap(outputBeginBuffer, 0, outputBeginBuffer.capacity())
@@ -556,7 +563,7 @@ public class HttpClientBM
             return result;
         }
 
-        boolean writeResponse(long correlationId)
+        boolean writeResponse()
         {
             dataRW.streamId(streamId);
             DataFW data = dataRW.build();
@@ -669,7 +676,7 @@ public class HttpClientBM
                 .threads(1)
                 .warmupIterations(0)
                 .measurementIterations(1)
-                .measurementTime(new TimeValue(1, SECONDS))
+                .measurementTime(new TimeValue(10, SECONDS))
                 .build();
 
         new Runner(opt).run();
