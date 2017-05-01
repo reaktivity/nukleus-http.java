@@ -96,12 +96,12 @@ public class HttpClientBM
     public static class SharedState
     {
         private final Configuration configuration;
-        private Reaktor reaktor;
+        private volatile Reaktor reaktor;
 
-        private HttpStreams clientAcceptStreams;
-        private HttpStreams clientAcceptReplyStreams;
-        private HttpStreams clientConnectStreams;
-        private HttpStreams clientConnectReplyStreams;
+        private volatile HttpStreams clientAcceptStreams;
+        private volatile HttpStreams clientAcceptReplyStreams;
+        private volatile HttpStreams clientConnectStreams;
+        private volatile HttpStreams clientConnectReplyStreams;
 
 
         private long clientAcceptRef;
@@ -133,6 +133,7 @@ public class HttpClientBM
             {
                 LangUtil.rethrowUnchecked(ex);
             }
+            reaktor = Reaktor.init(configuration, n -> "http".equals(n), HttpController.class::isAssignableFrom);
             reaktor.start();
             System.out.println("Reaktor started");
 
@@ -214,10 +215,10 @@ public class HttpClientBM
             {
                 throw new RuntimeException("SharedState.reinit: reader.readResponse() failed");
             }
-            System.out.println("SharedState.reinit complete");
+            System.out.println("SharedState.reinit complete " + this);
         }
 
-        @TearDown(Level.Trial)
+        @TearDown(Level.Iteration)
         public void reset() throws Exception
         {
             HttpController controller = reaktor.controller(HttpController.class);
@@ -252,8 +253,7 @@ public class HttpClientBM
     @State(Scope.Thread)
     public static class RequestWriterState
     {
-        private LongSupplier supplyStreamId;
-        private HttpStreams clientAcceptStreams;
+        private SharedState sharedState;
         private BooleanSupplier measurementEnded;
 
         private long nextCorrelationId;
@@ -272,8 +272,7 @@ public class HttpClientBM
         @Setup(Level.Iteration)
         public void reinit(SharedState state, Control control) throws Exception
         {
-            this.supplyStreamId = state.supplyStreamId();
-            this.clientAcceptStreams = state.clientAcceptStreams;
+            this.sharedState = state;
             this.measurementEnded = () -> control.stopMeasurement;
 
             final AtomicBuffer outputBeginBuffer = new UnsafeBuffer(new byte[256]);
@@ -305,7 +304,7 @@ public class HttpClientBM
 
         private void prepareNextStream()
         {
-            streamId = supplyStreamId.getAsLong();
+            streamId = sharedState.supplyStreamId().getAsLong();
             availableWindow = 0;
             beginRW.streamId(streamId).correlationId(++nextCorrelationId);
             dataRW.streamId(streamId);
@@ -324,8 +323,9 @@ public class HttpClientBM
 
         private boolean writeRequestBegin()
         {
+            beginRW.referenceId(sharedState.clientAcceptRef);
             BeginFW begin = beginRW.build();
-            return clientAcceptStreams.writeStreams(begin.typeId(), begin.buffer(), begin.offset(), begin.sizeof());
+            return sharedState.clientAcceptStreams.writeStreams(begin.typeId(), begin.buffer(), begin.offset(), begin.sizeof());
         }
 
         private boolean writeRequestDataAndEnd()
@@ -333,6 +333,7 @@ public class HttpClientBM
             DataFW data = dataRW.build();
             EndFW end = endRW.build();
             boolean result = false;
+            HttpStreams clientAcceptStreams = sharedState.clientAcceptStreams;
             while (!result && !measurementEnded.getAsBoolean())
             {
                 clientAcceptStreams.readThrottle(this::throttle);
@@ -386,7 +387,7 @@ public class HttpClientBM
     @State(Scope.Thread)
     public static class ResponseReaderState
     {
-        private HttpStreams clientAcceptReplyStreams;
+        private SharedState sharedState;
         private MessageHandler clientAcceptReplyHandler;
         private final BeginFW beginRO = new BeginFW();
         private final DataFW dataRO = new DataFW();
@@ -396,14 +397,14 @@ public class HttpClientBM
         @Setup(Level.Iteration)
         public void reinit(SharedState state, Control control) throws Exception
         {
-            this.clientAcceptReplyStreams = state.clientAcceptReplyStreams;
+            this.sharedState = state;
             this.clientAcceptReplyHandler = this::processResponseFrame;
             this.throttleBuffer = new UnsafeBuffer(allocateDirect(SIZE_OF_LONG + SIZE_OF_INT));
         }
 
         int readResponse()
         {
-            return clientAcceptReplyStreams.readStreams(clientAcceptReplyHandler);
+            return sharedState.clientAcceptReplyStreams.readStreams(clientAcceptReplyHandler);
         }
 
         private void processResponseFrame(
@@ -442,14 +443,15 @@ public class HttpClientBM
                     .streamId(streamId)
                     .update(update)
                     .build();
-            clientAcceptReplyStreams.writeThrottle(window.typeId(), window.buffer(), window.offset(), window.sizeof());
+            sharedState.clientAcceptReplyStreams.writeThrottle(window.typeId(), window.buffer(), window.offset(),
+                    window.sizeof());
         }
     }
 
     @State(Scope.Thread)
     public static class RemoteReaderState
     {
-        private HttpStreams clientConnectStreams;
+        private SharedState sharedState;
         private final BeginFW beginRO = new BeginFW();
         private final DataFW dataRO = new DataFW();
         private final WindowFW.Builder windowRW = new WindowFW.Builder();
@@ -461,7 +463,7 @@ public class HttpClientBM
         @Setup(Level.Iteration)
         public void reinit(SharedState state, Control control) throws Exception
         {
-            this.clientConnectStreams = state.clientConnectStreams;
+            this.sharedState = state;
             this.clientConnectHandler = this::processRequestFrame;
             this.throttleBuffer = new UnsafeBuffer(allocateDirect(SIZE_OF_LONG + SIZE_OF_INT));
         }
@@ -469,7 +471,7 @@ public class HttpClientBM
         int processRequests(RemoteWriterState writer)
         {
             this.writer = writer;
-            return clientConnectStreams.readStreams(clientConnectHandler);
+            return sharedState.clientConnectStreams.readStreams(clientConnectHandler);
         }
 
         private void processRequestFrame(
@@ -517,14 +519,14 @@ public class HttpClientBM
                     .streamId(streamId)
                     .update(update)
                     .build();
-            clientConnectStreams.writeThrottle(window.typeId(), window.buffer(), window.offset(), window.sizeof());
+            sharedState.clientConnectStreams.writeThrottle(window.typeId(), window.buffer(), window.offset(), window.sizeof());
         }
     }
 
     @State(Scope.Thread)
     public static class RemoteWriterState
     {
-        private HttpStreams clientConnectReplyStreams;
+        private SharedState sharedState;
         private BooleanSupplier measurementEnded;
         private LongSupplier supplyStreamId;
 
@@ -540,7 +542,7 @@ public class HttpClientBM
         @Setup(Level.Iteration)
         public void reinit(SharedState state, Control control) throws Exception
         {
-            this.clientConnectReplyStreams = state.clientConnectReplyStreams;
+            this.sharedState = state;
             this.measurementEnded = () -> control.stopMeasurement;
             this.supplyStreamId = state.supplyStreamId();
 
@@ -566,6 +568,7 @@ public class HttpClientBM
             beginRW.streamId(streamId).correlationId(correlationId);
             BeginFW begin = beginRW.build();
             boolean result = false;
+            HttpStreams clientConnectReplyStreams = sharedState.clientConnectReplyStreams;
             while (!measurementEnded.getAsBoolean() && !result)
             {
                 result = clientConnectReplyStreams.writeStreams(begin.typeId(), begin.buffer(), begin.offset(), begin.sizeof());
@@ -578,6 +581,7 @@ public class HttpClientBM
             dataRW.streamId(streamId);
             DataFW data = dataRW.build();
             boolean result = false;
+            HttpStreams clientConnectReplyStreams = sharedState.clientConnectReplyStreams;
             while (!result && !measurementEnded.getAsBoolean())
             {
                 clientConnectReplyStreams.readThrottle(this::throttle);
@@ -605,6 +609,7 @@ public class HttpClientBM
             endRW.streamId(streamId);
             EndFW end = endRW.build();
             boolean result = false;
+            HttpStreams clientConnectReplyStreams = sharedState.clientConnectReplyStreams;
             while (!measurementEnded.getAsBoolean() && !result)
             {
                 result = clientConnectReplyStreams.writeStreams(end.typeId(), end.buffer(), end.offset(), end.sizeof());
@@ -646,14 +651,19 @@ public class HttpClientBM
         int result;
         boolean full = false;
         state.requestCount++;
+        int firstFullRequest = 0;
         while ((result = state.writeRequest()) == 0 && !control.stopMeasurement)
         {
+            if (!full)
+            {
+                firstFullRequest = state.requestCount;
+            }
             full = true;
             state.idleStrategy.idle(result);
         }
         if (full)
         {
-            System.out.println(format("Ring buffer full while writing request %d", state.requestCount));
+            System.out.println(format("Ring buffer full while writing request %d", firstFullRequest));
         }
         return result;
     }
@@ -691,7 +701,7 @@ public class HttpClientBM
                 .include(HttpClientBM.class.getSimpleName())
                 .forks(0)
                 .threads(1)
-                .warmupIterations(0)
+                .warmupIterations(1)
                 .measurementIterations(1)
                 .measurementTime(new TimeValue(10, SECONDS))
                 .build();
