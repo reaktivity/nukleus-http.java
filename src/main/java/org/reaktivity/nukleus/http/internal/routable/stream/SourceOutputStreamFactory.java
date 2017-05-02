@@ -243,12 +243,6 @@ public final class SourceOutputStreamFactory
 
                 correlateNew.accept(targetCorrelationId, correlation);
 
-                final Route route = optional.get();
-                target = route.target();
-                final long targetRef = route.targetRef();
-                target.doBegin(targetId, targetRef, targetCorrelationId);
-                target.setThrottle(targetId, this::handleThrottle);
-
                 String[] pseudoHeaders = new String[4];
 
                 StringBuilder headersChars = new StringBuilder();
@@ -309,7 +303,6 @@ public final class SourceOutputStreamFactory
                     {
                         // TODO: diagnostics (reset reason?)
                         source.doReset(sourceId);
-                        target.removeThrottle(targetId);
                         source.removeStream(sourceId);
                     }
                     else
@@ -320,6 +313,11 @@ public final class SourceOutputStreamFactory
                         slotOffset = 0;
                         this.streamState = this::streamBeforeHeadersWritten;
                         this.throttleState = this::throttleBeforeHeadersWritten;
+                        final Route route = optional.get();
+                        target = route.target();
+                        final long targetRef = route.targetRef();
+                        target.doBegin(targetId, targetRef, targetCorrelationId);
+                        target.setThrottle(targetId, this::handleThrottle);
                     }
                 }
             }
