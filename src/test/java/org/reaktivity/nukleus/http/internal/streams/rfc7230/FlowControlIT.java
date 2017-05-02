@@ -143,8 +143,8 @@ public class FlowControlIT
     @Test
     @Specification({
         "${route}/input/new/controller",
-        "${streams}/multiple.requests.combined/server/source",
-        "${streams}/multiple.requests.combined/server/target" })
+        "${streams}/multiple.requests.pipelined/server/source",
+        "${streams}/multiple.requests.pipelined/server/target" })
     public void shouldAcceptMultipleRequestsInSameDataFrame() throws Exception
     {
         k3po.start();
@@ -156,8 +156,8 @@ public class FlowControlIT
     @Test
     @Specification({
         "${route}/input/new/controller",
-        "${streams}/multiple.requests.combined.fragmented/server/source",
-        "${streams}/multiple.requests.combined.fragmented/server/target" })
+        "${streams}/multiple.requests.pipelined.fragmented/server/source",
+        "${streams}/multiple.requests.pipelined.fragmented/server/target" })
     public void shouldAcceptMultipleRequestsInSameDataFrameFragmented() throws Exception
     {
         k3po.start();
@@ -169,9 +169,9 @@ public class FlowControlIT
     @Test
     @Specification({
         "${route}/input/new/controller",
-        "${streams}/multiple.requests.with.content.length.combined.fragmented/server/source",
-        "${streams}/multiple.requests.with.content.length.combined.fragmented/server/target" })
-    public void shouldAcceptMultipleRequestsWithContentLengthCombinedFragmented() throws Exception
+        "${streams}/multiple.requests.with.content.length.pipelined.fragmented/server/source",
+        "${streams}/multiple.requests.with.content.length.pipelined.fragmented/server/target" })
+    public void shouldAcceptMultipleRequestsWithContentLengthPipelinedFragmented() throws Exception
     {
         k3po.start();
         k3po.awaitBarrier("ROUTED_INPUT");
