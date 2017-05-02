@@ -374,7 +374,7 @@ public class HttpClientBM
                 }
                 break;
             case ResetFW.TYPE_ID:
-                System.out.println("ERROR: reset detected in client accept throttle");
+                System.out.println("WARNING: reset detected in client accept throttle");
                 break;
             default:
                 System.out.println(format("ERROR: unexpected msgTypeId %d detected in client accept throttle",
@@ -633,7 +633,7 @@ public class HttpClientBM
                 }
                 break;
             case ResetFW.TYPE_ID:
-                System.out.println("ERROR: reset detected in remote writer throttle");
+                System.out.println("WARNING: reset detected in remote writer throttle");
                 break;
             default:
                 System.out.println(format("ERROR: unexpected msgTypeId %d detected in remote writer throttle",

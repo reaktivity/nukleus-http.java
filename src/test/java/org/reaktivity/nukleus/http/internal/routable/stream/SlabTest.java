@@ -103,6 +103,20 @@ public class SlabTest
         assertEquals(16, buffer.capacity());
     }
 
+    @Test(expected = IndexOutOfBoundsException.class)
+    public void bufferShouldBoundsCheckByDefault() throws Exception
+    {
+        Slab slab = new Slab(256, 16);
+        slab.buffer(-1);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void bufferShouldCheckSlotAcquiredByDefault() throws Exception
+    {
+        Slab slab = new Slab(256, 16);
+        slab.buffer(11);
+    }
+
     @Test
     public void freeShouldMakeSlotAvailableForReuse() throws Exception
     {

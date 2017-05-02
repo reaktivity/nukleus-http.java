@@ -15,6 +15,7 @@
  */
 package org.reaktivity.nukleus.http.internal.routable.stream;
 
+import static java.lang.String.format;
 import static org.agrona.BitUtil.isPowerOfTwo;
 
 import java.nio.ByteBuffer;
@@ -32,6 +33,9 @@ import org.agrona.concurrent.UnsafeBuffer;
  */
 public final class Slab
 {
+    public static final String DISABLE_SLOT_CHECK_PROP_NAME = "nukleus.http.disable.slot.check";
+    public static final boolean SHOULD_SLOT_CHECK = !Boolean.getBoolean(DISABLE_SLOT_CHECK_PROP_NAME);
+
     public static final int NO_SLOT = -1;
 
     private final MutableDirectBuffer mutableFW = new UnsafeBuffer(new byte[0]);
@@ -95,8 +99,14 @@ public final class Slab
      */
     public MutableDirectBuffer buffer(int slot)
     {
-        assert slot >= 0 : "invalid slot: " + Integer.toString(slot);
-        assert used.get(slot);
+        if (SHOULD_SLOT_CHECK)
+        {
+            // BitSet.get will throw IndexOutOfBoundsException if slot is out of range
+            if (!used.get(slot))
+            {
+                throw new IllegalArgumentException(format("slot %d was not acquired", slot));
+            }
+        }
         final long slotAddressOffset = buffer.addressOffset() + (slot << bitsPerSlot);
         mutableFW.wrap(slotAddressOffset, slotCapacity);
         return mutableFW;
@@ -108,7 +118,7 @@ public final class Slab
      */
     public void release(int slot)
     {
-        if (slot != NO_SLOT)
+        if (slot >= 0)
         {
             assert used.get(slot);
             used.clear(slot);
