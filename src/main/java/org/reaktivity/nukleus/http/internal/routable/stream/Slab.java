@@ -95,6 +95,7 @@ public final class Slab
      */
     public MutableDirectBuffer buffer(int slot)
     {
+        assert slot >= 0 : "invalid slot: " + Integer.toString(slot);
         assert used.get(slot);
         final long slotAddressOffset = buffer.addressOffset() + (slot << bitsPerSlot);
         mutableFW.wrap(slotAddressOffset, slotCapacity);

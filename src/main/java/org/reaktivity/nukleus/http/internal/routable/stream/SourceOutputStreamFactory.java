@@ -79,13 +79,13 @@ public final class SourceOutputStreamFactory
         Source source,
         LongFunction<List<Route>> supplyRoutes,
         LongSupplier supplyTargetId,
-        LongObjectBiConsumer<Correlation<?>> correlateNew2,
+        LongObjectBiConsumer<Correlation<?>> correlateNew,
         Slab slab)
     {
         this.source = source;
         this.supplyTargetId = supplyTargetId;
         this.supplyRoutes = supplyRoutes;
-        this.correlateNew = correlateNew2;
+        this.correlateNew = correlateNew;
         this.slab = slab;
     }
 
