@@ -49,7 +49,7 @@
     <jmh.profilers.version>0.1.3</jmh.profilers.version>
     <nukleus.plugin.version>0.7.3</nukleus.plugin.version>
     <nukleus.version>0.2</nukleus.version>
-    <nukleus.http.spec.version>develop-SNAPSHOT</nukleus.http.spec.version>
+    <nukleus.http.spec.version>0.14</nukleus.http.spec.version>
     <reaktor.test.version>0.2</reaktor.test.version>
     <reaktor.version>0.1</reaktor.version>
   </properties>
