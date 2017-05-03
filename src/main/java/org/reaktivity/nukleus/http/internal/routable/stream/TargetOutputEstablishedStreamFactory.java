@@ -24,7 +24,6 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.function.LongFunction;
-import java.util.function.LongSupplier;
 
 import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
@@ -61,21 +60,18 @@ public final class TargetOutputEstablishedStreamFactory
 
     private final Source source;
     private final Function<String, Target> supplyTarget;
-    private final LongSupplier supplyStreamId;
-    private final LongFunction<Correlation> correlateEstablished;
+    private final LongFunction<Correlation<?>> correlateEstablished;
 
     private final Slab slab;
 
     public TargetOutputEstablishedStreamFactory(
         Source source,
         Function<String, Target> supplyTarget,
-        LongSupplier supplyStreamId,
-        LongFunction<Correlation> correlateEstablished,
+        LongFunction<Correlation<?>> correlateEstablished,
         Slab slab)
     {
         this.source = source;
         this.supplyTarget = supplyTarget;
-        this.supplyStreamId = supplyStreamId;
         this.correlateEstablished = correlateEstablished;
         this.slab = slab;
     }
@@ -93,9 +89,8 @@ public final class TargetOutputEstablishedStreamFactory
         private long sourceId;
 
         private Target target;
-        private long targetId;
+        private ServerConnectionState targetStream;
 
-        private int window;
         private int slotIndex;
         private int slotPosition;
         private int slotOffset;
@@ -104,8 +99,8 @@ public final class TargetOutputEstablishedStreamFactory
         @Override
         public String toString()
         {
-            return String.format("%s[source=%s, sourceId=%016x, window=%d, targetId=%016x]",
-                    getClass().getSimpleName(), source.routableName(), sourceId, window, targetId);
+            return String.format("%s[source=%s, sourceId=%016x, window=%d, targetStream=%s]",
+                    getClass().getSimpleName(), source.routableName(), sourceId, targetStream);
         }
 
         private TargetOutputEstablishedStream()
@@ -222,13 +217,14 @@ public final class TargetOutputEstablishedStreamFactory
             final long targetCorrelationId = beginRO.correlationId();
             final OctetsFW extension = beginRO.extension();
 
-            final Correlation correlation = correlateEstablished.apply(targetCorrelationId);
+            @SuppressWarnings("unchecked")
+            final Correlation<ServerConnectionState> correlation =
+                         (Correlation<ServerConnectionState>) correlateEstablished.apply(targetCorrelationId);
 
             if (sourceRef == 0L && correlation != null)
             {
-                final Target newTarget = supplyTarget.apply(correlation.source());
-                final long newTargetId = supplyStreamId.getAsLong();
-                final long sourceCorrelationId = correlation.id();
+                target = supplyTarget.apply(correlation.source());
+                targetStream = correlation.state();
 
                 Map<String, String> headers = EMPTY_HEADERS;
                 if (extension.sizeof() > 0)
@@ -239,14 +235,14 @@ public final class TargetOutputEstablishedStreamFactory
                     headers = headers0;
                 }
 
-                this.sourceId = newSourceId;
-                this.target = newTarget;
-                this.targetId = newTargetId;
+                if (!targetStream.started)
+                {
+                    target.doBegin(targetStream.streamId, 0L, correlation.id());
+                    targetStream.started = true;
+                }
+                target.setThrottle(targetStream.streamId, this::handleThrottle);
 
-                // TODO: replace with connection pool (start)
-                target.doBegin(newTargetId, 0L, sourceCorrelationId);
-                newTarget.addThrottle(newTargetId, this::handleThrottle);
-                // TODO: replace with connection pool (end)
+                this.sourceId = newSourceId;
 
                 // default status (and reason)
                 String[] status = new String[] { "200", "OK" };
@@ -279,9 +275,9 @@ public final class TargetOutputEstablishedStreamFactory
                 if (payloadChars.length() > slot.capacity())
                 {
                     slot.putBytes(0,  RESPONSE_HEADERS_TOO_LONG_RESPONSE);
-                    target.doData(newTargetId, slot, 0, RESPONSE_HEADERS_TOO_LONG_RESPONSE.length);
+                    target.doData(targetStream.streamId, slot, 0, RESPONSE_HEADERS_TOO_LONG_RESPONSE.length);
                     source.doReset(sourceId);
-                    target.removeThrottle(newTargetId);
+                    target.removeThrottle(targetStream.streamId);
                     source.removeStream(sourceId);
                 }
                 else
@@ -292,6 +288,10 @@ public final class TargetOutputEstablishedStreamFactory
                     slotOffset = 0;
                     this.streamState = this::streamBeforeHeadersWritten;
                     this.throttleState = this::throttleBeforeHeadersWritten;
+                    if (targetStream.window > 0)
+                    {
+                        useTargetWindowToWriteResponseHeaders();
+                    }
                 }
             }
             else
@@ -308,16 +308,15 @@ public final class TargetOutputEstablishedStreamFactory
 
             dataRO.wrap(buffer, index, index + length);
 
-            window -= dataRO.length();
-
-            if (window < 0)
+            if (targetStream.window < dataRO.length())
             {
                 processUnexpected(buffer, index, length);
             }
             else
             {
                 final OctetsFW payload = dataRO.payload();
-                target.doData(targetId, payload);
+                target.doData(targetStream.streamId, payload);
+                targetStream.window -= dataRO.length();
             }
         }
 
@@ -332,9 +331,18 @@ public final class TargetOutputEstablishedStreamFactory
 
         private void doEnd()
         {
-            target.removeThrottle(targetId);
+            if (targetStream != null && targetStream.endRequested && --targetStream.pendingRequests == 0)
+            {
+                target.doEnd(targetStream.streamId);
+                target.removeThrottle(targetStream.streamId);
+                this.streamState = this::streamAfterEnd;
+            }
+            else
+            {
+                throttleState = this::throttleBetweenResponses;
+                streamState = this::streamBeforeBegin;
+            }
             source.removeStream(sourceId);
-            this.streamState = this::streamAfterEnd;
         }
 
         private void processUnexpected(
@@ -386,7 +394,32 @@ public final class TargetOutputEstablishedStreamFactory
             switch (msgTypeId)
             {
             case WindowFW.TYPE_ID:
-                processWindowToWriteResponseHeaders(buffer, index, length);
+                windowRO.wrap(buffer, index, index + length);
+                int update = windowRO.update();
+                targetStream.window += update;
+                useTargetWindowToWriteResponseHeaders();
+                break;
+            case ResetFW.TYPE_ID:
+                processReset(buffer, index, length);
+                break;
+            default:
+                // ignore
+                break;
+            }
+        }
+
+        private void throttleBetweenResponses(
+            int msgTypeId,
+            DirectBuffer buffer,
+            int index,
+            int length)
+        {
+            switch (msgTypeId)
+            {
+            case WindowFW.TYPE_ID:
+                windowRO.wrap(buffer, index, index + length);
+                int update = windowRO.update();
+                targetStream.window += update;
                 break;
             case ResetFW.TYPE_ID:
                 processReset(buffer, index, length);
@@ -417,18 +450,15 @@ public final class TargetOutputEstablishedStreamFactory
             }
         }
 
-        private void processWindowToWriteResponseHeaders(
-            DirectBuffer buffer,
-            int index,
-            int length)
+        private void useTargetWindowToWriteResponseHeaders()
         {
-            windowRO.wrap(buffer, index, index + length);
-            int update = windowRO.update();
-            int writableBytes = Math.min(slotPosition - slotOffset, update);
-            MutableDirectBuffer slot = slab.buffer(slotIndex);
-            target.doData(targetId, slot, slotOffset, writableBytes);
-            slotOffset += writableBytes;
             int bytesDeferred = slotPosition - slotOffset;
+            int writableBytes = Math.min(bytesDeferred, targetStream.window);
+            MutableDirectBuffer slot = slab.buffer(slotIndex);
+            target.doData(targetStream.streamId, slot, slotOffset, writableBytes);
+            targetStream.window -= writableBytes;
+            slotOffset += writableBytes;
+            bytesDeferred -= writableBytes;
             if (bytesDeferred == 0)
             {
                 slab.release(slotIndex);
@@ -441,10 +471,9 @@ public final class TargetOutputEstablishedStreamFactory
                 {
                     streamState = this::streamAfterBeginOrData;
                     throttleState = this::throttleNextWindow;
-                    update -= writableBytes;
-                    if (update > 0)
+                    if (targetStream.window > 0)
                     {
-                        doWindow(update);
+                        doSourceWindow(targetStream.window);
                     }
                 }
             }
@@ -456,14 +485,13 @@ public final class TargetOutputEstablishedStreamFactory
             int length)
         {
             windowRO.wrap(buffer, index, index + length);
-
             final int update = windowRO.update();
-            doWindow(update);
+            targetStream.window += update;
+            doSourceWindow(update);
         }
 
-        private void doWindow(int update)
+        private void doSourceWindow(int update)
         {
-            window += update;
             source.doWindow(sourceId, update);
         }
 

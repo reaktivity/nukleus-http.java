@@ -53,18 +53,18 @@ public final class Routable extends Nukleus.Composite
     private final Map<String, Source> sourcesByPartitionName;
     private final Map<String, Target> targetsByName;
     private final Long2ObjectHashMap<List<Route>> routesByRef;
-    private final LongObjectBiConsumer<Correlation> correlateNew;
-    private final LongFunction<Correlation> correlateEstablished;
-    private final LongFunction<Correlation> lookupEstablished;
+    private final LongObjectBiConsumer<Correlation<?>> correlateNew;
+    private final LongFunction<Correlation<?>> correlateEstablished;
+    private final LongFunction<Correlation<?>> lookupEstablished;
     private final LongSupplier supplyTargetId;
 
     public Routable(
         Context context,
         Conductor conductor,
         String sourceName,
-        LongObjectBiConsumer<Correlation> correlateNew,
-        LongFunction<Correlation> correlateEstablished,
-        LongFunction<Correlation> lookupEstablished)
+        LongObjectBiConsumer<Correlation<?>> correlateNew,
+        LongFunction<Correlation<?>> correlateEstablished,
+        LongFunction<Correlation<?>> lookupEstablished)
     {
         this.context = context;
         this.conductor = conductor;

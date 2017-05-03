@@ -71,7 +71,7 @@ public final class SourceOutputStreamFactory
     private final Source source;
     private final LongSupplier supplyTargetId;
     private final LongFunction<List<Route>> supplyRoutes;
-    private final LongObjectBiConsumer<Correlation> correlateNew;
+    private final LongObjectBiConsumer<Correlation<?>> correlateNew;
 
     private final Slab slab;
 
@@ -79,7 +79,7 @@ public final class SourceOutputStreamFactory
         Source source,
         LongFunction<List<Route>> supplyRoutes,
         LongSupplier supplyTargetId,
-        LongObjectBiConsumer<Correlation> correlateNew,
+        LongObjectBiConsumer<Correlation<?>> correlateNew,
         Slab slab)
     {
         this.source = source;
@@ -238,7 +238,8 @@ public final class SourceOutputStreamFactory
             {
                 targetId = supplyTargetId.getAsLong();
                 final long targetCorrelationId = targetId;
-                final Correlation correlation = new Correlation(correlationId, source.routableName(), INPUT_ESTABLISHED);
+                final Correlation<?> correlation =
+                        new Correlation<Object>(correlationId, source.routableName(), INPUT_ESTABLISHED);
 
                 correlateNew.accept(targetCorrelationId, correlation);
 
@@ -246,7 +247,7 @@ public final class SourceOutputStreamFactory
                 target = route.target();
                 final long targetRef = route.targetRef();
                 target.doBegin(targetId, targetRef, targetCorrelationId);
-                target.addThrottle(targetId, this::handleThrottle);
+                target.setThrottle(targetId, this::handleThrottle);
 
                 String[] pseudoHeaders = new String[4];
 

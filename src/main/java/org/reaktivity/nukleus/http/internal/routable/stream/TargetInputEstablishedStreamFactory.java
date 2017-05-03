@@ -58,7 +58,7 @@ public final class TargetInputEstablishedStreamFactory
     private final Source source;
     private final Function<String, Target> supplyTarget;
     private final LongSupplier supplyStreamId;
-    private final LongFunction<Correlation> correlateEstablished;
+    private final LongFunction<Correlation<?>> correlateEstablished;
     private final int maximumHeadersSize;
     private final Slab slab;
 
@@ -66,13 +66,13 @@ public final class TargetInputEstablishedStreamFactory
             Source source,
             Function<String, Target> supplyTarget,
             LongSupplier supplyStreamId,
-            LongFunction<Correlation> correlateEstablished,
+            LongFunction<Correlation<?>> correlateEstablished2,
             Slab slab)
     {
         this.source = source;
         this.supplyTarget = supplyTarget;
         this.supplyStreamId = supplyStreamId;
-        this.correlateEstablished = correlateEstablished;
+        this.correlateEstablished = correlateEstablished2;
         this.slab = slab;
         this.maximumHeadersSize = slab.slotCapacity();
     }
@@ -243,7 +243,7 @@ public final class TargetInputEstablishedStreamFactory
             final long sourceRef = beginRO.referenceId();
             final long targetCorrelationId = beginRO.correlationId();
 
-            final Correlation correlation = correlateEstablished.apply(targetCorrelationId);
+            final Correlation<?> correlation = correlateEstablished.apply(targetCorrelationId);
 
             if (sourceRef == 0L && correlation != null)
             {
@@ -447,7 +447,7 @@ public final class TargetInputEstablishedStreamFactory
 
                 target.doHttpBegin(targetId, 0L, sourceCorrelationId,
                         hs -> headers.forEach((k, v) -> hs.item(i -> i.name(k).value(v))));
-                target.addThrottle(targetId, this::handleThrottle);
+                target.setThrottle(targetId, this::handleThrottle);
 
                 boolean hasUpgrade = headers.containsKey("upgrade");
 
