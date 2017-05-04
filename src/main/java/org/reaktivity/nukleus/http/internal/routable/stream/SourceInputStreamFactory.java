@@ -266,8 +266,9 @@ public final class SourceInputStreamFactory
             // TODO: replace with connection pool (end)
 
             StringBuffer payloadText = new StringBuffer()
-                    .append("HTTP/1.1 ").append(Integer.toString(status)).append(" ").append(message).append("\r\n")
-                    .append("Connection: close\r\n\r\n");
+                    .append(String.format("HTTP/1.1 %d %s\r\n", status, message))
+                    .append("Connection: close\r\n")
+                    .append("\r\n");
 
             final DirectBuffer payload = new UnsafeBuffer(payloadText.toString().getBytes(StandardCharsets.UTF_8));
 
@@ -460,6 +461,7 @@ public final class SourceInputStreamFactory
                     // Incomplete request, not yet cached
                     slotIndex = slab.acquire(sourceId);
                 }
+
                 if (slotIndex == NO_SLOT)
                 {
                     // Out of slab memory
