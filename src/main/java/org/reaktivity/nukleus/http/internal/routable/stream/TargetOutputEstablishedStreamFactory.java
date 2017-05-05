@@ -270,27 +270,35 @@ public final class TargetOutputEstablishedStreamFactory
                                            .append(headersChars).append("\r\n").toString();
 
                 slotIndex = slab.acquire(sourceId);
-                slotPosition = 0;
-                MutableDirectBuffer slot = slab.buffer(slotIndex);
-                if (payloadChars.length() > slot.capacity())
+                if (slotIndex == NO_SLOT)
                 {
-                    slot.putBytes(0,  RESPONSE_HEADERS_TOO_LONG_RESPONSE);
-                    target.doData(targetStream.streamId, slot, 0, RESPONSE_HEADERS_TOO_LONG_RESPONSE.length);
                     source.doReset(sourceId);
-                    target.removeThrottle(targetStream.streamId);
-                    source.removeStream(sourceId);
+                    this.streamState = this::streamAfterRejectOrReset;
                 }
                 else
                 {
-                    byte[] bytes = payloadChars.getBytes(US_ASCII);
-                    slot.putBytes(0, bytes);
-                    slotPosition = bytes.length;
-                    slotOffset = 0;
-                    this.streamState = this::streamBeforeHeadersWritten;
-                    this.throttleState = this::throttleBeforeHeadersWritten;
-                    if (targetStream.window > 0)
+                    slotPosition = 0;
+                    MutableDirectBuffer slot = slab.buffer(slotIndex);
+                    if (payloadChars.length() > slot.capacity())
                     {
-                        useTargetWindowToWriteResponseHeaders();
+                        slot.putBytes(0,  RESPONSE_HEADERS_TOO_LONG_RESPONSE);
+                        target.doData(targetStream.streamId, slot, 0, RESPONSE_HEADERS_TOO_LONG_RESPONSE.length);
+                        source.doReset(sourceId);
+                        target.removeThrottle(targetStream.streamId);
+                        source.removeStream(sourceId);
+                    }
+                    else
+                    {
+                        byte[] bytes = payloadChars.getBytes(US_ASCII);
+                        slot.putBytes(0, bytes);
+                        slotPosition = bytes.length;
+                        slotOffset = 0;
+                        this.streamState = this::streamBeforeHeadersWritten;
+                        this.throttleState = this::throttleBeforeHeadersWritten;
+                        if (targetStream.window > 0)
+                        {
+                            useTargetWindowToWriteResponseHeaders();
+                        }
                     }
                 }
             }

@@ -18,6 +18,7 @@ package org.reaktivity.nukleus.http.internal.streams.rfc7230;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.rules.RuleChain.outerRule;
 
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.DisableOnDebug;
@@ -77,10 +78,50 @@ public class ConnectionManagementIT
 
     @Test
     @Specification({
+        "${route}/input/new/controller",
+        "${streams}/multiple.requests.same.connection/server/source",
+        "${streams}/multiple.requests.same.connection/server/target" })
+    public void shouldAcceptMultipleRequestsOnSameConnection() throws Exception
+    {
+        k3po.start();
+        k3po.awaitBarrier("ROUTED_INPUT");
+        k3po.notifyBarrier("ROUTED_OUTPUT");
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
         "${route}/output/new/controller",
         "${streams}/response.status.101.with.upgrade/client/source",
         "${streams}/response.status.101.with.upgrade/client/target" })
     public void shouldSwitchProtocolAfterUpgradeClient() throws Exception
+    {
+        k3po.start();
+        k3po.awaitBarrier("ROUTED_OUTPUT");
+        k3po.notifyBarrier("ROUTED_INPUT");
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/output/new/controller",
+        "${streams}/multiple.requests/client/source",
+        "${streams}/multiple.requests/client/target" })
+    public void shouldIssueMultipleRequests() throws Exception
+    {
+        k3po.start();
+        k3po.awaitBarrier("ROUTED_OUTPUT");
+        k3po.notifyBarrier("ROUTED_INPUT");
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/output/new/controller",
+        "${streams}/multiple.requests.same.connection/client/source",
+        "${streams}/multiple.requests.same.connection/client/target" })
+    @Ignore("Not yet supported")
+    public void shouldIssueMultipleRequestsUsingConnectionPool() throws Exception
     {
         k3po.start();
         k3po.awaitBarrier("ROUTED_OUTPUT");

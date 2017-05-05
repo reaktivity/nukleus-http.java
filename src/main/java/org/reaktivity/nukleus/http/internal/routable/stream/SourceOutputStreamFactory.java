@@ -243,12 +243,6 @@ public final class SourceOutputStreamFactory
 
                 correlateNew.accept(targetCorrelationId, correlation);
 
-                final Route route = optional.get();
-                target = route.target();
-                final long targetRef = route.targetRef();
-                target.doBegin(targetId, targetRef, targetCorrelationId);
-                target.setThrottle(targetId, this::handleThrottle);
-
                 String[] pseudoHeaders = new String[4];
 
                 StringBuilder headersChars = new StringBuilder();
@@ -296,23 +290,35 @@ public final class SourceOutputStreamFactory
                                            .append("Host").append(": ").append(pseudoHeaders[AUTHORITY]).append("\r\n")
                                            .append(headersChars).append("\r\n").toString();
                 slotIndex = slab.acquire(sourceId);
-                slotPosition = 0;
-                MutableDirectBuffer slot = slab.buffer(slotIndex);
-                if (payloadChars.length() > slot.capacity())
+                if (slotIndex == NO_SLOT)
                 {
-                    // TODO: diagnostics (reset reason?)
                     source.doReset(sourceId);
-                    target.removeThrottle(targetId);
-                    source.removeStream(sourceId);
+                    this.streamState = this::streamAfterReplyOrReset;
                 }
                 else
                 {
-                    byte[] bytes = payloadChars.getBytes(US_ASCII);
-                    slot.putBytes(0, bytes);
-                    slotPosition = bytes.length;
-                    slotOffset = 0;
-                    this.streamState = this::streamBeforeHeadersWritten;
-                    this.throttleState = this::throttleBeforeHeadersWritten;
+                    slotPosition = 0;
+                    MutableDirectBuffer slot = slab.buffer(slotIndex);
+                    if (payloadChars.length() > slot.capacity())
+                    {
+                        // TODO: diagnostics (reset reason?)
+                        source.doReset(sourceId);
+                        source.removeStream(sourceId);
+                    }
+                    else
+                    {
+                        byte[] bytes = payloadChars.getBytes(US_ASCII);
+                        slot.putBytes(0, bytes);
+                        slotPosition = bytes.length;
+                        slotOffset = 0;
+                        this.streamState = this::streamBeforeHeadersWritten;
+                        this.throttleState = this::throttleBeforeHeadersWritten;
+                        final Route route = optional.get();
+                        target = route.target();
+                        final long targetRef = route.targetRef();
+                        target.doBegin(targetId, targetRef, targetCorrelationId);
+                        target.setThrottle(targetId, this::handleThrottle);
+                    }
                 }
             }
             else
@@ -351,7 +357,9 @@ public final class SourceOutputStreamFactory
 
         private void doEnd()
         {
+            // TODO: Return target stream to connection pool or call doEnd on it to free resources
             target.removeThrottle(targetId);
+
             source.removeStream(sourceId);
             this.streamState = this::streamAfterEnd;
         }

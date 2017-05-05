@@ -37,8 +37,9 @@ final class ServerConnectionState
     @Override
     public String toString()
     {
-        return String.format("[streamId=%016x, window=%d]",
-                getClass().getSimpleName(), streamId, window);
+        return String.format(
+                "[streamId=%016x, target=%s, window=%d, started=%b, pendingRequests=%d, endRequested=%b]",
+                getClass().getSimpleName(), streamId, target, window, started, pendingRequests, endRequested);
     }
 
     public void doEnd(Function<String, Target> supplyTarget)

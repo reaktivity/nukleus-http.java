@@ -253,9 +253,7 @@ public final class SourceInputStreamFactory
             this.streamState = this::streamAfterRejectOrReset;
         }
 
-        private void processInvalidRequest(
-            int requestBytes,
-            String payloadChars)
+        private void processInvalidRequest(int status, String message)
         {
             Target rejectTarget = supplyTarget.apply(source.name());
             this.target = rejectTarget;
@@ -267,7 +265,12 @@ public final class SourceInputStreamFactory
             rejectTarget.setThrottle(newTargetId, this::handleThrottle);
             // TODO: replace with connection pool (end)
 
-            DirectBuffer payload = new UnsafeBuffer(payloadChars.getBytes(StandardCharsets.UTF_8));
+            StringBuffer payloadText = new StringBuffer()
+                    .append(String.format("HTTP/1.1 %d %s\r\n", status, message))
+                    .append("Connection: close\r\n")
+                    .append("\r\n");
+
+            final DirectBuffer payload = new UnsafeBuffer(payloadText.toString().getBytes(StandardCharsets.UTF_8));
 
             this.decoderState = this::decodeHttpBegin;
             this.streamState = this::streamAfterRejectOrReset;
@@ -300,7 +303,7 @@ public final class SourceInputStreamFactory
                     }
                 }
             };
-            doSourceWindow(requestBytes);
+            source.doReset(sourceId);
         }
 
         private void processBegin(
@@ -457,20 +460,28 @@ public final class SourceInputStreamFactory
                 {
                     // Incomplete request, not yet cached
                     slotIndex = slab.acquire(sourceId);
+                }
+
+                if (slotIndex == NO_SLOT)
+                {
+                    // Out of slab memory
+                    processInvalidRequest(503, "Service Unavailable");
+                }
+                else
+                {
                     slotOffset = 0;
                     MutableDirectBuffer buffer = slab.buffer(slotIndex);
                     buffer.putBytes(0, payload, offset, length);
                     slotPosition = length;
-                }
-                if (window == 0)
-                {
-                    // Increase source window to ensure we can receive the largest possible request headers
-                    ensureSourceWindow(maximumHeadersSize - length);
-                    if (window < 2)
+                    if (window == 0)
                     {
-                        slab.release(slotIndex);
-                        processInvalidRequest(limit - offset, "HTTP/1.1 431 Request Header Fields Too Large\r\n\r\n");
-                        source.doReset(sourceId);
+                        // Increase source window to ensure we can receive the largest possible request headers
+                        ensureSourceWindow(maximumHeadersSize - length);
+                        if (window < 2)
+                        {
+                            slab.release(slotIndex);
+                            processInvalidRequest(431, "Request Header Fields Too Large");
+                        }
                     }
                 }
             }
@@ -493,7 +504,7 @@ public final class SourceInputStreamFactory
 
             if (start.length != 3)
             {
-                processInvalidRequest(length, "HTTP/1.1 400 Bad Request\r\n\r\n");
+                processInvalidRequest(400, "Bad Request");
                 return;
             }
 
@@ -501,7 +512,7 @@ public final class SourceInputStreamFactory
             Matcher versionMatcher = versionPattern.matcher(start[2]);
             if (!versionMatcher.matches())
             {
-                processInvalidRequest(length, "HTTP/1.1 505 HTTP Version Not Supported\r\n\r\n");
+                processInvalidRequest(505, "HTTP Version Not Supported");
             }
             else
             {
@@ -512,7 +523,7 @@ public final class SourceInputStreamFactory
 
                 if (headers.get(":authority") == null || requestURI.getUserInfo() != null)
                 {
-                    processInvalidRequest(length, "HTTP/1.1 400 Bad Request\r\n\r\n");
+                    processInvalidRequest(400, "Bad Request");
                 }
                 else
                 {
@@ -569,7 +580,7 @@ public final class SourceInputStreamFactory
                     }
                     else
                     {
-                        processInvalidRequest(length, "HTTP/1.1 404 Not Found\r\n\r\n");
+                        processInvalidRequest(404, "Not Found");
                     }
                 }
             }
@@ -642,6 +653,14 @@ public final class SourceInputStreamFactory
             if (slotIndex == NO_SLOT && writableBytes < length)
             {
                 slotIndex = slab.acquire(sourceId);
+                if (slotIndex == NO_SLOT)
+                {
+                    // We can't write back an HTTP error response because we already forwarded the begin to the target
+                    source.doReset(sourceId);
+                    target.doHttpEnd(targetId);
+                    doEnd();
+                    return limit;
+                }
                 slotOffset = 0;
                 MutableDirectBuffer buffer = slab.buffer(slotIndex);
                 buffer.putBytes(0, payload, offset, length);
@@ -676,10 +695,20 @@ public final class SourceInputStreamFactory
             if (slotIndex == NO_SLOT && writableBytes < length)
             {
                 slotIndex = slab.acquire(sourceId);
-                slotOffset = 0;
-                MutableDirectBuffer buffer = slab.buffer(slotIndex);
-                buffer.putBytes(0, payload, offset, length);
-                slotPosition = length;
+                if (slotIndex == NO_SLOT)
+                {
+                    // We can't write back an HTTP error response because we already forwarded the begin to the target
+                    source.doReset(sourceId);
+                    target.doHttpEnd(targetId);
+                    doEnd();
+                }
+                else
+                {
+                    slotOffset = 0;
+                    MutableDirectBuffer buffer = slab.buffer(slotIndex);
+                    buffer.putBytes(0, payload, offset, length);
+                    slotPosition = length;
+                }
             }
             return limit;
         }

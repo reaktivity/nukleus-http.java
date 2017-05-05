@@ -397,13 +397,21 @@ public final class TargetInputEstablishedStreamFactory
             if (endOfHeadersAt == -1)
             {
                 slotIndex = slab.acquire(sourceId);
-                slotPosition = slotOffset = 0;
-                int length = limit - offset;
-                MutableDirectBuffer buffer = slab.buffer(slotIndex);
-                assert length <= buffer.capacity();
-                buffer.putBytes(0, payload, offset, length);
-                slotPosition = length;
-                decoderState = this::defragmentHttpBegin;
+                if (slotIndex == NO_SLOT)
+                {
+                    source.doReset(sourceId);
+                    doEnd();
+                }
+                else
+                {
+                    slotPosition = slotOffset = 0;
+                    int length = limit - offset;
+                    MutableDirectBuffer buffer = slab.buffer(slotIndex);
+                    assert length <= buffer.capacity();
+                    buffer.putBytes(0, payload, offset, length);
+                    slotPosition = length;
+                    decoderState = this::defragmentHttpBegin;
+                }
             }
             else
             {
@@ -412,14 +420,22 @@ public final class TargetInputEstablishedStreamFactory
                 {
                     // Not all source data was consumed, delay processing it until target gives us window
                     slotIndex = slab.acquire(sourceId);
-                    slotPosition = slotOffset = 0;
-                    int length = limit - endOfHeadersAt;
-                    MutableDirectBuffer buffer = slab.buffer(slotIndex);
-                    assert length <= buffer.capacity();
-                    buffer.putBytes(0, payload, endOfHeadersAt, length);
-                    slotPosition = length;
-                    streamState = this::streamBeforeWindowsAreAligned;
-                    throttleState = this::throttleBeforeWindowsAreAligned;
+                    if (slotIndex == NO_SLOT)
+                    {
+                        source.doReset(sourceId);
+                        doEnd();
+                    }
+                    else
+                    {
+                        slotPosition = slotOffset = 0;
+                        int length = limit - endOfHeadersAt;
+                        MutableDirectBuffer buffer = slab.buffer(slotIndex);
+                        assert length <= buffer.capacity();
+                        buffer.putBytes(0, payload, endOfHeadersAt, length);
+                        slotPosition = length;
+                        streamState = this::streamBeforeWindowsAreAligned;
+                        throttleState = this::throttleBeforeWindowsAreAligned;
+                    }
                 }
             }
             return limit;
