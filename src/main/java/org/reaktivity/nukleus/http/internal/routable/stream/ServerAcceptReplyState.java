@@ -19,19 +19,18 @@ import java.util.function.Function;
 
 import org.reaktivity.nukleus.http.internal.routable.Target;
 
-final class ServerConnectionState
+final class ServerAcceptReplyState
 {
     final long streamId;
-    String target;
+    Target target;
     int window;
     boolean started;
     int pendingRequests;
     public boolean endRequested;
 
-    ServerConnectionState(long streamId, String target)
+    ServerAcceptReplyState(long streamId, Target target)
     {
         this.streamId = streamId;
-        this.target = target;
     }
 
     @Override
@@ -46,8 +45,7 @@ final class ServerConnectionState
     {
         if (pendingRequests == 0)
         {
-            Target transportOutput = supplyTarget.apply(target);
-            transportOutput.doEnd(streamId);
+            target.doEnd(streamId);
             // TODO: call a callback registered by TargetOutputEstablishedStream so it can clean up resources
         }
         else
