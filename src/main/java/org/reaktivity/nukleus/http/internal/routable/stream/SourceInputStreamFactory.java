@@ -324,15 +324,13 @@ public final class SourceInputStreamFactory
             this.decoderState = this::decodeHttpBegin;
 
             // Proactively issue BEGIN on server accept reply since we only support bidirectional transport
-            targetId = supplyStreamId.getAsLong();
-            target = supplyTarget.apply(source.name());
-            target.doBegin(targetId, 0L, sourceCorrelationId);
-            ServerAcceptReplyState state = new ServerAcceptReplyState(targetId, target);
-            state.started = true;
+            long replyStreamId = supplyStreamId.getAsLong();
+            Target loopBackTarget = supplyTarget.apply(source.name());
+            ServerAcceptReplyState state = new ServerAcceptReplyState(replyStreamId, loopBackTarget);
+            loopBackTarget.doBegin(replyStreamId, 0L, sourceCorrelationId);
             this.correlation = new Correlation<ServerAcceptReplyState>(sourceCorrelationId, source.routableName(),
                     OUTPUT_ESTABLISHED, state);
-            target.setThrottle(targetId, this::handleThrottle);
-            throttleState = this::throttleStoreServerAcceptReplyWindow;
+            loopBackTarget.setThrottle(targetId, this::loopBackThrottle);
 
             doSourceWindow(maximumHeadersSize);
         }
@@ -526,7 +524,16 @@ public final class SourceInputStreamFactory
             Matcher versionMatcher = versionPattern.matcher(start[2]);
             if (!versionMatcher.matches())
             {
-                processInvalidRequest(505, "HTTP Version Not Supported");
+                Pattern validVersionPattern = Pattern.compile("HTTP/(\\d)\\.(\\d)");
+                Matcher validVersionMatcher = validVersionPattern.matcher(start[2]);
+                if (validVersionMatcher.matches())
+                {
+                    processInvalidRequest(505, "HTTP Version Not Supported");
+                }
+                else
+                {
+                    processInvalidRequest(400, "Bad Request");
+                }
             }
             else
             {
@@ -825,7 +832,7 @@ public final class SourceInputStreamFactory
             }
         }
 
-        private void throttleStoreServerAcceptReplyWindow(
+        private void loopBackThrottle(
             int msgTypeId,
             DirectBuffer buffer,
             int index,

@@ -68,8 +68,8 @@ public class ArchitectureIT
     @Test
     @Specification({
         "${route}/input/new/controller",
-        "${client}/request.version.http.1.2+/client",
-        "${server}/request.version.http.1.2+/server" })
+        "${client}/request.version.1.2+/client",
+        "${server}/request.version.1.2+/server" })
     public void shouldRespondVersionHttp11WhenRequestVersionHttp12plus() throws Exception
     {
         k3po.finish();
@@ -105,7 +105,7 @@ public class ArchitectureIT
     @Test
     @Specification({
         "${route}/input/new/controller",
-        "${client}/request.version.not.http.1.x/client" })
+        "${client}/request.version.not.1.x/client" })
     public void shouldRejectRequestWhenVersionNotHttp1x() throws Exception
     {
         k3po.finish();
@@ -119,4 +119,5 @@ public class ArchitectureIT
     {
         k3po.finish();
     }
+
 }

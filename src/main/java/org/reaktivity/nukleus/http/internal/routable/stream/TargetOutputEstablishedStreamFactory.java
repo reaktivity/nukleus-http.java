@@ -235,11 +235,6 @@ public final class TargetOutputEstablishedStreamFactory
                     headers = headers0;
                 }
 
-                if (!targetStream.started)
-                {
-                    target.doBegin(targetStream.streamId, 0L, correlation.id());
-                    targetStream.started = true;
-                }
                 target.setThrottle(targetStream.streamId, this::handleThrottle);
 
                 this.sourceId = newSourceId;
@@ -343,6 +338,7 @@ public final class TargetOutputEstablishedStreamFactory
             {
                 target.doEnd(targetStream.streamId);
                 target.removeThrottle(targetStream.streamId);
+                targetStream.loopBackTarget.removeThrottle(targetStream.streamId);
                 this.streamState = this::streamAfterEnd;
             }
             else
