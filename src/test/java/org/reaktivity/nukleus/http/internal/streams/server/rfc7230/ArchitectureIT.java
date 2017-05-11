@@ -87,7 +87,7 @@ public class ArchitectureIT
     @Test
     @Specification({
         "${route}/input/new/controller",
-        "${server}/request.version.invalid/client" })
+        "${client}/request.version.invalid/client" })
     public void shouldRejectRequestWhenVersionInvalid() throws Exception
     {
         k3po.finish();
@@ -96,7 +96,7 @@ public class ArchitectureIT
     @Test
     @Specification({
         "${route}/input/new/controller",
-        "${server}/request.version.missing/client" })
+        "${client}/request.version.missing/client" })
     public void shouldRejectRequestWhenVersionMissing() throws Exception
     {
         k3po.finish();
@@ -105,7 +105,7 @@ public class ArchitectureIT
     @Test
     @Specification({
         "${route}/input/new/controller",
-        "${server}/request.version.not.http.1.x/client" })
+        "${client}/request.version.not.http.1.x/client" })
     public void shouldRejectRequestWhenVersionNotHttp1x() throws Exception
     {
         k3po.finish();
@@ -114,7 +114,7 @@ public class ArchitectureIT
     @Test
     @Specification({
         "${route}/input/new/controller",
-        "${server}/request.uri.with.user.info/client", })
+        "${client}/request.uri.with.user.info/client", })
     public void shouldRejectRequestWithUserInfo() throws Exception
     {
         k3po.finish();
