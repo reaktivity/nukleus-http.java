@@ -602,7 +602,7 @@ public final class SourceInputStreamFactory
             Map<String, String> headers = new LinkedHashMap<>();
             headers.put(":scheme", "http");
             headers.put(":method", start[0]);
-            headers.put(":path", requestURI.getPath());
+            headers.put(":path", requestURI.getRawPath());
 
             if (authority != null)
             {
