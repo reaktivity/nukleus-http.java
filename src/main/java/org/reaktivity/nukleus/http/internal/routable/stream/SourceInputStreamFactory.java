@@ -269,7 +269,10 @@ public final class SourceInputStreamFactory
             this.decoderState = this::decodeHttpBegin;
             this.streamState = this::streamAfterRejectOrReset;
             int writableBytes = Math.min(correlation.state().window, payload.capacity());
-            target.doData(targetId, payload, 0, writableBytes);
+            if (writableBytes > 0)
+            {
+                target.doData(targetId, payload, 0, writableBytes);
+            }
             if (writableBytes < payload.capacity())
             {
                 this.throttleState = new MessageHandler()
@@ -330,7 +333,7 @@ public final class SourceInputStreamFactory
             loopBackTarget.doBegin(replyStreamId, 0L, sourceCorrelationId);
             this.correlation = new Correlation<ServerAcceptReplyState>(sourceCorrelationId, source.routableName(),
                     OUTPUT_ESTABLISHED, state);
-            loopBackTarget.setThrottle(targetId, this::loopBackThrottle);
+            loopBackTarget.setThrottle(replyStreamId, this::loopBackThrottle);
 
             doSourceWindow(maximumHeadersSize);
         }
