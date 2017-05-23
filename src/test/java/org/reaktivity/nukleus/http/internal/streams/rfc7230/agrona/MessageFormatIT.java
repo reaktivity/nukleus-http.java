@@ -13,12 +13,11 @@
  * License for the specific language governing permissions and limitations
  * under the License.
  */
-package org.reaktivity.nukleus.http.internal.streams.client.rfc7230;
+package org.reaktivity.nukleus.http.internal.streams.rfc7230.agrona;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.rules.RuleChain.outerRule;
 
-import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.DisableOnDebug;
@@ -28,11 +27,11 @@ import org.kaazing.k3po.junit.annotation.Specification;
 import org.kaazing.k3po.junit.rules.K3poRule;
 import org.reaktivity.reaktor.test.NukleusRule;
 
-public class ConnectionManagementIT
+public class MessageFormatIT
 {
     private final K3poRule k3po = new K3poRule()
             .addScriptRoot("route", "org/reaktivity/specification/nukleus/http/control/route")
-            .addScriptRoot("streams", "org/reaktivity/specification/nukleus/http/streams/rfc7230/connection.management");
+            .addScriptRoot("streams", "org/reaktivity/specification/nukleus/http/streams/rfc7230/message.format/agrona");
 
     private final TestRule timeout = new DisableOnDebug(new Timeout(5, SECONDS));
 
@@ -53,9 +52,9 @@ public class ConnectionManagementIT
     @Test
     @Specification({
         "${route}/input/new/controller",
-        "${streams}/response.status.101.with.upgrade/server/source",
-        "${streams}/response.status.101.with.upgrade/server/target" })
-    public void shouldSwitchProtocolAfterUpgrade() throws Exception
+        "${streams}/request.with.content.length/server/source",
+        "${streams}/request.with.content.length/server/target" })
+    public void shouldAcceptRequestWithContentLength() throws Exception
     {
         k3po.start();
         k3po.awaitBarrier("ROUTED_INPUT");
@@ -66,9 +65,9 @@ public class ConnectionManagementIT
     @Test
     @Specification({
         "${route}/input/new/controller",
-        "${streams}/multiple.requests/server/source",
-        "${streams}/multiple.requests/server/target" })
-    public void shouldAcceptMultipleRequests() throws Exception
+        "${streams}/request.with.headers/server/source",
+        "${streams}/request.with.headers/server/target" })
+    public void shouldAcceptRequestWithHeaders() throws Exception
     {
         k3po.start();
         k3po.awaitBarrier("ROUTED_INPUT");
@@ -79,9 +78,9 @@ public class ConnectionManagementIT
     @Test
     @Specification({
         "${route}/input/new/controller",
-        "${streams}/multiple.requests.same.connection/server/source",
-        "${streams}/multiple.requests.same.connection/server/target" })
-    public void shouldAcceptMultipleRequestsOnSameConnection() throws Exception
+        "${streams}/response.with.content.length/server/source",
+        "${streams}/response.with.content.length/server/target" })
+    public void shouldWriteResponseWithContentLength() throws Exception
     {
         k3po.start();
         k3po.awaitBarrier("ROUTED_INPUT");
@@ -92,9 +91,9 @@ public class ConnectionManagementIT
     @Test
     @Specification({
         "${route}/output/new/controller",
-        "${streams}/response.status.101.with.upgrade/client/source",
-        "${streams}/response.status.101.with.upgrade/client/target" })
-    public void shouldSwitchProtocolAfterUpgradeClient() throws Exception
+        "${streams}/response.with.content.length/client/source",
+        "${streams}/response.with.content.length/client/target" })
+    public void shouldAcceptResponseWithContentLength() throws Exception
     {
         k3po.start();
         k3po.awaitBarrier("ROUTED_OUTPUT");
@@ -105,9 +104,9 @@ public class ConnectionManagementIT
     @Test
     @Specification({
         "${route}/output/new/controller",
-        "${streams}/multiple.requests/client/source",
-        "${streams}/multiple.requests/client/target" })
-    public void shouldIssueMultipleRequests() throws Exception
+        "${streams}/response.with.headers/client/source",
+        "${streams}/response.with.headers/client/target" })
+    public void shouldAcceptResponseWithHeaders() throws Exception
     {
         k3po.start();
         k3po.awaitBarrier("ROUTED_OUTPUT");
@@ -118,14 +117,27 @@ public class ConnectionManagementIT
     @Test
     @Specification({
         "${route}/output/new/controller",
-        "${streams}/multiple.requests.same.connection/client/source",
-        "${streams}/multiple.requests.same.connection/client/target" })
-    @Ignore("Not yet supported")
-    public void shouldIssueMultipleRequestsUsingConnectionPool() throws Exception
+        "${streams}/request.with.headers/client/source",
+        "${streams}/request.with.headers/client/target" })
+    public void shouldWriteRequestWithHeaders() throws Exception
     {
         k3po.start();
         k3po.awaitBarrier("ROUTED_OUTPUT");
         k3po.notifyBarrier("ROUTED_INPUT");
         k3po.finish();
     }
+
+    @Test
+    @Specification({
+        "${route}/output/new/controller",
+        "${streams}/request.with.content.length/client/source",
+        "${streams}/request.with.content.length/client/target" })
+    public void shouldWriteRequestWithContentLength() throws Exception
+    {
+        k3po.start();
+        k3po.awaitBarrier("ROUTED_OUTPUT");
+        k3po.notifyBarrier("ROUTED_INPUT");
+        k3po.finish();
+    }
+
 }
