@@ -32,7 +32,8 @@ public class ConnectionManagementIT
 {
     private final K3poRule k3po = new K3poRule()
             .addScriptRoot("route", "org/reaktivity/specification/nukleus/http/control/route")
-            .addScriptRoot("streams", "org/reaktivity/specification/nukleus/http/streams/rfc7230/connection.management/agrona");
+            .addScriptRoot("client", "org/reaktivity/specification/nukleus/http/streams/rfc7230/connection.management")
+            .addScriptRoot("server", "org/reaktivity/specification/http/rfc7230/connection.management");
 
     private final TestRule timeout = new DisableOnDebug(new Timeout(5, SECONDS));
 
@@ -40,92 +41,155 @@ public class ConnectionManagementIT
         .directory("target/nukleus-itests")
         .commandBufferCapacity(1024)
         .responseBufferCapacity(1024)
-        .counterValuesBufferCapacity(1024)
-        .streams("http", "source")
-        .streams("source", "http#source")
-        .streams("target", "http#source")
-        .streams("http", "target")
-        .streams("source", "http#target");
+        .counterValuesBufferCapacity(1024);
 
     @Rule
     public final TestRule chain = outerRule(nukleus).around(k3po).around(timeout);
 
     @Test
     @Specification({
-        "${route}/input/new/controller",
-        "${streams}/response.status.101.with.upgrade/server/source",
-        "${streams}/response.status.101.with.upgrade/server/target" })
-    public void shouldSwitchProtocolAfterUpgrade() throws Exception
+        "${route}/output/new/controller",
+        "${client}/request.with.connection.close/client",
+        "${server}/request.with.connection.close/server" })
+    public void clientAndServerMustCloseConnectionAfterRequestWithConnectionClose() throws Exception
     {
-        k3po.start();
-        k3po.awaitBarrier("ROUTED_INPUT");
-        k3po.notifyBarrier("ROUTED_OUTPUT");
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${route}/input/new/controller",
-        "${streams}/multiple.requests/server/source",
-        "${streams}/multiple.requests/server/target" })
-    public void shouldAcceptMultipleRequests() throws Exception
-    {
-        k3po.start();
-        k3po.awaitBarrier("ROUTED_INPUT");
-        k3po.notifyBarrier("ROUTED_OUTPUT");
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${route}/input/new/controller",
-        "${streams}/multiple.requests.same.connection/server/source",
-        "${streams}/multiple.requests.same.connection/server/target" })
-    public void shouldAcceptMultipleRequestsOnSameConnection() throws Exception
-    {
-        k3po.start();
-        k3po.awaitBarrier("ROUTED_INPUT");
-        k3po.notifyBarrier("ROUTED_OUTPUT");
         k3po.finish();
     }
 
     @Test
     @Specification({
         "${route}/output/new/controller",
-        "${streams}/response.status.101.with.upgrade/client/source",
-        "${streams}/response.status.101.with.upgrade/client/target" })
-    public void shouldSwitchProtocolAfterUpgradeClient() throws Exception
+        "${client}response.with.connection.close/client",
+        "${server}response.with.connection.close/server" })
+    public void serverMustCloseConnectionAfterResponseWithConnectionClose() throws Exception
     {
-        k3po.start();
-        k3po.awaitBarrier("ROUTED_OUTPUT");
-        k3po.notifyBarrier("ROUTED_INPUT");
         k3po.finish();
     }
 
     @Test
     @Specification({
         "${route}/output/new/controller",
-        "${streams}/multiple.requests/client/source",
-        "${streams}/multiple.requests/client/target" })
-    public void shouldIssueMultipleRequests() throws Exception
+        "${client}/multiple.requests.same.connection/client",
+        "${server}/multiple.requests.same.connection/server" })
+    public void connectionsShouldPersistByDefault() throws Exception
     {
-        k3po.start();
-        k3po.awaitBarrier("ROUTED_OUTPUT");
-        k3po.notifyBarrier("ROUTED_INPUT");
         k3po.finish();
     }
 
     @Test
     @Specification({
         "${route}/output/new/controller",
-        "${streams}/multiple.requests.same.connection/client/source",
-        "${streams}/multiple.requests.same.connection/client/target" })
-    @Ignore("Not yet supported")
-    public void shouldIssueMultipleRequestsUsingConnectionPool() throws Exception
+        "${client}/multiple.requests.pipelined/client",
+        "${server}/multiple.requests.pipelined/server" })
+    public void shouldSupporttHttpPipelining() throws Exception
     {
-        k3po.start();
-        k3po.awaitBarrier("ROUTED_OUTPUT");
-        k3po.notifyBarrier("ROUTED_INPUT");
         k3po.finish();
     }
+
+    @Test
+    @Specification({
+        "${route}/output/new/controller",
+        "${client}/multiple.requests.pipelined.with.retry/client",
+        "${server}/multiple.requests.pipelined.with.retry/server" })
+    @Ignore("Only relevant for use of http nukleus as a client. " +
+        "Fails due to the following error during processing of the client abort command: " +
+            " Missing file for streams: ...target/nukleus-itests/source/streams/http")
+    public void clientWithPipeliningMustNotRetryPipeliningImmediatelyAfterFailure() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/output/new/controller",
+        "${client}/first.pipelined.response.has.connection.close/client",
+        "${server}/first.pipelined.response.has.connection.close/server" })
+    public void clientMustNotReuseConnectionWhenReceivesConnectionClose() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/output/new/controller",
+        "${client}/upgrade.request.and.response/client",
+        "${server}/upgrade.request.and.response/server" })
+    public void upgradeRequestandResponse() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/output/new/controller",
+        "${client}/request.and.upgrade.required.response/client",
+        "${server}/request.and.upgrade.required.response/server" })
+    public void requestAndUpgradeRequiredResponse() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/output/new/controller",
+        "${client}/upgrade.request.and.response.with.data/client",
+        "${server}/upgrade.request.and.response.with.data/server" })
+    public void upgradeRequestAndResponseWithData() throws Exception
+    {
+        k3po.finish();
+    }
+
+    // Proxy tests only have "cooked" versions
+
+    /**
+     * See <a href="https://tools.ietf.org/html/rfc7230#section-6.1">RFC 7230 section 6.1: Connection</a>.
+     *
+     * In order to avoid confusing downstream recipients, a proxy or gateway MUST remove or replace any received
+     * connection options before forwarding the message.
+     *
+     * @throws Exception when K3PO is not started
+     */
+    @Test
+    @Specification({
+        "${route}/output/new/controller",
+        "${server}/proxy.must.not.forward.connection.header/client",
+        "${server}/proxy.must.not.forward.connection.header/proxy",
+        "${server}/proxy.must.not.forward.connection.header/backend" })
+    @Ignore("http proxy not yet implemented")
+    public void intermediaryMustRemoveConnectionHeaderOnForwardRequest() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/output/new/controller",
+            "${server}/reverse.proxy.connection.established/client",
+            "${server}/reverse.proxy.connection.established/proxy",
+            "${server}/reverse.proxy.connection.established/backend" })
+    @Ignore("http proxy not yet implemented")
+    public void reverseProxyConnectionEstablished() throws Exception
+    {
+        k3po.finish();
+    }
+
+    /**
+     * See <a href="https://tools.ietf.org/html/rfc7230#section-6.3.1">RFC 7230 section 6.3.1: Retrying Requests</a>.
+     *
+     * A proxy MUST NOT automatically retry non-idempotent requests.
+     *
+     * @throws Exception when K3PO is not started
+     */
+    @Test
+    @Specification({
+        "${route}/output/new/controller",
+        "${server}/proxy.must.not.retry.non.idempotent.requests/client",
+        "${server}/proxy.must.not.retry.non.idempotent.requests/proxy",
+        "${server}/proxy.must.not.retry.non.idempotent.requests/backend" })
+    @Ignore("http proxy not yet implemented")
+    public void proxyMustNotRetryNonIdempotentRequests() throws Exception
+    {
+        k3po.finish();
+    }
+
 }
