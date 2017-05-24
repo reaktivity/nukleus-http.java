@@ -51,6 +51,7 @@ public class ConnectionManagementIT
         "${route}/output/new/controller",
         "${client}/request.with.connection.close/client",
         "${server}/request.with.connection.close/server" })
+    @Ignore("TODO: SourceOutputStream should propagate high-level END after connection:close")
     public void clientAndServerMustCloseConnectionAfterRequestWithConnectionClose() throws Exception
     {
         k3po.finish();
@@ -61,7 +62,9 @@ public class ConnectionManagementIT
         "${route}/output/new/controller",
         "${client}response.with.connection.close/client",
         "${server}response.with.connection.close/server" })
-    public void serverMustCloseConnectionAfterResponseWithConnectionClose() throws Exception
+    @Ignore("TODO: as part of connection pooling TargetInputEstablishedStream should " +
+            "send END on target output after getting response with connection:close")
+    public void responseWithConnectionClose() throws Exception
     {
         k3po.finish();
     }
@@ -71,6 +74,7 @@ public class ConnectionManagementIT
         "${route}/output/new/controller",
         "${client}/multiple.requests.same.connection/client",
         "${server}/multiple.requests.same.connection/server" })
+    @Ignore("TODO: implement connection pooling so this test passes")
     public void connectionsShouldPersistByDefault() throws Exception
     {
         k3po.finish();
@@ -81,6 +85,7 @@ public class ConnectionManagementIT
         "${route}/output/new/controller",
         "${client}/multiple.requests.pipelined/client",
         "${server}/multiple.requests.pipelined/server" })
+    @Ignore("Issuing pipelined requests is not yet implemented")
     public void shouldSupporttHttpPipelining() throws Exception
     {
         k3po.finish();
@@ -91,9 +96,7 @@ public class ConnectionManagementIT
         "${route}/output/new/controller",
         "${client}/multiple.requests.pipelined.with.retry/client",
         "${server}/multiple.requests.pipelined.with.retry/server" })
-    @Ignore("Only relevant for use of http nukleus as a client. " +
-        "Fails due to the following error during processing of the client abort command: " +
-            " Missing file for streams: ...target/nukleus-itests/source/streams/http")
+    @Ignore("Issuing pipelined requests is not yet implemented")
     public void clientWithPipeliningMustNotRetryPipeliningImmediatelyAfterFailure() throws Exception
     {
         k3po.finish();
@@ -104,6 +107,7 @@ public class ConnectionManagementIT
         "${route}/output/new/controller",
         "${client}/first.pipelined.response.has.connection.close/client",
         "${server}/first.pipelined.response.has.connection.close/server" })
+    @Ignore("Issuing pipelined requests is not yet implemented")
     public void clientMustNotReuseConnectionWhenReceivesConnectionClose() throws Exception
     {
         k3po.finish();

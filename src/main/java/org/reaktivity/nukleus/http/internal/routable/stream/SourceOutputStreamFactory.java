@@ -15,11 +15,11 @@
  */
 package org.reaktivity.nukleus.http.internal.routable.stream;
 
-import static java.lang.Character.toUpperCase;
 import static java.nio.charset.StandardCharsets.US_ASCII;
 import static org.reaktivity.nukleus.http.internal.routable.Route.headersMatch;
 import static org.reaktivity.nukleus.http.internal.routable.stream.Slab.NO_SLOT;
 import static org.reaktivity.nukleus.http.internal.router.RouteKind.INPUT_ESTABLISHED;
+import static org.reaktivity.nukleus.http.internal.util.HttpUtil.appendHeader;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -273,8 +273,7 @@ public final class SourceOutputStreamFactory
                         }
                         break;
                     default:
-                        headersChars.append(toUpperCase(name.charAt(0))).append(name.substring(1))
-                        .append(": ").append(value).append("\r\n");
+                        appendHeader(headersChars, name, value);
                     }
                 });
 
