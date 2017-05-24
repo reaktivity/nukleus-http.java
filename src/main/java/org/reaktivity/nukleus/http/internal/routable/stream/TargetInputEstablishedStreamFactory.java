@@ -353,7 +353,12 @@ public final class TargetInputEstablishedStreamFactory
             final int offset,
             final int limit)
         {
-            final int endOfHeadersAt = limitOfBytes(payload, offset, limit, CRLFCRLF_BYTES);
+            // Beware of fragmented CRLFCRLF: up to the last three bytes could be on the slab
+            MutableDirectBuffer buffer = slab.buffer(slotIndex);
+            final int endOfHeadersAt = limitOfBytes(
+                    buffer, Math.max(0, slotPosition-3), slotPosition,
+                    payload, offset, limit, CRLFCRLF_BYTES);
+
             if (window < 2 && endOfHeadersAt == -1)
             {
                 slab.release(slotIndex);
@@ -362,7 +367,6 @@ public final class TargetInputEstablishedStreamFactory
             else
             {
                 int length = endOfHeadersAt == -1 ? limit - offset : endOfHeadersAt - offset;
-                MutableDirectBuffer buffer = slab.buffer(slotIndex);
                 buffer.putBytes(slotPosition, payload, offset, length);
                 slotPosition += length;
                 if (endOfHeadersAt != -1)
