@@ -37,7 +37,7 @@ final class ServerAcceptReplyState
     public String toString()
     {
         return String.format(
-                "[streamId=%016x, target=%s, window=%d, started=%b, pendingRequests=%d, endRequested=%b]",
+                "%s[streamId=%016x, target=%s, window=%d, started=%b, pendingRequests=%d, endRequested=%b]",
                 getClass().getSimpleName(), streamId, loopBackTarget, window, pendingRequests, endRequested);
     }
 

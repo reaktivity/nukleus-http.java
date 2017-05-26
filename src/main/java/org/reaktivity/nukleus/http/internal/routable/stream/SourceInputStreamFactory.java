@@ -331,7 +331,7 @@ public final class SourceInputStreamFactory
             Target loopBackTarget = supplyTarget.apply(source.name());
             ServerAcceptReplyState state = new ServerAcceptReplyState(replyStreamId, loopBackTarget);
             loopBackTarget.doBegin(replyStreamId, 0L, sourceCorrelationId);
-            this.correlation = new Correlation<ServerAcceptReplyState>(sourceCorrelationId, source.routableName(),
+            this.correlation = new Correlation<>(sourceCorrelationId, source.routableName(),
                     OUTPUT_ESTABLISHED, state);
             loopBackTarget.setThrottle(replyStreamId, this::loopBackThrottle);
 

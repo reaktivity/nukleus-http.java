@@ -20,6 +20,7 @@ import static org.reaktivity.nukleus.http.internal.routable.stream.Slab.NO_SLOT;
 import static org.reaktivity.nukleus.http.internal.util.BufferUtil.limitOfBytes;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Function;
@@ -99,6 +100,7 @@ public final class TargetInputEstablishedStreamFactory
         private long sourceCorrelationId;
         private int window;
         private int contentRemaining;
+        private ClientConnectReplyState clientConnectReplyState;
         private int sourceUpdateDeferred;
         private int availableTargetWindow;
 
@@ -243,7 +245,10 @@ public final class TargetInputEstablishedStreamFactory
             final long sourceRef = beginRO.referenceId();
             final long targetCorrelationId = beginRO.correlationId();
 
-            final Correlation<?> correlation = correlateEstablished.apply(targetCorrelationId);
+            @SuppressWarnings("unchecked")
+            final Correlation<ClientConnectReplyState> correlation =
+                    (Correlation<ClientConnectReplyState>) correlateEstablished.apply(targetCorrelationId);
+            clientConnectReplyState = correlation.state();
 
             if (sourceRef == 0L && correlation != null)
             {
@@ -469,11 +474,23 @@ public final class TargetInputEstablishedStreamFactory
                         hs -> headers.forEach((k, v) -> hs.item(i -> i.name(k).value(v))));
                 target.setThrottle(targetId, this::handleThrottle);
 
-                boolean hasUpgrade = headers.containsKey("upgrade");
+                boolean upgraded = "101".equals(headers.get(":status"));
+                String connectionOptions = headers.get("connection");
+                if (connectionOptions != null)
+                {
+                    Arrays.asList(connectionOptions.toLowerCase().split(",")).stream().forEach((element) ->
+                    {
+                        if (element.equals("close"))
+                        {
+                            clientConnectReplyState.connection.persistent = false;
+                        }
+                    });
+                }
 
                 // TODO: wait for 101 first
-                if (hasUpgrade)
+                if (upgraded)
                 {
+                    clientConnectReplyState.connection.persistent = false;
                     this.decoderState = this::decodeHttpDataAfterUpgrade;
                 }
                 else
@@ -485,10 +502,14 @@ public final class TargetInputEstablishedStreamFactory
                 sourceUpdateDeferred += length;
                 this.throttleState = this::throttleBeforeWindowOrReset;
 
-                if (!hasUpgrade && contentRemaining == 0)
+                if (contentRemaining == 0)
                 {
                     // no content
-                    target.doHttpEnd(targetId);
+                    if (!upgraded)
+                    {
+                        target.doHttpEnd(targetId);
+                    }
+                    clientConnectReplyState.releaseConnection(upgraded);
                 }
             }
         }
@@ -532,6 +553,7 @@ public final class TargetInputEstablishedStreamFactory
             if (contentRemaining == 0)
             {
                 target.doHttpEnd(targetId);
+                clientConnectReplyState.releaseConnection(false);
 
                 this.throttleState = this::throttleBeforeWindowOrReset;
             }
@@ -556,6 +578,7 @@ public final class TargetInputEstablishedStreamFactory
         {
             // TODO: consider chunks, trailers
             target.doHttpEnd(targetId);
+            clientConnectReplyState.releaseConnection(false);
             return limit;
         }
 
