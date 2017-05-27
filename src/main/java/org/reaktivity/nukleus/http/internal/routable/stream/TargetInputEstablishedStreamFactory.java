@@ -60,6 +60,7 @@ public final class TargetInputEstablishedStreamFactory
     private final Function<String, Target> supplyTarget;
     private final LongSupplier supplyStreamId;
     private final LongFunction<Correlation<?>> correlateEstablished;
+    private final LongFunction<Correlation<?>> lookupEstablished;
     private final int maximumHeadersSize;
     private final Slab slab;
 
@@ -67,13 +68,15 @@ public final class TargetInputEstablishedStreamFactory
             Source source,
             Function<String, Target> supplyTarget,
             LongSupplier supplyStreamId,
-            LongFunction<Correlation<?>> correlateEstablished2,
+            LongFunction<Correlation<?>> correlateEstablished,
+            LongFunction<Correlation<?>> lookupEstablished,
             Slab slab)
     {
         this.source = source;
         this.supplyTarget = supplyTarget;
         this.supplyStreamId = supplyStreamId;
-        this.correlateEstablished = correlateEstablished2;
+        this.correlateEstablished = correlateEstablished;
+        this.lookupEstablished = lookupEstablished;
         this.slab = slab;
         this.maximumHeadersSize = slab.slotCapacity();
     }
@@ -101,9 +104,8 @@ public final class TargetInputEstablishedStreamFactory
         private int window;
         private int contentRemaining;
         private ClientConnectReplyState clientConnectReplyState;
-        private int sourceUpdateDeferred;
+        private long clientConnectCorrelationId;
         private int availableTargetWindow;
-
         @Override
         public String toString()
         {
@@ -243,29 +245,15 @@ public final class TargetInputEstablishedStreamFactory
 
             this.sourceId = beginRO.streamId();
             final long sourceRef = beginRO.referenceId();
-            final long targetCorrelationId = beginRO.correlationId();
+            this.clientConnectCorrelationId = beginRO.correlationId();
 
-            @SuppressWarnings("unchecked")
-            final Correlation<ClientConnectReplyState> correlation =
-                    (Correlation<ClientConnectReplyState>) correlateEstablished.apply(targetCorrelationId);
-            clientConnectReplyState = correlation.state();
+            final Correlation<?> correlation = lookupEstablished.apply(clientConnectCorrelationId);
 
             if (sourceRef == 0L && correlation != null)
             {
-                this.target = supplyTarget.apply(correlation.source());
-                this.targetId = supplyStreamId.getAsLong();
-                this.sourceCorrelationId = correlation.id();
-
                 this.streamState = this::streamAfterBeginOrData;
                 this.decoderState = this::decodeHttpBegin;
-
-                this.window += maximumHeadersSize;
-
-                // Make sure we don't advertise more window than available target window
-                // once we have started the stream on the target
-                this.sourceUpdateDeferred -= maximumHeadersSize;
-
-                source.doWindow(sourceId, maximumHeadersSize);
+                ensureSourceWindow(maximumHeadersSize);
             }
             else
             {
@@ -470,6 +458,8 @@ public final class TargetInputEstablishedStreamFactory
                 final Map<String, String> headers = decodeHttpHeaders(start, lines);
                 // TODO: replace with lightweight approach (end)
 
+                resolveTarget();
+
                 target.doHttpBegin(targetId, 0L, sourceCorrelationId,
                         hs -> headers.forEach((k, v) -> hs.item(i -> i.name(k).value(v))));
                 target.setThrottle(targetId, this::handleThrottle);
@@ -499,7 +489,6 @@ public final class TargetInputEstablishedStreamFactory
                     this.decoderState = this::decodeHttpData;
                 }
 
-                sourceUpdateDeferred += length;
                 this.throttleState = this::throttleBeforeWindowOrReset;
 
                 if (contentRemaining == 0)
@@ -507,9 +496,12 @@ public final class TargetInputEstablishedStreamFactory
                     // no content
                     if (!upgraded)
                     {
-                        target.doHttpEnd(targetId);
+                        httpResponseComplete();
                     }
-                    clientConnectReplyState.releaseConnection(upgraded);
+                    else
+                    {
+                        clientConnectReplyState.releaseConnection(upgraded);
+                    }
                 }
             }
         }
@@ -552,10 +544,7 @@ public final class TargetInputEstablishedStreamFactory
 
             if (contentRemaining == 0)
             {
-                target.doHttpEnd(targetId);
-                clientConnectReplyState.releaseConnection(false);
-
-                this.throttleState = this::throttleBeforeWindowOrReset;
+                httpResponseComplete();
             }
 
             return offset + length;
@@ -580,6 +569,37 @@ public final class TargetInputEstablishedStreamFactory
             target.doHttpEnd(targetId);
             clientConnectReplyState.releaseConnection(false);
             return limit;
+        }
+
+        private void resolveTarget()
+        {
+            @SuppressWarnings("unchecked")
+            final Correlation<ClientConnectReplyState> correlation =
+                    (Correlation<ClientConnectReplyState>) correlateEstablished.apply(clientConnectCorrelationId);
+
+            clientConnectReplyState = correlation.state();
+            this.target = supplyTarget.apply(correlation.source());
+            this.targetId = supplyStreamId.getAsLong();
+            this.sourceCorrelationId = correlation.id();
+            this.availableTargetWindow = 0;
+        }
+
+        private void httpResponseComplete()
+        {
+            target.doHttpEnd(targetId);
+            target.removeThrottle(targetId);
+            boolean persistent = clientConnectReplyState.connection.persistent;
+            clientConnectReplyState.releaseConnection(false);
+            if (persistent)
+            {
+                this.streamState = this::streamAfterBeginOrData;
+                this.decoderState = this::decodeHttpBegin;
+                ensureSourceWindow(maximumHeadersSize);
+            }
+            else
+            {
+                this.streamState = this::streamAfterReplyOrReset;
+            }
         }
 
         private void handleThrottle(
@@ -652,8 +672,8 @@ public final class TargetInputEstablishedStreamFactory
         {
             windowRO.wrap(buffer, index, index + length);
             int update = windowRO.update();
-            doSourceWindow(update);
             availableTargetWindow += update;
+            ensureSourceWindow(availableTargetWindow);
             processDeferredData();
         }
 
@@ -669,7 +689,7 @@ public final class TargetInputEstablishedStreamFactory
             // with the initial window we gave to source
             slotOffset += writableBytes;
             bytesDeferred -= writableBytes;
-            if (sourceUpdateDeferred >= 0 && bytesDeferred == 0)
+            if (availableTargetWindow >= window && bytesDeferred == 0)
             {
                 slab.release(slotIndex);
                 slotIndex = NO_SLOT;
@@ -691,22 +711,25 @@ public final class TargetInputEstablishedStreamFactory
             int length)
         {
             windowRO.wrap(buffer, index, index + length);
-
             int update = windowRO.update();
             doSourceWindow(update);
         }
 
         private void doSourceWindow(int update)
         {
-            sourceUpdateDeferred += update;
-            if (sourceUpdateDeferred > 0)
-            {
-                window += sourceUpdateDeferred;
-                source.doWindow(sourceId, sourceUpdateDeferred + framing(sourceUpdateDeferred));
-                sourceUpdateDeferred = 0;
-            }
+            window += update;
+            source.doWindow(sourceId, update + framing(update));
         }
 
+        private void ensureSourceWindow(int requiredWindow)
+        {
+            if (requiredWindow > window)
+            {
+                int update = requiredWindow - window;
+                doSourceWindow(update);
+                window = requiredWindow;
+            }
+        }
 
         private void processReset(
             DirectBuffer buffer,

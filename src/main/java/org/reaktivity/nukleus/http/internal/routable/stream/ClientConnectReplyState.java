@@ -19,15 +19,15 @@ import org.reaktivity.nukleus.http.internal.routable.stream.ConnectionPool.Conne
 
 final class ClientConnectReplyState
 {
+    private final ConnectionPool connectionPool;
     final Connection connection;
-    final ConnectionPool connectionPool;
     int pendingResponses;
 
     ClientConnectReplyState(ConnectionPool connectionPool,
                             Connection connection)
     {
-       this.connection = connection;
        this.connectionPool = connectionPool;
+       this.connection = connection;
        this.pendingResponses = 1;
     }
 

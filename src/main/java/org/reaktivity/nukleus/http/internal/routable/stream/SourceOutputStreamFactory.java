@@ -121,7 +121,7 @@ public final class SourceOutputStreamFactory
         private Connection connection;
         private ConnectionRequest nextConnectionRequest;
         private ConnectionPool connectionPool;
-        private int window;
+        private int sourceWindow;
         private int slotIndex;
         private int slotPosition;
         private int slotOffset;
@@ -342,6 +342,7 @@ public final class SourceOutputStreamFactory
                             break;
                         }
                     });
+                    appendHeader(headersChars, name, value);
                     break;
                 default:
                     appendHeader(headersChars, name, value);
@@ -377,8 +378,8 @@ public final class SourceOutputStreamFactory
         {
             dataRO.wrap(buffer, index, index + length);
 
-            window -= dataRO.length();
-            if (window < 0)
+            sourceWindow -= dataRO.length();
+            if (sourceWindow < 0)
             {
                 processUnexpected(buffer, index, length);
             }
@@ -386,6 +387,7 @@ public final class SourceOutputStreamFactory
             {
                 final OctetsFW payload = dataRO.payload();
                 target.doData(connection.targetId, payload);
+                connection.window -= payload.sizeof();
             }
         }
 
@@ -455,7 +457,9 @@ public final class SourceOutputStreamFactory
             switch (msgTypeId)
             {
             case WindowFW.TYPE_ID:
-                processWindowToWriteRequestHeaders(buffer, index, length);
+                windowRO.wrap(buffer, index, index + length);
+                connection.window += windowRO.update();
+                useWindowToWriteRequestHeaders();
                 break;
             case ResetFW.TYPE_ID:
                 processReset(buffer, index, length);
@@ -475,7 +479,10 @@ public final class SourceOutputStreamFactory
             switch (msgTypeId)
             {
             case WindowFW.TYPE_ID:
-                processWindow(buffer, index, length);
+                windowRO.wrap(buffer, index, index + length);
+                int update = windowRO.update();
+                connection.window += update;
+                doSourceWindow(update);
                 break;
             case ResetFW.TYPE_ID:
                 processReset(buffer, index, length);
@@ -486,16 +493,12 @@ public final class SourceOutputStreamFactory
             }
         }
 
-        private void processWindowToWriteRequestHeaders(
-            DirectBuffer buffer,
-            int index,
-            int length)
+        private void useWindowToWriteRequestHeaders()
         {
-            windowRO.wrap(buffer, index, index + length);
-            int update = windowRO.update();
-            int writableBytes = Math.min(slotPosition - slotOffset, update);
+            int writableBytes = Math.min(slotPosition - slotOffset, connection.window);
             MutableDirectBuffer slot = slab.buffer(slotIndex);
             target.doData(connection.targetId, slot, slotOffset, writableBytes);
+            connection.window -= writableBytes;
             slotOffset += writableBytes;
             int bytesDeferred = slotPosition - slotOffset;
             if (bytesDeferred == 0)
@@ -510,29 +513,17 @@ public final class SourceOutputStreamFactory
                 {
                     streamState = this::streamAfterBeginOrData;
                     throttleState = this::throttleNextWindow;
-                    update -= writableBytes;
-                    if (update > 0)
+                    if (connection.window > 0)
                     {
-                        doWindow(update);
+                        doSourceWindow(connection.window);
                     }
                 }
             }
         }
 
-        private void processWindow(
-            DirectBuffer buffer,
-            int index,
-            int length)
+        private void doSourceWindow(int update)
         {
-            windowRO.wrap(buffer, index, index + length);
-
-            final int update = windowRO.update();
-            doWindow(update);
-        }
-
-        private void doWindow(int update)
-        {
-            window += update;
+            sourceWindow += update;
             source.doWindow(sourceId, update);
         }
 
@@ -586,6 +577,10 @@ public final class SourceOutputStreamFactory
                     new Correlation<>(correlationId, source.routableName(), INPUT_ESTABLISHED, state);
             correlateNew.accept(targetCorrelationId, correlation);
             target.setThrottle(connection.targetId, this::handleThrottle);
+            if (connection.window > 0)
+            {
+                useWindowToWriteRequestHeaders();
+            }
         }
     }
 }
