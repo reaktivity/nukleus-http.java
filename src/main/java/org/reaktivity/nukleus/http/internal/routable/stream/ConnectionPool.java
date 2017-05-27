@@ -88,13 +88,15 @@ final class ConnectionPool
         }
         if (nextRequest != null)
         {
-            acquire(nextRequest);
+            ConnectionRequest current = nextRequest;
+            nextRequest = nextRequest.next();
+            acquire(current);
         }
     }
 
     private void enqueue(ConnectionRequest request)
     {
-        if (request == null)
+        if (this.nextRequest == null)
         {
             this.nextRequest = request;
         }

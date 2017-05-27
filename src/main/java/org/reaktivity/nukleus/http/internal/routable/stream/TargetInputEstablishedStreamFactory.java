@@ -589,7 +589,6 @@ public final class TargetInputEstablishedStreamFactory
             target.doHttpEnd(targetId);
             target.removeThrottle(targetId);
             boolean persistent = clientConnectReplyState.connection.persistent;
-            clientConnectReplyState.releaseConnection(false);
             if (persistent)
             {
                 this.streamState = this::streamAfterBeginOrData;
@@ -600,6 +599,7 @@ public final class TargetInputEstablishedStreamFactory
             {
                 this.streamState = this::streamAfterReplyOrReset;
             }
+            clientConnectReplyState.releaseConnection(false);
         }
 
         private void handleThrottle(

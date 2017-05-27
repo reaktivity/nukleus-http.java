@@ -550,7 +550,6 @@ public final class SourceOutputStreamFactory
         @Override
         public Consumer<Connection> getConsumer()
         {
-            // TODO Auto-generated method stub
             return this;
         }
 
