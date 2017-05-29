@@ -66,4 +66,20 @@ public class ConnectionManagementPoolSize1IT
         k3po.finish();
     }
 
+    @Test
+    @Specification({
+        "${route}/output/new/controller",
+        "${client}/concurrent.upgrade.requests.and.responses.with.data/client",
+        "${server}/concurrent.upgrade.requests.and.responses.with.data/server" })
+    public void connectionsLimitShouldNotApplyToUpgradedConnections() throws Exception
+    {
+        k3po.start();
+        k3po.awaitBarrier("REQUEST_ONE_RECEIVED");
+        k3po.awaitBarrier("REQUEST_TWO_RECEIVED");
+        k3po.notifyBarrier("WRITE_DATA_REQUEST_ONE");
+        k3po.notifyBarrier("WRITE_DATA_REQUEST_TWO");
+        k3po.finish();
+    }
+
+
 }
