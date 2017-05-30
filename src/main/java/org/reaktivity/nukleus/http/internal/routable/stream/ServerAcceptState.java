@@ -19,7 +19,11 @@ import java.util.function.Function;
 
 import org.reaktivity.nukleus.http.internal.routable.Target;
 
-final class ServerAcceptReplyState
+/**
+ * This class represents state shared between the server accept (source input) and server accept reply
+ * (source output established) streams.
+ */
+final class ServerAcceptState
 {
     final long streamId;
     final Target loopBackTarget;
@@ -27,7 +31,7 @@ final class ServerAcceptReplyState
     int pendingRequests;
     public boolean endRequested;
 
-    ServerAcceptReplyState(long streamId, Target loopBackTarget)
+    ServerAcceptState(long streamId, Target loopBackTarget)
     {
         this.streamId = streamId;
         this.loopBackTarget = loopBackTarget;
