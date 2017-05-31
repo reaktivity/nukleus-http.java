@@ -477,7 +477,6 @@ public final class TargetInputEstablishedStreamFactory
                     });
                 }
 
-                // TODO: wait for 101 first
                 if (upgraded)
                 {
                     clientConnectReplyState.connection.persistent = false;
