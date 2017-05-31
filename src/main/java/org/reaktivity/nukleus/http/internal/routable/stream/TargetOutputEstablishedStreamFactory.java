@@ -89,7 +89,7 @@ public final class TargetOutputEstablishedStreamFactory
         private long sourceId;
 
         private Target target;
-        private ServerAcceptReplyState targetStream;
+        private ServerAcceptState targetStream;
 
         private int slotIndex;
         private int slotPosition;
@@ -218,8 +218,8 @@ public final class TargetOutputEstablishedStreamFactory
             final OctetsFW extension = beginRO.extension();
 
             @SuppressWarnings("unchecked")
-            final Correlation<ServerAcceptReplyState> correlation =
-                         (Correlation<ServerAcceptReplyState>) correlateEstablished.apply(targetCorrelationId);
+            final Correlation<ServerAcceptState> correlation =
+                         (Correlation<ServerAcceptState>) correlateEstablished.apply(targetCorrelationId);
 
             if (sourceRef == 0L && correlation != null)
             {
@@ -289,6 +289,7 @@ public final class TargetOutputEstablishedStreamFactory
                         slotOffset = 0;
                         this.streamState = this::streamBeforeHeadersWritten;
                         this.throttleState = this::throttleBeforeHeadersWritten;
+                        targetStream.replyTarget.setThrottle(targetStream.streamId, this::handleThrottle);
                         if (targetStream.window > 0)
                         {
                             useTargetWindowToWriteResponseHeaders();
@@ -337,7 +338,7 @@ public final class TargetOutputEstablishedStreamFactory
             {
                 target.doEnd(targetStream.streamId);
                 target.removeThrottle(targetStream.streamId);
-                targetStream.loopBackTarget.removeThrottle(targetStream.streamId);
+                targetStream.restoreInitialThrottle();
                 this.streamState = this::streamAfterEnd;
             }
             else

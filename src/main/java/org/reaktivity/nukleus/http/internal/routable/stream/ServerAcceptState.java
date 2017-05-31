@@ -17,20 +17,28 @@ package org.reaktivity.nukleus.http.internal.routable.stream;
 
 import java.util.function.Function;
 
+import org.agrona.concurrent.MessageHandler;
 import org.reaktivity.nukleus.http.internal.routable.Target;
 
-final class ServerAcceptReplyState
+/**
+ * This class represents state shared between the server accept (source input) and server accept reply
+ * (source output established) streams.
+ */
+final class ServerAcceptState
 {
     final long streamId;
-    final Target loopBackTarget;
+    final Target replyTarget;
+    private final MessageHandler initialThrottle;
     int window;
     int pendingRequests;
-    public boolean endRequested;
+    boolean endRequested;
 
-    ServerAcceptReplyState(long streamId, Target loopBackTarget)
+    ServerAcceptState(long streamId, Target replyTarget, MessageHandler initialThrottle)
     {
         this.streamId = streamId;
-        this.loopBackTarget = loopBackTarget;
+        this.replyTarget = replyTarget;
+        this.initialThrottle = initialThrottle;
+        replyTarget.setThrottle(streamId, initialThrottle);
     }
 
     @Override
@@ -38,20 +46,27 @@ final class ServerAcceptReplyState
     {
         return String.format(
                 "%s[streamId=%016x, target=%s, window=%d, started=%b, pendingRequests=%d, endRequested=%b]",
-                getClass().getSimpleName(), streamId, loopBackTarget, window, pendingRequests, endRequested);
+                getClass().getSimpleName(), streamId, replyTarget, window, pendingRequests, endRequested);
+    }
+
+    public void restoreInitialThrottle()
+    {
+        replyTarget.setThrottle(streamId, initialThrottle);
     }
 
     public void doEnd(Function<String, Target> supplyTarget)
     {
         if (pendingRequests == 0)
         {
-            loopBackTarget.doEnd(streamId);
-            loopBackTarget.removeThrottle(streamId);
+            replyTarget.doEnd(streamId);
+            replyTarget.removeThrottle(streamId);
         }
         else
         {
             endRequested = true;
         }
     }
+
 }
+
 

@@ -117,7 +117,7 @@ public final class SourceInputStreamFactory
         private int contentRemaining;
         private int availableTargetWindow;
         private boolean hasUpgrade;
-        private Correlation<ServerAcceptReplyState> correlation;
+        private Correlation<ServerAcceptState> correlation;
 
         @Override
         public String toString()
@@ -328,12 +328,11 @@ public final class SourceInputStreamFactory
 
             // Proactively issue BEGIN on server accept reply since we only support bidirectional transport
             long replyStreamId = supplyStreamId.getAsLong();
-            Target loopBackTarget = supplyTarget.apply(source.name());
-            ServerAcceptReplyState state = new ServerAcceptReplyState(replyStreamId, loopBackTarget);
-            loopBackTarget.doBegin(replyStreamId, 0L, sourceCorrelationId);
+            Target replyTarget = supplyTarget.apply(source.name());
+            ServerAcceptState state = new ServerAcceptState(replyStreamId, replyTarget, this::loopBackThrottle);
+            replyTarget.doBegin(replyStreamId, 0L, sourceCorrelationId);
             this.correlation = new Correlation<>(sourceCorrelationId, source.routableName(),
                     OUTPUT_ESTABLISHED, state);
-            loopBackTarget.setThrottle(replyStreamId, this::loopBackThrottle);
 
             doSourceWindow(maximumHeadersSize);
         }
