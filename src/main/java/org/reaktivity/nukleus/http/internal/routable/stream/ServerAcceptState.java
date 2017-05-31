@@ -17,6 +17,7 @@ package org.reaktivity.nukleus.http.internal.routable.stream;
 
 import java.util.function.Function;
 
+import org.agrona.concurrent.MessageHandler;
 import org.reaktivity.nukleus.http.internal.routable.Target;
 
 /**
@@ -27,22 +28,30 @@ final class ServerAcceptState
 {
     final long streamId;
     final Target replyTarget;
+    private final MessageHandler initialThrottle;
     int window;
     int pendingRequests;
     boolean endRequested;
 
-    ServerAcceptState(long streamId, Target replyTarget)
+    ServerAcceptState(long streamId, Target replyTarget, MessageHandler initialThrottle)
     {
         this.streamId = streamId;
         this.replyTarget = replyTarget;
+        this.initialThrottle = initialThrottle;
+        replyTarget.setThrottle(streamId, initialThrottle);
     }
 
     @Override
     public String toString()
     {
         return String.format(
-                "[streamId=%016x, target=%s, window=%d, started=%b, pendingRequests=%d, endRequested=%b]",
+                "%s[streamId=%016x, target=%s, window=%d, started=%b, pendingRequests=%d, endRequested=%b]",
                 getClass().getSimpleName(), streamId, replyTarget, window, pendingRequests, endRequested);
+    }
+
+    public void restoreInitialThrottle()
+    {
+        replyTarget.setThrottle(streamId, initialThrottle);
     }
 
     public void doEnd(Function<String, Target> supplyTarget)
@@ -59,4 +68,5 @@ final class ServerAcceptState
     }
 
 }
+
 

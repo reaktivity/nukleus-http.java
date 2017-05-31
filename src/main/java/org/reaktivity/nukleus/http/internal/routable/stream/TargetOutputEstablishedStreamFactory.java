@@ -338,7 +338,7 @@ public final class TargetOutputEstablishedStreamFactory
             {
                 target.doEnd(targetStream.streamId);
                 target.removeThrottle(targetStream.streamId);
-                targetStream.replyTarget.removeThrottle(targetStream.streamId);
+                targetStream.restoreInitialThrottle();
                 this.streamState = this::streamAfterEnd;
             }
             else
