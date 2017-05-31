@@ -17,43 +17,56 @@ package org.reaktivity.nukleus.http.internal.routable.stream;
 
 import java.util.function.Function;
 
+import org.agrona.concurrent.MessageHandler;
 import org.reaktivity.nukleus.http.internal.routable.Target;
 
-final class ServerConnectionState
+/**
+ * This class represents state shared between the server accept (source input) and server accept reply
+ * (source output established) streams.
+ */
+final class ServerAcceptState
 {
     final long streamId;
-    String target;
+    final Target replyTarget;
+    private final MessageHandler initialThrottle;
     int window;
-    boolean started;
     int pendingRequests;
-    public boolean endRequested;
+    boolean endRequested;
 
-    ServerConnectionState(long streamId, String target)
+    ServerAcceptState(long streamId, Target replyTarget, MessageHandler initialThrottle)
     {
         this.streamId = streamId;
-        this.target = target;
+        this.replyTarget = replyTarget;
+        this.initialThrottle = initialThrottle;
+        replyTarget.setThrottle(streamId, initialThrottle);
     }
 
     @Override
     public String toString()
     {
         return String.format(
-                "[streamId=%016x, target=%s, window=%d, started=%b, pendingRequests=%d, endRequested=%b]",
-                getClass().getSimpleName(), streamId, target, window, started, pendingRequests, endRequested);
+                "%s[streamId=%016x, target=%s, window=%d, started=%b, pendingRequests=%d, endRequested=%b]",
+                getClass().getSimpleName(), streamId, replyTarget, window, pendingRequests, endRequested);
+    }
+
+    public void restoreInitialThrottle()
+    {
+        replyTarget.setThrottle(streamId, initialThrottle);
     }
 
     public void doEnd(Function<String, Target> supplyTarget)
     {
         if (pendingRequests == 0)
         {
-            Target transportOutput = supplyTarget.apply(target);
-            transportOutput.doEnd(streamId);
-            // TODO: call a callback registered by TargetOutputEstablishedStream so it can clean up resources
+            replyTarget.doEnd(streamId);
+            replyTarget.removeThrottle(streamId);
         }
         else
         {
             endRequested = true;
         }
     }
+
 }
+
 

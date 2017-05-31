@@ -117,7 +117,7 @@ public final class SourceInputStreamFactory
         private int contentRemaining;
         private int availableTargetWindow;
         private boolean hasUpgrade;
-        private Correlation<ServerConnectionState> correlation;
+        private Correlation<ServerAcceptState> correlation;
 
         @Override
         public String toString()
@@ -255,15 +255,9 @@ public final class SourceInputStreamFactory
 
         private void processInvalidRequest(int status, String message)
         {
-            Target rejectTarget = supplyTarget.apply(source.name());
-            this.target = rejectTarget;
-
-            final long newTargetId = supplyStreamId.getAsLong();
-
-            // TODO: replace with connection pool (start)
-            rejectTarget.doBegin(newTargetId, 0L, sourceCorrelationId);
-            rejectTarget.setThrottle(newTargetId, this::handleThrottle);
-            // TODO: replace with connection pool (end)
+            Target serverAcceptReply = supplyTarget.apply(source.name());
+            long serverAcceptReplyStreamId = correlation.state().streamId;
+            switchTarget(serverAcceptReply, serverAcceptReplyStreamId);
 
             StringBuffer payloadText = new StringBuffer()
                     .append(String.format("HTTP/1.1 %d %s\r\n", status, message))
@@ -274,35 +268,47 @@ public final class SourceInputStreamFactory
 
             this.decoderState = this::decodeHttpBegin;
             this.streamState = this::streamAfterRejectOrReset;
-            this.throttleState = new MessageHandler()
+            int writableBytes = Math.min(correlation.state().window, payload.capacity());
+            if (writableBytes > 0)
             {
-                int offset = 0;
-
-                @Override
-                public void onMessage(int msgTypeId, MutableDirectBuffer buffer, int index, int length)
+                target.doData(targetId, payload, 0, writableBytes);
+            }
+            if (writableBytes < payload.capacity())
+            {
+                this.throttleState = new MessageHandler()
                 {
-                    switch (msgTypeId)
+                    int offset = 0;
+
+                    @Override
+                    public void onMessage(int msgTypeId, MutableDirectBuffer buffer, int index, int length)
                     {
-                    case WindowFW.TYPE_ID:
-                        windowRO.wrap(buffer, index, index + length);
-                        int update = windowRO.update();
-                        int writableBytes = Math.min(update, payload.capacity() - offset);
-                        rejectTarget.doData(newTargetId, payload, offset, writableBytes);
-                        offset += writableBytes;
-                        if (offset == payload.capacity())
+                        switch (msgTypeId)
                         {
-                            throttleState = SourceInputStream.this::throttleIgnoreWindow;
+                        case WindowFW.TYPE_ID:
+                            windowRO.wrap(buffer, index, index + length);
+                            int update = windowRO.update();
+                            int writableBytes = Math.min(update, payload.capacity() - offset);
+                            target.doData(targetId, payload, offset, writableBytes);
+                            offset += writableBytes;
+                            if (offset == payload.capacity())
+                            {
+                                throttleState = SourceInputStream.this::throttleIgnoreWindow;
+                            }
+                            break;
+                        case ResetFW.TYPE_ID:
+                            processReset(buffer, index, length);
+                            break;
+                        default:
+                            // ignore
+                            break;
                         }
-                        break;
-                    case ResetFW.TYPE_ID:
-                        processReset(buffer, index, length);
-                        break;
-                    default:
-                        // ignore
-                        break;
                     }
-                }
-            };
+                };
+            }
+            else
+            {
+                throttleState = SourceInputStream.this::throttleIgnoreWindow;
+            }
             source.doReset(sourceId);
         }
 
@@ -319,6 +325,14 @@ public final class SourceInputStreamFactory
 
             this.streamState = this::streamAfterBeginOrData;
             this.decoderState = this::decodeHttpBegin;
+
+            // Proactively issue BEGIN on server accept reply since we only support bidirectional transport
+            long replyStreamId = supplyStreamId.getAsLong();
+            Target replyTarget = supplyTarget.apply(source.name());
+            ServerAcceptState state = new ServerAcceptState(replyStreamId, replyTarget, this::loopBackThrottle);
+            replyTarget.doBegin(replyStreamId, 0L, sourceCorrelationId);
+            this.correlation = new Correlation<ServerAcceptState>(sourceCorrelationId, source.routableName(),
+                    OUTPUT_ESTABLISHED, state);
 
             doSourceWindow(maximumHeadersSize);
         }
@@ -512,7 +526,16 @@ public final class SourceInputStreamFactory
             Matcher versionMatcher = versionPattern.matcher(start[2]);
             if (!versionMatcher.matches())
             {
-                processInvalidRequest(505, "HTTP Version Not Supported");
+                Pattern validVersionPattern = Pattern.compile("HTTP/(\\d)\\.(\\d)");
+                Matcher validVersionMatcher = validVersionPattern.matcher(start[2]);
+                if (validVersionMatcher.matches())
+                {
+                    processInvalidRequest(505, "HTTP Version Not Supported");
+                }
+                else
+                {
+                    processInvalidRequest(400, "Bad Request");
+                }
             }
             else
             {
@@ -536,18 +559,6 @@ public final class SourceInputStreamFactory
                         final long targetRef = route.targetRef();
                         final long newTargetId = supplyStreamId.getAsLong();
 
-                        if (correlation == null)
-                        {
-                            long newOutputEstablishedStreamId = supplyStreamId.getAsLong();
-                            ServerConnectionState state = new ServerConnectionState(newOutputEstablishedStreamId,
-                                    newTarget.name());
-                            this.correlation = new Correlation<ServerConnectionState>(sourceCorrelationId, source.routableName(),
-                                    OUTPUT_ESTABLISHED, state);
-                        }
-                        else
-                        {
-                            correlation.state().target = newTarget.name();
-                        }
                         final long targetCorrelationId = newTargetId;
                         correlation.state().pendingRequests++;
                         correlateNew.accept(targetCorrelationId, correlation);
@@ -555,10 +566,7 @@ public final class SourceInputStreamFactory
                         availableTargetWindow = 0;
                         newTarget.doHttpBegin(newTargetId, targetRef, newTargetId,
                                 hs -> headers.forEach((k, v) -> hs.item(i -> i.name(k).value(v))));
-                        newTarget.setThrottle(newTargetId, this::handleThrottle);
-
-                        this.target = newTarget;
-                        this.targetId = newTargetId;
+                        switchTarget(newTarget, newTargetId);
 
                         hasUpgrade = headers.containsKey("upgrade");
                         if (hasUpgrade)
@@ -596,7 +604,7 @@ public final class SourceInputStreamFactory
             Map<String, String> headers = new LinkedHashMap<>();
             headers.put(":scheme", "http");
             headers.put(":method", start[0]);
-            headers.put(":path", requestURI.getPath());
+            headers.put(":path", requestURI.getRawPath());
 
             if (authority != null)
             {
@@ -826,6 +834,28 @@ public final class SourceInputStreamFactory
             }
         }
 
+        private void loopBackThrottle(
+            int msgTypeId,
+            DirectBuffer buffer,
+            int index,
+            int length)
+        {
+            switch (msgTypeId)
+            {
+            case WindowFW.TYPE_ID:
+                windowRO.wrap(buffer, index, index + length);
+                int update = windowRO.update();
+                correlation.state().window += update;
+                break;
+            case ResetFW.TYPE_ID:
+                processReset(buffer, index, length);
+                break;
+            default:
+                // ignore
+                break;
+            }
+        }
+
         private void processWindowForHttpData(DirectBuffer buffer, int index, int length)
         {
             windowRO.wrap(buffer, index, index + length);
@@ -892,6 +922,18 @@ public final class SourceInputStreamFactory
             resetRO.wrap(buffer, index, index + length);
             slab.release(slotIndex);
             source.doReset(sourceId);
+        }
+
+        private void switchTarget(Target newTarget, long newTargetId)
+        {
+            if (target != null)
+            {
+                target.removeThrottle(targetId);
+            }
+            target = newTarget;
+            targetId = newTargetId;
+            newTarget.setThrottle(newTargetId, this::handleThrottle);
+            throttleState = SourceInputStream.this::throttleIgnoreWindow;
         }
     }
 

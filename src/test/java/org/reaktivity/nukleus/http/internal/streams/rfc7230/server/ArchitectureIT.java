@@ -13,7 +13,7 @@
  * License for the specific language governing permissions and limitations
  * under the License.
  */
-package org.reaktivity.nukleus.http.internal.streams.rfc7230;
+package org.reaktivity.nukleus.http.internal.streams.rfc7230.server;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.rules.RuleChain.outerRule;
@@ -31,7 +31,8 @@ public class ArchitectureIT
 {
     private final K3poRule k3po = new K3poRule()
             .addScriptRoot("route", "org/reaktivity/specification/nukleus/http/control/route")
-            .addScriptRoot("streams", "org/reaktivity/specification/nukleus/http/streams/rfc7230/architecture");
+            .addScriptRoot("client", "org/reaktivity/specification/http/rfc7230/architecture")
+            .addScriptRoot("server", "org/reaktivity/specification/nukleus/http/streams/rfc7230/architecture");
 
     private final TestRule timeout = new DisableOnDebug(new Timeout(5, SECONDS));
 
@@ -39,12 +40,7 @@ public class ArchitectureIT
         .directory("target/nukleus-itests")
         .commandBufferCapacity(1024)
         .responseBufferCapacity(1024)
-        .counterValuesBufferCapacity(1024)
-        .streams("http", "source")
-        .streams("source", "http#source")
-        .streams("target", "http#source")
-        .streams("http", "target")
-        .streams("source", "http#target");
+        .counterValuesBufferCapacity(1024);
 
     @Rule
     public final TestRule chain = outerRule(nukleus).around(k3po).around(timeout);
@@ -52,112 +48,76 @@ public class ArchitectureIT
     @Test
     @Specification({
         "${route}/input/new/controller",
-        "${streams}/request.and.response/server/source",
-        "${streams}/request.and.response/server/target" })
+        "${client}/request.and.response/client",
+        "${server}/request.and.response/server" })
     public void shouldCorrelateRequestAndResponse() throws Exception
     {
-        k3po.start();
-        k3po.awaitBarrier("ROUTED_INPUT");
-        k3po.notifyBarrier("ROUTED_OUTPUT");
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${route}/output/new/controller",
-        "${streams}/request.and.response/client/source",
-        "${streams}/request.and.response/client/target" })
-    public void shouldCorrelateRequestAndResponseClient() throws Exception
-    {
-        k3po.start();
-        k3po.awaitBarrier("ROUTED_OUTPUT");
-        k3po.notifyBarrier("ROUTED_INPUT");
         k3po.finish();
     }
 
     @Test
     @Specification({
         "${route}/input/new/controller",
-        "${streams}/request.header.host.missing/server/source" })
-    public void shouldRejectRequestWhenHostHeaderMissing() throws Exception
-    {
-        k3po.start();
-        k3po.awaitBarrier("ROUTED_INPUT");
-        k3po.notifyBarrier("ROUTED_OUTPUT");
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${route}/input/new/controller",
-        "${streams}/request.version.http.1.2+/server/source",
-        "${streams}/request.version.http.1.2+/server/target" })
-    public void shouldRespondVersionHttp11WhenRequestVersionHttp12plus() throws Exception
-    {
-        k3po.start();
-        k3po.awaitBarrier("ROUTED_INPUT");
-        k3po.notifyBarrier("ROUTED_OUTPUT");
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${route}/input/new/controller",
-        "${streams}/request.version.invalid/server/source" })
-    public void shouldRejectRequestWhenVersionInvalid() throws Exception
-    {
-        k3po.start();
-        k3po.awaitBarrier("ROUTED_INPUT");
-        k3po.notifyBarrier("ROUTED_OUTPUT");
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${route}/input/new/controller",
-        "${streams}/request.version.missing/server/source" })
-    public void shouldRejectRequestWhenVersionMissing() throws Exception
-    {
-        k3po.start();
-        k3po.awaitBarrier("ROUTED_INPUT");
-        k3po.notifyBarrier("ROUTED_OUTPUT");
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${route}/input/new/controller",
-        "${streams}/request.version.not.http.1.x/server/source" })
-    public void shouldRejectRequestWhenVersionNotHttp1x() throws Exception
-    {
-        k3po.start();
-        k3po.awaitBarrier("ROUTED_INPUT");
-        k3po.notifyBarrier("ROUTED_OUTPUT");
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${route}/input/new/controller",
-        "${streams}/request.uri.with.user.info/server/source", })
-    public void shouldRejectRequestWithUserInfo() throws Exception
-    {
-        k3po.start();
-        k3po.awaitBarrier("ROUTED_INPUT");
-        k3po.notifyBarrier("ROUTED_OUTPUT");
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${route}/input/new/controller",
-        "${streams}/request.uri.with.percent.chars/server/source",
-        "${streams}/request.uri.with.percent.chars/server/target" })
+        "${client}/request.uri.with.percent.chars/client",
+        "${server}/request.uri.with.percent.chars/server" })
     public void shouldAcceptRequestWithPercentChars() throws Exception
     {
-        k3po.start();
-        k3po.awaitBarrier("ROUTED_INPUT");
-        k3po.notifyBarrier("ROUTED_OUTPUT");
         k3po.finish();
     }
+
+    @Test
+    @Specification({
+        "${route}/input/new/controller",
+        "${client}/request.version.1.2+/client",
+        "${server}/request.version.1.2+/server" })
+    public void shouldRespondVersionHttp11WhenRequestVersionHttp12plus() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/input/new/controller",
+        "${client}/request.header.host.missing/client" })
+    public void shouldRejectRequestWhenHostHeaderMissing() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/input/new/controller",
+        "${client}/request.version.invalid/client" })
+    public void shouldRejectRequestWhenVersionInvalid() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/input/new/controller",
+        "${client}/request.version.missing/client" })
+    public void shouldRejectRequestWhenVersionMissing() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/input/new/controller",
+        "${client}/request.version.not.1.x/client" })
+    public void shouldRejectRequestWhenVersionNotHttp1x() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/input/new/controller",
+        "${client}/request.uri.with.user.info/client", })
+    public void shouldRejectRequestWithUserInfo() throws Exception
+    {
+        k3po.finish();
+    }
+
 }

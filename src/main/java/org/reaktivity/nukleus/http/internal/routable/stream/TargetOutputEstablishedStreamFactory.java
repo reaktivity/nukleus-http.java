@@ -15,9 +15,9 @@
  */
 package org.reaktivity.nukleus.http.internal.routable.stream;
 
-import static java.lang.Character.toUpperCase;
 import static java.nio.charset.StandardCharsets.US_ASCII;
 import static org.reaktivity.nukleus.http.internal.routable.stream.Slab.NO_SLOT;
+import static org.reaktivity.nukleus.http.internal.util.HttpUtil.appendHeader;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -89,7 +89,7 @@ public final class TargetOutputEstablishedStreamFactory
         private long sourceId;
 
         private Target target;
-        private ServerConnectionState targetStream;
+        private ServerAcceptState targetStream;
 
         private int slotIndex;
         private int slotPosition;
@@ -218,8 +218,8 @@ public final class TargetOutputEstablishedStreamFactory
             final OctetsFW extension = beginRO.extension();
 
             @SuppressWarnings("unchecked")
-            final Correlation<ServerConnectionState> correlation =
-                         (Correlation<ServerConnectionState>) correlateEstablished.apply(targetCorrelationId);
+            final Correlation<ServerAcceptState> correlation =
+                         (Correlation<ServerAcceptState>) correlateEstablished.apply(targetCorrelationId);
 
             if (sourceRef == 0L && correlation != null)
             {
@@ -235,11 +235,6 @@ public final class TargetOutputEstablishedStreamFactory
                     headers = headers0;
                 }
 
-                if (!targetStream.started)
-                {
-                    target.doBegin(targetStream.streamId, 0L, correlation.id());
-                    targetStream.started = true;
-                }
                 target.setThrottle(targetStream.streamId, this::handleThrottle);
 
                 this.sourceId = newSourceId;
@@ -260,8 +255,7 @@ public final class TargetOutputEstablishedStreamFactory
                     }
                     else
                     {
-                        headersChars.append(toUpperCase(name.charAt(0))).append(name.substring(1))
-                               .append(": ").append(value).append("\r\n");
+                        appendHeader(headersChars, name, value);
                     }
                 });
 
@@ -295,6 +289,7 @@ public final class TargetOutputEstablishedStreamFactory
                         slotOffset = 0;
                         this.streamState = this::streamBeforeHeadersWritten;
                         this.throttleState = this::throttleBeforeHeadersWritten;
+                        targetStream.replyTarget.setThrottle(targetStream.streamId, this::handleThrottle);
                         if (targetStream.window > 0)
                         {
                             useTargetWindowToWriteResponseHeaders();
@@ -343,6 +338,7 @@ public final class TargetOutputEstablishedStreamFactory
             {
                 target.doEnd(targetStream.streamId);
                 target.removeThrottle(targetStream.streamId);
+                targetStream.restoreInitialThrottle();
                 this.streamState = this::streamAfterEnd;
             }
             else
