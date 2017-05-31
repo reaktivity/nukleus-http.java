@@ -26,15 +26,15 @@ import org.reaktivity.nukleus.http.internal.routable.Target;
 final class ServerAcceptState
 {
     final long streamId;
-    final Target loopBackTarget;
+    final Target replyTarget;
     int window;
     int pendingRequests;
-    public boolean endRequested;
+    boolean endRequested;
 
-    ServerAcceptState(long streamId, Target loopBackTarget)
+    ServerAcceptState(long streamId, Target replyTarget)
     {
         this.streamId = streamId;
-        this.loopBackTarget = loopBackTarget;
+        this.replyTarget = replyTarget;
     }
 
     @Override
@@ -42,20 +42,21 @@ final class ServerAcceptState
     {
         return String.format(
                 "[streamId=%016x, target=%s, window=%d, started=%b, pendingRequests=%d, endRequested=%b]",
-                getClass().getSimpleName(), streamId, loopBackTarget, window, pendingRequests, endRequested);
+                getClass().getSimpleName(), streamId, replyTarget, window, pendingRequests, endRequested);
     }
 
     public void doEnd(Function<String, Target> supplyTarget)
     {
         if (pendingRequests == 0)
         {
-            loopBackTarget.doEnd(streamId);
-            loopBackTarget.removeThrottle(streamId);
+            replyTarget.doEnd(streamId);
+            replyTarget.removeThrottle(streamId);
         }
         else
         {
             endRequested = true;
         }
     }
+
 }
 
