@@ -49,7 +49,13 @@ public final class Context implements Closeable
     // Must be a positive power of two.
     public static final String MEMORY_FOR_DECODE_PROPERTY_NAME = "nukleus.http.available.memory.for.decode";
 
+    // Maximum number of parallel connections to a given target name and ref (i.e. route) when
+    // the HTTP nukleus is acting as a client
+    public static final String MAXIMUM_CONNECTIONS_PROPERTY_NAME = "nukleus.http.maximum.connections";
+
     private static final int MAXIMUM_HEADERS_SIZE_DEFAULT = 8192;
+
+    private static final int MAXIMUM_CONNECTIONS_DEFAULT = 10; // most browsers use 6, IE 11 uses 13
 
     private final ControlLayout.Builder controlRW = new ControlLayout.Builder();
 
@@ -58,6 +64,7 @@ public final class Context implements Closeable
     private ControlLayout controlRO;
     private int maximumStreamsCount;
     private int maximumHeadersSize;
+    private int maximumConnectionsPerRoute;
     private int memoryForDecodeEncode;
     private int streamsBufferCapacity;
     private int throttleBufferCapacity;
@@ -87,6 +94,11 @@ public final class Context implements Closeable
     public boolean readonly()
     {
         return readonly;
+    }
+
+    public int maximumConnectionsPerRoute()
+    {
+        return maximumConnectionsPerRoute;
     }
 
     public int maximumStreamsCount()
@@ -317,6 +329,7 @@ public final class Context implements Closeable
                 memoryForDecode = BitUtil.findNextPositivePowerOfTwo(maximumHeadersSize * maxStreamsWithIncompleteRequest / 2);
             }
             this.memoryForDecodeEncode = memoryForDecode;
+            maximumConnectionsPerRoute = Integer.getInteger(MAXIMUM_CONNECTIONS_PROPERTY_NAME, MAXIMUM_CONNECTIONS_DEFAULT);
         }
         catch (Exception ex)
         {

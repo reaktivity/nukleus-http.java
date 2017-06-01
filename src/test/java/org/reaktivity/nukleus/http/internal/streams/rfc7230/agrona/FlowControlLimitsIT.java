@@ -134,5 +134,20 @@ public class FlowControlLimitsIT
         k3po.finish();
     }
 
+    @Test
+    @Specification({
+        "${route}/output/new/controller",
+        "${streams}/response.first.fragment.maximum.headers/client/source",
+        "${streams}/response.first.fragment.maximum.headers/client/target" })
+    @ScriptProperty("sourceInputInitialWindow [0x40 0x00 0x00 0x00]") // 64 bytes, same as max headers size
+    public void shouldAcceptResponseWithFirstFragmentHeadersOfLengthMaxHttpHeadersSize() throws Exception
+    {
+        k3po.start();
+        k3po.awaitBarrier("ROUTED_OUTPUT");
+        k3po.notifyBarrier("ROUTED_INPUT");
+        k3po.finish();
+    }
+
+
 }
 

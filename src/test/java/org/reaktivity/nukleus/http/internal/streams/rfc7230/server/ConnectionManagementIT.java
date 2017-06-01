@@ -72,8 +72,8 @@ public class ConnectionManagementIT
     @Specification({
         "${route}/input/new/controller",
         "${client}/multiple.requests.same.connection/client",
-        "${server}/multiple.requests.same.connection/server" })
-    public void connectionsShouldPersistByDefault() throws Exception
+        "${server}/multiple.requests.serialized/server" })
+    public void shouldSupportMultipleRequestsOnSameConnection() throws Exception
     {
         k3po.finish();
     }

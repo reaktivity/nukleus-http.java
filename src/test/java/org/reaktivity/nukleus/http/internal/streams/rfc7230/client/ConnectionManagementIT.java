@@ -62,8 +62,6 @@ public class ConnectionManagementIT
         "${route}/output/new/controller",
         "${client}response.with.connection.close/client",
         "${server}response.with.connection.close/server" })
-    @Ignore("TODO: as part of connection pooling TargetInputEstablishedStream should " +
-            "send END on target output after getting response with connection:close")
     public void responseWithConnectionClose() throws Exception
     {
         k3po.finish();
@@ -72,10 +70,23 @@ public class ConnectionManagementIT
     @Test
     @Specification({
         "${route}/output/new/controller",
-        "${client}/multiple.requests.same.connection/client",
+        "${client}/multiple.requests.serialized/client",
         "${server}/multiple.requests.same.connection/server" })
-    @Ignore("TODO: implement connection pooling so this test passes")
-    public void connectionsShouldPersistByDefault() throws Exception
+    public void multipleRequestsSameConnection() throws Exception
+    {
+        k3po.start();
+        k3po.notifyBarrier("WRITE_RESPONSE_ONE");
+        k3po.notifyBarrier("WRITE_RESPONSE_TWO");
+        k3po.notifyBarrier("WRITE_RESPONSE_THREE");
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/output/new/controller",
+        "${client}/concurrent.requests/client",
+        "${server}/concurrent.requests.different.connections/server" })
+    public void concurrentRequestsDifferentConnections() throws Exception
     {
         k3po.finish();
     }

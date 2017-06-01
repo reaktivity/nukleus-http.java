@@ -331,7 +331,7 @@ public final class SourceInputStreamFactory
             Target replyTarget = supplyTarget.apply(source.name());
             ServerAcceptState state = new ServerAcceptState(replyStreamId, replyTarget, this::loopBackThrottle);
             replyTarget.doBegin(replyStreamId, 0L, sourceCorrelationId);
-            this.correlation = new Correlation<ServerAcceptState>(sourceCorrelationId, source.routableName(),
+            this.correlation = new Correlation<>(sourceCorrelationId, source.routableName(),
                     OUTPUT_ESTABLISHED, state);
 
             doSourceWindow(maximumHeadersSize);
