@@ -461,7 +461,7 @@ public final class TargetInputEstablishedStreamFactory
                 resolveTarget();
 
                 target.doHttpBegin(targetId, 0L, sourceCorrelationId,
-                        hs -> headers.forEach((k, v) -> hs.item(i -> i.name(k).value(v))));
+                        hs -> headers.forEach((k, v) -> hs.item(i -> i.representation((byte) 0).name(k).value(v))));
                 target.setThrottle(targetId, this::handleThrottle);
 
                 boolean upgraded = "101".equals(headers.get(":status"));
