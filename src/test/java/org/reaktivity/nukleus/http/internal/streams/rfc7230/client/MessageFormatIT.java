@@ -35,7 +35,7 @@ public class MessageFormatIT
             .addScriptRoot("server", "org/reaktivity/specification/http/rfc7230/message.format")
             .addScriptRoot("client", "org/reaktivity/specification/nukleus/http/streams/rfc7230/message.format");
 
-    private final TestRule timeout = new DisableOnDebug(new Timeout(10, SECONDS));
+    private final TestRule timeout = new DisableOnDebug(new Timeout(6, SECONDS));
 
     private final NukleusRule nukleus = new NukleusRule("http")
         .directory("target/nukleus-itests")
@@ -89,108 +89,6 @@ public class MessageFormatIT
     @Test
     @Specification({
         "${route}/output/new/controller",
-        "${client}/invalid.request.whitespace.after.start.line/client",
-        "${server}/invalid.request.whitespace.after.start.line/server" })
-    public void invalidRequestWhitespaceAfterStartLine() throws Exception
-    {
-        // As per RFC, alternatively could process everything before whitespace,
-        // but the better choice is to reject
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${route}/output/new/controller",
-        "${client}/invalid.request.missing.target/client",
-        "${server}/invalid.request.missing.target/server" })
-    public void invalidRequestMissingTarget() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${route}/output/new/controller",
-        "${client}/invalid.request.not.http/client",
-        "${server}/invalid.request.not.http/server" })
-    public void invalidRequestNotHttp() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${route}/output/new/controller",
-        "${client}/request.with.unimplemented.method/client",
-        "${server}/request.with.unimplemented.method/server" })
-    public void requestWithUnimplementedMethod() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${route}/output/new/controller",
-        "${client}/request.with.extra.CRLF.after.request.line/client",
-        "${server}/request.with.extra.CRLF.after.request.line/server" })
-    public void robustServerShouldAllowExtraCRLFAfterRequestLine() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${route}/output/new/controller",
-        "${client}/request.with.start.line.too.long/client",
-        "${server}/request.with.start.line.too.long/server" })
-    public void requestWithStartLineTooLong() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${route}/output/new/controller",
-        "${client}/invalid.request.space.before.colon.in.header/client",
-        "${server}/invalid.request.space.before.colon.in.header/server" })
-    public void invalidRequestSpaceBeforeColonInHeader() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${route}/output/new/controller",
-        "${client}/request.with.obsolete.line.folding/client",
-        "${server}/request.with.obsolete.line.folding/server" })
-    public void requestWithObsoleteLineFolding() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${route}/output/new/controller",
-        "${client}/request.with.header.value.too.long/client",
-        "${server}/request.with.header.value.too.long/server" })
-    public void requestWithHeaderValueTooLong() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${route}/output/new/controller",
-        "${client}/request.with.unknown.transfer.encoding/client",
-        "${server}/request.with.unknown.transfer.encoding/server" })
-    public void requestWithUnknownTransferEncoding() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${route}/output/new/controller",
         "${client}/post.request.with.no.content/client",
         "${server}/post.request.with.no.content/server" })
     public void postRequestWithNoContent() throws Exception
@@ -221,33 +119,22 @@ public class MessageFormatIT
     @Test
     @Specification({
         "${route}/output/new/controller",
-        "${client}/invalid.request.multiple.content.lengths/client",
-        "${server}/invalid.request.multiple.content.lengths/server" })
-    public void invalidRequestMultipleContentLengths() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${route}/output/new/controller",
-        "${client}/gateway.must.reject.request.with.multiple.different.content.length/client",
-        "${gateway}/gateway.must.reject.request.with.multiple.different.content.length/gateway",
-        "${server}/gateway.must.reject.request.with.multiple.different.content.length/server" })
-    @Ignore("proxy tests not tests implemented")
-    public void gatewayMustRejectResponseWithMultipleDifferentContentLength() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${route}/output/new/controller",
         "${client}/on.response.proxy.must.remove.space.in.header.with.space.between.header.name.and.colon/client",
         "${server}/on.response.proxy.must.remove.space.in.header.with.space.between.header.name.and.colon/server",
         "${proxy}/on.response.proxy.must.remove.space.in.header.with.space.between.header.name.and.colon/proxy" })
     @Ignore("proxy tests not tests implemented")
     public void onResponseProxyMustRemoveSpaceInHeaderWithSpaceBetweenHeaderNameAndColon() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/output/new/controller",
+        "${client}/proxy.gets.response.with.multiple.content.lengths/client",
+        "${server}/proxy.gets.response.with.multiple.content.lengths/server" })
+    @Ignore("proxy tests not tests implemented")
+    public void proxyGetsResponseWithMultipleContentLengths() throws Exception
     {
         k3po.finish();
     }
@@ -266,9 +153,9 @@ public class MessageFormatIT
     @Test
     @Specification({
         "${route}/output/new/controller",
-        "${client}/proxy.should.preserve.unrecongnized.headers/client",
-        "${server}/proxy.should.preserve.unrecongnized.headers/server",
-        "${proxy}/proxy.should.preserve.unrecongnized.headers/proxy" })
+        "${client}/proxy.should.preserve.unrecognized.headers/client",
+        "${server}/proxy.should.preserve.unrecognized.headers/server",
+        "${proxy}/proxy.should.preserve.unrecognized.headers/proxy" })
     @Ignore("proxy tests not tests implemented")
     public void proxyShouldPreserveUnrecognizedHeaders() throws Exception
     {
