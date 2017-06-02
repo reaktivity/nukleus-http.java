@@ -712,6 +712,7 @@ public final class SourceInputStreamFactory
             }
 
             Pattern headerPattern = Pattern.compile("([^\\s:]+):\\s*(.*)");
+            boolean contentLengthFound = false;
             for (int i = 1; i < lines.length; i++)
             {
                 Matcher headerMatcher = headerPattern.matcher(lines[i]);
@@ -743,6 +744,19 @@ public final class SourceInputStreamFactory
                     httpStatus.status = 501;
                     httpStatus.message = "Unsupported transfer-encoding " + value;
                     break;
+                }
+                else if ("content-length".equals(name))
+                {
+                    if (contentLengthFound)
+                    {
+                        httpStatus.status = 400;
+                        httpStatus.message = "Bad Request";
+                    }
+                    else
+                    {
+                        contentLengthFound = true;
+                        headers.put(name, value);
+                    }
                 }
                 else
                 {

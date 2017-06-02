@@ -215,7 +215,6 @@ public class MessageFormatIT
     @Specification({
         "${route}/input/new/controller",
         "${client}/invalid.request.multiple.content.lengths/client"})
-    @Ignore // TODO: handle this case
     public void invalidRequestMultipleContentLengths() throws Exception
     {
         k3po.finish();
