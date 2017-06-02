@@ -176,7 +176,6 @@ public class MessageFormatIT
     @Specification({
         "${route}/input/new/controller",
         "${client}/request.with.unknown.transfer.encoding/client"})
-    @Ignore // TODO: handle this case
     public void requestWithUnknownTransferEncoding() throws Exception
     {
         k3po.finish();

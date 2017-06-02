@@ -307,7 +307,7 @@ public final class SourceInputStreamFactory
 
             final DirectBuffer payload = new UnsafeBuffer(payloadText.toString().getBytes(StandardCharsets.UTF_8));
 
-            this.decoderState = this::decodeHttpBegin;
+            this.decoderState = this::decodeBeforeHttpBegin;
             this.streamState = this::streamAfterRejectOrReset;
             int writableBytes = Math.min(correlation.state().window, payload.capacity());
             if (writableBytes > 0)
@@ -366,7 +366,7 @@ public final class SourceInputStreamFactory
             this.sourceCorrelationId = beginRO.correlationId();
 
             this.streamState = this::streamAfterBeginOrData;
-            this.decoderState = this::decodeHttpBegin;
+            this.decoderState = this::decodeBeforeHttpBegin;
 
             // Proactively issue BEGIN on server accept reply since we only support bidirectional transport
             long replyStreamId = supplyStreamId.getAsLong();
@@ -502,6 +502,50 @@ public final class SourceInputStreamFactory
             slotPosition = dataLength;
         }
 
+        private int decodeBeforeHttpBegin(
+            final DirectBuffer payload,
+            final int offset,
+            final int limit)
+        {
+            int length = limit - offset;
+            int result = offset;
+            decoderState = this::decodeHttpBegin;
+            if (payload.getByte(offset) == '\r')
+            {
+                if (length == 1)
+                {
+                    decoderState = this::decodeBeforeHttpBeginAfterCR;
+                    result = offset + 1;
+                }
+                else if (payload.getByte(offset+1) == '\n')
+                {
+                    // RFC 3270 3.5.  Message Parsing Robustness: skip empty line (CRLF) before request-line
+                    result = offset + 2;
+                    decoderState = this::decodeBeforeHttpBegin;
+                }
+            }
+            return result;
+        }
+
+        private int decodeBeforeHttpBeginAfterCR(
+            final DirectBuffer payload,
+            final int offset,
+            final int limit)
+        {
+            int result = limit;
+            if (payload.getByte(offset) == '\n')
+            {
+                // RFC 3270 3.5.  Message Parsing Robustness: skip empty line (CRLF) before request-line
+                decoderState = this::decodeBeforeHttpBegin;
+                result = offset + 1;
+            }
+            else
+            {
+                processInvalidRequest(400, "Bad Request");
+            }
+            return result;
+        }
+
         private int decodeHttpBegin(
             final DirectBuffer payload,
             final int offset,
@@ -511,44 +555,36 @@ public final class SourceInputStreamFactory
             final int endOfHeadersAt = limitOfBytes(payload, offset, limit, CRLFCRLF_BYTES);
             if (endOfHeadersAt == -1)
             {
-                if (payload.getByte(offset) == '\r' && payload.getByte(offset+1) == '\n')
+                int length = limit - offset;
+                if (slotIndex == NO_SLOT)
                 {
-                    // RFC 3270 3.5.  Message Parsing Robustness: skip empty line (CRLF) before request-line
-                    return offset + 2;
+                    // Incomplete request, not yet cached
+                    slotIndex = slab.acquire(sourceId);
                 }
-                int firstSpace = limitOfBytes(payload, offset, limit, SPACE);
-                if (firstSpace > MAXIMUM_METHOD_BYTES)
+
+                if (slotIndex == NO_SLOT)
                 {
-                    processInvalidRequest(400, "Bad Request");
+                    // Out of slab memory
+                    processInvalidRequest(503, "Service Unavailable");
                 }
                 else
                 {
-                    int length = limit - offset;
-                    if (slotIndex == NO_SLOT)
+                    slotOffset = 0;
+                    MutableDirectBuffer buffer = slab.buffer(slotIndex);
+                    buffer.putBytes(0, payload, offset, length);
+                    slotPosition = length;
+                    int firstSpace = limitOfBytes(buffer, slotOffset, slotPosition, SPACE);
+                    if (firstSpace > MAXIMUM_METHOD_BYTES)
                     {
-                        // Incomplete request, not yet cached
-                        slotIndex = slab.acquire(sourceId);
+                        processInvalidRequest(400, "Bad Request");
                     }
-
-                    if (slotIndex == NO_SLOT)
+                    if (window == 0)
                     {
-                        // Out of slab memory
-                        processInvalidRequest(503, "Service Unavailable");
-                    }
-                    else
-                    {
-                        slotOffset = 0;
-                        MutableDirectBuffer buffer = slab.buffer(slotIndex);
-                        buffer.putBytes(0, payload, offset, length);
-                        slotPosition = length;
-                        if (window == 0)
+                        // Increase source window to ensure we can receive the largest possible request headers
+                        ensureSourceWindow(maximumHeadersSize - length);
+                        if (window < 2)
                         {
-                            // Increase source window to ensure we can receive the largest possible request headers
-                            ensureSourceWindow(maximumHeadersSize - length);
-                            if (window < 2)
-                            {
-                                processInvalidRequest(431, "Request Header Fields Too Large");
-                            }
+                            processInvalidRequest(431, "Request Header Fields Too Large");
                         }
                     }
                 }
@@ -701,6 +737,13 @@ public final class SourceInputStreamFactory
                         headers.put(":authority", value);
                     }
                 }
+                else if ("transfer-encoding".equals(name) &&  (!"chunked".equals(value)))
+                {
+                    // TODO: support other transfer encodings
+                    httpStatus.status = 501;
+                    httpStatus.message = "Unsupported transfer-encoding " + value;
+                    break;
+                }
                 else
                 {
                     headers.put(name, value);
@@ -747,7 +790,7 @@ public final class SourceInputStreamFactory
             if (contentRemaining == 0)
             {
                 target.doHttpEnd(targetId);
-                decoderState = this::decodeHttpBegin;
+                decoderState = this::decodeBeforeHttpBegin;
                 throttleState = this::throttleIgnoreWindow;
                 if (writableBytes < length)
                 {
