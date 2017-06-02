@@ -55,6 +55,9 @@ import org.reaktivity.nukleus.http.internal.util.function.LongObjectBiConsumer;
 public final class SourceInputStreamFactory
 {
     private static final byte[] CRLFCRLF_BYTES = "\r\n\r\n".getBytes(StandardCharsets.US_ASCII);
+    private static final byte[] SPACE = " ".getBytes(StandardCharsets.US_ASCII);
+    private static final int MAXIMUM_METHOD_BYTES = "OPTIONS".length();
+
     private enum StandardMethods
     {
         GET,
@@ -513,31 +516,39 @@ public final class SourceInputStreamFactory
                     // RFC 3270 3.5.  Message Parsing Robustness: skip empty line (CRLF) before request-line
                     return offset + 2;
                 }
-                int length = limit - offset;
-                if (slotIndex == NO_SLOT)
+                int firstSpace = limitOfBytes(payload, offset, limit, SPACE);
+                if (firstSpace > MAXIMUM_METHOD_BYTES)
                 {
-                    // Incomplete request, not yet cached
-                    slotIndex = slab.acquire(sourceId);
-                }
-
-                if (slotIndex == NO_SLOT)
-                {
-                    // Out of slab memory
-                    processInvalidRequest(503, "Service Unavailable");
+                    processInvalidRequest(400, "Bad Request");
                 }
                 else
                 {
-                    slotOffset = 0;
-                    MutableDirectBuffer buffer = slab.buffer(slotIndex);
-                    buffer.putBytes(0, payload, offset, length);
-                    slotPosition = length;
-                    if (window == 0)
+                    int length = limit - offset;
+                    if (slotIndex == NO_SLOT)
                     {
-                        // Increase source window to ensure we can receive the largest possible request headers
-                        ensureSourceWindow(maximumHeadersSize - length);
-                        if (window < 2)
+                        // Incomplete request, not yet cached
+                        slotIndex = slab.acquire(sourceId);
+                    }
+
+                    if (slotIndex == NO_SLOT)
+                    {
+                        // Out of slab memory
+                        processInvalidRequest(503, "Service Unavailable");
+                    }
+                    else
+                    {
+                        slotOffset = 0;
+                        MutableDirectBuffer buffer = slab.buffer(slotIndex);
+                        buffer.putBytes(0, payload, offset, length);
+                        slotPosition = length;
+                        if (window == 0)
                         {
-                            processInvalidRequest(431, "Request Header Fields Too Large");
+                            // Increase source window to ensure we can receive the largest possible request headers
+                            ensureSourceWindow(maximumHeadersSize - length);
+                            if (window < 2)
+                            {
+                                processInvalidRequest(431, "Request Header Fields Too Large");
+                            }
                         }
                     }
                 }

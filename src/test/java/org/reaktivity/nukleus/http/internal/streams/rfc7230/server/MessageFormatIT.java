@@ -110,7 +110,6 @@ public class MessageFormatIT
     @Specification({
         "${route}/input/new/controller",
         "${client}/invalid.request.not.http/client"})
-    @Ignore // TODO: handle this case
     public void invalidRequestNotHttp() throws Exception
     {
         k3po.finish();
@@ -229,7 +228,7 @@ public class MessageFormatIT
         "${client}/gateway.must.reject.request.with.multiple.different.content.length/client",
         "${gateway}/gateway.must.reject.request.with.multiple.different.content.length/gateway",
         "${server}/gateway.must.reject.request.with.multiple.different.content.length/server" })
-    @Ignore("proxy tests not tests implemented")
+    @Ignore("proxy tests not implemented")
     public void gatewayMustRejectResponseWithMultipleDifferentContentLength() throws Exception
     {
         k3po.finish();
@@ -241,7 +240,7 @@ public class MessageFormatIT
         "${client}/on.response.proxy.must.remove.space.in.header.with.space.between.header.name.and.colon/client",
         "${server}/on.response.proxy.must.remove.space.in.header.with.space.between.header.name.and.colon/server",
         "${proxy}/on.response.proxy.must.remove.space.in.header.with.space.between.header.name.and.colon/proxy" })
-    @Ignore("proxy tests not tests implemented")
+    @Ignore("proxy tests not implemented")
     public void onResponseProxyMustRemoveSpaceInHeaderWithSpaceBetweenHeaderNameAndColon() throws Exception
     {
         k3po.finish();
@@ -252,7 +251,7 @@ public class MessageFormatIT
         "${route}/input/new/controller",
         "${client}/proxy.or.gateway.must.reject.obs.in.header.value/client",
         "${server}/proxy.or.gateway.must.reject.obs.in.header.value/server" })
-    @Ignore("proxy tests not tests implemented")
+    @Ignore("proxy tests not implemented")
     public void proxyOrGatewayMustRejectOBSInHeaderValue() throws Exception
     {
         k3po.finish();
@@ -264,7 +263,7 @@ public class MessageFormatIT
         "${client}/proxy.should.preserve.unrecongnized.headers/client",
         "${server}/proxy.should.preserve.unrecongnized.headers/server",
         "${proxy}/proxy.should.preserve.unrecongnized.headers/proxy" })
-    @Ignore("proxy tests not tests implemented")
+    @Ignore("proxy tests not implemented")
     public void proxyShouldPreserveUnrecognizedHeaders() throws Exception
     {
         k3po.finish();
