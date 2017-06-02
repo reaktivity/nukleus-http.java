@@ -77,7 +77,7 @@ public final class SourceInputStreamFactory
             {
                 result = valueOf(name);
             }
-            catch(IllegalArgumentException e)
+            catch (IllegalArgumentException e)
             {
                 result = null;
             }
