@@ -24,6 +24,7 @@ import org.junit.Test;
 import org.junit.rules.DisableOnDebug;
 import org.junit.rules.TestRule;
 import org.junit.rules.Timeout;
+import org.kaazing.k3po.junit.annotation.ScriptProperty;
 import org.kaazing.k3po.junit.annotation.Specification;
 import org.kaazing.k3po.junit.rules.K3poRule;
 import org.reaktivity.reaktor.test.NukleusRule;
@@ -138,7 +139,6 @@ public class MessageFormatIT
     @Specification({
         "${route}/input/new/controller",
         "${client}/request.with.start.line.too.long/client"})
-    @Ignore //("TODO: report 501 Request URI Too Long, drain the source before reset")
     public void requestWithStartLineTooLong() throws Exception
     {
         k3po.finish();
@@ -166,7 +166,7 @@ public class MessageFormatIT
     @Specification({
         "${route}/input/new/controller",
         "${client}/request.with.header.value.too.long/client"})
-    @Ignore // ("TODO: drain the source before reset or fix the test scripts")
+    @ScriptProperty("headerSize \"9001\"")
     public void requestWithHeaderValueTooLong() throws Exception
     {
         k3po.finish();

@@ -55,6 +55,7 @@ import org.reaktivity.nukleus.http.internal.util.function.LongObjectBiConsumer;
 public final class SourceInputStreamFactory
 {
     private static final byte[] CRLFCRLF_BYTES = "\r\n\r\n".getBytes(StandardCharsets.US_ASCII);
+    private static final byte[] CRLF_BYTES = "\r\n".getBytes(StandardCharsets.US_ASCII);
     private static final byte[] SPACE = " ".getBytes(StandardCharsets.US_ASCII);
     private static final int MAXIMUM_METHOD_BYTES = "OPTIONS".length();
 
@@ -307,8 +308,13 @@ public final class SourceInputStreamFactory
 
             final DirectBuffer payload = new UnsafeBuffer(payloadText.toString().getBytes(StandardCharsets.UTF_8));
 
-            this.decoderState = this::decodeBeforeHttpBegin;
+            this.decoderState = this::decodeSkipData;
             this.streamState = this::streamAfterRejectOrReset;
+            if (slotIndex != NO_SLOT)
+            {
+                slab.release(slotIndex);
+                slotIndex = NO_SLOT;
+            }
             int writableBytes = Math.min(correlation.state().window, payload.capacity());
             if (writableBytes > 0)
             {
@@ -333,7 +339,9 @@ public final class SourceInputStreamFactory
                             offset += writableBytes;
                             if (offset == payload.capacity())
                             {
-                                throttleState = SourceInputStream.this::throttleIgnoreWindow;
+                                // Drain data from source before resetting to allow its writes to complete
+                                throttleState = SourceInputStream.this::throttlePropagateWindow;
+                                doSourceWindow(maximumHeadersSize);
                                 source.doReset(sourceId);
                             }
                             break;
@@ -349,7 +357,9 @@ public final class SourceInputStreamFactory
             }
             else
             {
-                throttleState = SourceInputStream.this::throttleIgnoreWindow;
+                // Drain data from source before resetting to allow its writes to complete
+                throttleState = SourceInputStream.this::throttlePropagateWindow;
+                doSourceWindow(maximumHeadersSize);
                 source.doReset(sourceId);
             }
         }
@@ -584,7 +594,15 @@ public final class SourceInputStreamFactory
                         ensureSourceWindow(maximumHeadersSize - length);
                         if (window < 2)
                         {
-                            processInvalidRequest(431, "Request Header Fields Too Large");
+                            int firstCRLF = limitOfBytes(buffer, slotOffset, slotPosition, CRLF_BYTES);
+                            if (firstCRLF == -1 || firstCRLF > maximumHeadersSize)
+                            {
+                                processInvalidRequest(414, "Request URI too long");
+                            }
+                            else
+                            {
+                                processInvalidRequest(431, "Request Header Fields Too Large");
+                            }
                         }
                     }
                 }
@@ -845,6 +863,14 @@ public final class SourceInputStreamFactory
                     slotPosition = length;
                 }
             }
+            return limit;
+        }
+
+        private int decodeSkipData(
+                DirectBuffer payload,
+                int offset,
+                int limit)
+        {
             return limit;
         }
 
