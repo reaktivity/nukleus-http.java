@@ -13,7 +13,7 @@
  * License for the specific language governing permissions and limitations
  * under the License.
  */
-package org.reaktivity.nukleus.http.internal.streams.rfc7230.client;
+package org.reaktivity.nukleus.http.internal.streams.rfc7230.server;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.rules.RuleChain.outerRule;
@@ -27,14 +27,14 @@ import org.kaazing.k3po.junit.annotation.Specification;
 import org.kaazing.k3po.junit.rules.K3poRule;
 import org.reaktivity.reaktor.test.NukleusRule;
 
-public class ArchitectureIT
+public class FlowControlIT
 {
     private final K3poRule k3po = new K3poRule()
             .addScriptRoot("route", "org/reaktivity/specification/nukleus/http/control/route")
-            .addScriptRoot("server", "org/reaktivity/specification/http/rfc7230/architecture")
-            .addScriptRoot("client", "org/reaktivity/specification/nukleus/http/streams/rfc7230/architecture");
+            .addScriptRoot("client", "org/reaktivity/specification/http/rfc7230/flow.control")
+            .addScriptRoot("server", "org/reaktivity/specification/nukleus/http/streams/rfc7230/flow.control");
 
-    private final TestRule timeout = new DisableOnDebug(new Timeout(10, SECONDS));
+    private final TestRule timeout = new DisableOnDebug(new Timeout(5, SECONDS));
 
     private final NukleusRule nukleus = new NukleusRule("http")
         .directory("target/nukleus-itests")
@@ -47,21 +47,22 @@ public class ArchitectureIT
 
     @Test
     @Specification({
-        "${route}/output/new/controller",
-        "${client}/request.and.response/client",
-        "${server}/request.and.response/server" })
-    public void shouldCorrelateRequestAndResponse() throws Exception
+        "${route}/input/new/controller",
+        "${client}/request.fragmented/client",
+        "${server}/request.fragmented/server" })
+    public void shouldAcceptFragmentedRequest() throws Exception
     {
         k3po.finish();
     }
 
     @Test
     @Specification({
-        "${route}/output/new/controller",
-        "${client}/request.uri.with.percent.chars/client",
-        "${server}/request.uri.with.percent.chars/server" })
-    public void shouldAcceptRequestWithPercentChars() throws Exception
+        "${route}/input/new/controller",
+        "${client}/request.with.content.length.and.end.late.target.window/client",
+        "${server}/request.with.content.length.and.end.late.target.window/server" })
+    public void shouldWaitForTargetWindowAndWriteDataBeforeProcessingSourceEnd() throws Exception
     {
         k3po.finish();
     }
+
 }
