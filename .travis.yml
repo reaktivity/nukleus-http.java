@@ -4,14 +4,8 @@ before_install:
   - rm ~/.m2/settings.xml
 jdk:
   - oraclejdk8
-install:
-  - git clone https://github.com/cmebarrow/nukleus-http.spec.git reaktivity/nukleus-http.spec
-  - cd  reaktivity/nukleus-http.spec
-  - git checkout connection_pool_etc_3
-  - mvn -B -DskipTests install 
-  - cd ../..
-script:
-  - mvn -B -nsu verify
+install: true
+script: mvn -B -nsu verify
 cache:
   directories:
     - $HOME/.m2
