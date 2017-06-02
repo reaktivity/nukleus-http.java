@@ -331,6 +331,7 @@ public final class SourceInputStreamFactory
                             if (offset == payload.capacity())
                             {
                                 throttleState = SourceInputStream.this::throttleIgnoreWindow;
+                                source.doReset(sourceId);
                             }
                             break;
                         case ResetFW.TYPE_ID:
@@ -346,8 +347,8 @@ public final class SourceInputStreamFactory
             else
             {
                 throttleState = SourceInputStream.this::throttleIgnoreWindow;
+                source.doReset(sourceId);
             }
-            source.doReset(sourceId);
         }
 
         private void processBegin(
