@@ -55,6 +55,31 @@ import org.reaktivity.nukleus.http.internal.util.function.LongObjectBiConsumer;
 public final class SourceInputStreamFactory
 {
     private static final byte[] CRLFCRLF_BYTES = "\r\n\r\n".getBytes(StandardCharsets.US_ASCII);
+    private enum StandardMethods
+    {
+        GET,
+        HEAD,
+        POST,
+        PUT,
+        DELETE,
+        CONNECT,
+        OPTIONS,
+        TRACE;
+
+        static StandardMethods parse(String name)
+        {
+            StandardMethods result;
+            try
+            {
+                result = valueOf(name);
+            }
+            catch(IllegalArgumentException e)
+            {
+                result = null;
+            }
+            return result;
+        }
+    };
 
     private final FrameFW frameRO = new FrameFW();
 
@@ -73,6 +98,19 @@ public final class SourceInputStreamFactory
     private final int maximumHeadersSize;
     private final Slab slab;
     private final MutableDirectBuffer temporarySlot;
+
+    private class HttpStatus
+    {
+        int status;
+        String message;
+
+        void reset()
+        {
+            status = 200;
+            message = "OK";
+        }
+    }
+    private final HttpStatus httpStatus = new HttpStatus();
 
     public SourceInputStreamFactory(
         Source source,
@@ -277,7 +315,7 @@ public final class SourceInputStreamFactory
             {
                 this.throttleState = new MessageHandler()
                 {
-                    int offset = 0;
+                    int offset = writableBytes;
 
                     @Override
                     public void onMessage(int msgTypeId, MutableDirectBuffer buffer, int index, int length)
@@ -469,6 +507,11 @@ public final class SourceInputStreamFactory
             final int endOfHeadersAt = limitOfBytes(payload, offset, limit, CRLFCRLF_BYTES);
             if (endOfHeadersAt == -1)
             {
+                if (payload.getByte(offset) == '\r' && payload.getByte(offset+1) == '\n')
+                {
+                    // RFC 3270 3.5.  Message Parsing Robustness: skip empty line (CRLF) before request-line
+                    return offset + 2;
+                }
                 int length = limit - offset;
                 if (slotIndex == NO_SLOT)
                 {
@@ -493,7 +536,6 @@ public final class SourceInputStreamFactory
                         ensureSourceWindow(maximumHeadersSize - length);
                         if (window < 2)
                         {
-                            slab.release(slotIndex);
                             processInvalidRequest(431, "Request Header Fields Too Large");
                         }
                     }
@@ -537,14 +579,24 @@ public final class SourceInputStreamFactory
                     processInvalidRequest(400, "Bad Request");
                 }
             }
+            else if (null == StandardMethods.parse(start[0]))
+            {
+                processInvalidRequest(501, "Not Implemented");
+            }
             else
             {
                 final URI requestURI = URI.create(start[1]);
 
-                final Map<String, String> headers = decodeHttpHeaders(start, lines, requestURI);
+                httpStatus.reset();
+                final Map<String, String> headers = decodeHttpHeaders(start, lines, requestURI, httpStatus);
+
                 // TODO: replace with lightweight approach (end)
 
-                if (headers.get(":authority") == null || requestURI.getUserInfo() != null)
+                if (httpStatus.status != 200)
+                {
+                    processInvalidRequest(httpStatus.status, httpStatus.message);
+                }
+                else if (headers.get(":authority") == null || requestURI.getUserInfo() != null)
                 {
                     processInvalidRequest(400, "Bad Request");
                 }
@@ -597,13 +649,13 @@ public final class SourceInputStreamFactory
         private Map<String, String> decodeHttpHeaders(
             String[] start,
             String[] lines,
-            URI requestURI)
+            URI requestURI,
+            HttpStatus httpStatus)
         {
             String authority = requestURI.getAuthority();
 
-            Map<String, String> headers = new LinkedHashMap<>();
-            headers.put(":scheme", "http");
-            headers.put(":method", start[0]);
+            final Map<String, String> headers = new LinkedHashMap<>();
+            headers.put(":scheme", "http");            headers.put(":method", start[0]);
             headers.put(":path", requestURI.getRawPath());
 
             if (authority != null)
@@ -611,13 +663,19 @@ public final class SourceInputStreamFactory
                 headers.put(":authority", authority);
             }
 
-            Pattern headerPattern = Pattern.compile("([^\\s:]+)\\s*:\\s*(.*)");
+            Pattern headerPattern = Pattern.compile("([^\\s:]+):\\s*(.*)");
             for (int i = 1; i < lines.length; i++)
             {
                 Matcher headerMatcher = headerPattern.matcher(lines[i]);
                 if (!headerMatcher.matches())
                 {
-                    throw new IllegalStateException("illegal http header syntax: " + lines[i]);
+                    httpStatus.status = 400;
+                    httpStatus.message = "Bad Request";
+                    if (lines[i].startsWith(" "))
+                    {
+                        httpStatus.message = "Bad Request - obsolete line folding not supported";
+                    }
+                    break;
                 }
 
                 String name = headerMatcher.group(1).toLowerCase();
@@ -942,4 +1000,5 @@ public final class SourceInputStreamFactory
     {
         int decode(DirectBuffer buffer, int offset, int length);
     }
+
 }
