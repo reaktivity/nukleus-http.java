@@ -44,6 +44,49 @@ public final class BufferUtil
         return -1;
     }
 
+    public static int limitOfBytes(
+            DirectBuffer fragment,
+            int offset1,
+            int limit1,
+            DirectBuffer buffer,
+            int offset2,
+            int limit2,
+            byte[] value)
+    {
+        int matchedBytes = 0;
+
+        for (int cursor = offset1; cursor < limit1; cursor++)
+        {
+            if (fragment.getByte(cursor) != value[matchedBytes])
+            {
+                matchedBytes = 0;
+                continue;
+            }
+
+            if (value.length == ++matchedBytes)
+            {
+                throw new IllegalArgumentException("Full match found in fragment buffer");
+            }
+        }
+
+        for (int cursor = offset2; cursor < limit2; cursor++)
+        {
+            if (buffer.getByte(cursor) != value[matchedBytes])
+            {
+                matchedBytes = 0;
+                continue;
+            }
+
+            if (value.length == ++matchedBytes)
+            {
+                return cursor + 1;
+            }
+        }
+
+        return -1;
+    }
+
+
     private BufferUtil()
     {
         // utility class, no instances

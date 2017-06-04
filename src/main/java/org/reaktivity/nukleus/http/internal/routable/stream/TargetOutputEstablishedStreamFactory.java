@@ -15,20 +15,19 @@
  */
 package org.reaktivity.nukleus.http.internal.routable.stream;
 
-import static java.lang.Character.toUpperCase;
 import static java.nio.charset.StandardCharsets.US_ASCII;
+import static org.reaktivity.nukleus.http.internal.routable.stream.Slab.NO_SLOT;
+import static org.reaktivity.nukleus.http.internal.util.HttpUtil.appendHeader;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.function.LongFunction;
-import java.util.function.LongSupplier;
 
 import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
 import org.agrona.concurrent.MessageHandler;
-import org.agrona.concurrent.UnsafeBuffer;
 import org.reaktivity.nukleus.http.internal.routable.Correlation;
 import org.reaktivity.nukleus.http.internal.routable.Source;
 import org.reaktivity.nukleus.http.internal.routable.Target;
@@ -45,6 +44,9 @@ public final class TargetOutputEstablishedStreamFactory
 {
     private static final Map<String, String> EMPTY_HEADERS = Collections.emptyMap();
 
+    public static final byte[] RESPONSE_HEADERS_TOO_LONG_RESPONSE =
+            "HTTP/1.1 507 Insufficient Storage\r\n\r\n".getBytes(US_ASCII);
+
     private final FrameFW frameRO = new FrameFW();
 
     private final BeginFW beginRO = new BeginFW();
@@ -58,19 +60,20 @@ public final class TargetOutputEstablishedStreamFactory
 
     private final Source source;
     private final Function<String, Target> supplyTarget;
-    private final LongSupplier supplyStreamId;
-    private final LongFunction<Correlation> correlateEstablished;
+    private final LongFunction<Correlation<?>> correlateEstablished;
+
+    private final Slab slab;
 
     public TargetOutputEstablishedStreamFactory(
         Source source,
         Function<String, Target> supplyTarget,
-        LongSupplier supplyStreamId,
-        LongFunction<Correlation> correlateEstablished)
+        LongFunction<Correlation<?>> correlateEstablished,
+        Slab slab)
     {
         this.source = source;
         this.supplyTarget = supplyTarget;
-        this.supplyStreamId = supplyStreamId;
         this.correlateEstablished = correlateEstablished;
+        this.slab = slab;
     }
 
     public MessageHandler newStream()
@@ -86,21 +89,24 @@ public final class TargetOutputEstablishedStreamFactory
         private long sourceId;
 
         private Target target;
-        private long targetId;
+        private ServerAcceptState targetStream;
 
-        private int window;
+        private int slotIndex;
+        private int slotPosition;
+        private int slotOffset;
+        private boolean endDeferred;
 
         @Override
         public String toString()
         {
-            return String.format("%s[source=%s, sourceId=%016x, window=%d, targetId=%016x]",
-                    getClass().getSimpleName(), source.routableName(), sourceId, window, targetId);
+            return String.format("%s[source=%s, sourceId=%016x, window=%d, targetStream=%s]",
+                    getClass().getSimpleName(), source.routableName(), sourceId, targetStream);
         }
 
         private TargetOutputEstablishedStream()
         {
-            this.streamState = this::beforeBegin;
-            this.throttleState = this::throttleSkipNextWindow;
+            this.streamState = this::streamBeforeBegin;
+            this.throttleState = this::throttleBeforeBegin;
         }
 
         private void handleStream(
@@ -112,7 +118,7 @@ public final class TargetOutputEstablishedStreamFactory
             streamState.onMessage(msgTypeId, buffer, index, length);
         }
 
-        private void beforeBegin(
+        private void streamBeforeBegin(
             int msgTypeId,
             DirectBuffer buffer,
             int index,
@@ -128,7 +134,25 @@ public final class TargetOutputEstablishedStreamFactory
             }
         }
 
-        private void afterBeginOrData(
+        private void streamBeforeHeadersWritten(
+            int msgTypeId,
+            DirectBuffer buffer,
+            int index,
+            int length)
+        {
+            switch (msgTypeId)
+            {
+            case EndFW.TYPE_ID:
+                endDeferred = true;
+                break;
+            default:
+                slab.release(slotIndex);
+                processUnexpected(buffer, index, length);
+                break;
+            }
+        }
+
+        private void streamAfterBeginOrData(
             int msgTypeId,
             DirectBuffer buffer,
             int index,
@@ -148,7 +172,7 @@ public final class TargetOutputEstablishedStreamFactory
             }
         }
 
-        private void afterEnd(
+        private void streamAfterEnd(
             int msgTypeId,
             DirectBuffer buffer,
             int index,
@@ -157,7 +181,7 @@ public final class TargetOutputEstablishedStreamFactory
             processUnexpected(buffer, index, length);
         }
 
-        private void afterRejectOrReset(
+        private void streamAfterRejectOrReset(
             int msgTypeId,
             MutableDirectBuffer buffer,
             int index,
@@ -177,22 +201,8 @@ public final class TargetOutputEstablishedStreamFactory
 
                 source.removeStream(streamId);
 
-                this.streamState = this::afterEnd;
+                this.streamState = this::streamAfterEnd;
             }
-        }
-
-        private void processUnexpected(
-            DirectBuffer buffer,
-            int index,
-            int length)
-        {
-            frameRO.wrap(buffer, index, index + length);
-
-            final long streamId = frameRO.streamId();
-
-            source.doReset(streamId);
-
-            this.streamState = this::afterRejectOrReset;
         }
 
         private void processBegin(
@@ -203,17 +213,18 @@ public final class TargetOutputEstablishedStreamFactory
             beginRO.wrap(buffer, index, index + length);
 
             final long newSourceId = beginRO.streamId();
-            final long sourceRef = beginRO.referenceId();
+            final long sourceRef = beginRO.sourceRef();
             final long targetCorrelationId = beginRO.correlationId();
             final OctetsFW extension = beginRO.extension();
 
-            final Correlation correlation = correlateEstablished.apply(targetCorrelationId);
+            @SuppressWarnings("unchecked")
+            final Correlation<ServerAcceptState> correlation =
+                         (Correlation<ServerAcceptState>) correlateEstablished.apply(targetCorrelationId);
 
             if (sourceRef == 0L && correlation != null)
             {
-                final Target newTarget = supplyTarget.apply(correlation.source());
-                final long newTargetId = supplyStreamId.getAsLong();
-                final long sourceCorrelationId = correlation.id();
+                target = supplyTarget.apply(correlation.source());
+                targetStream = correlation.state();
 
                 Map<String, String> headers = EMPTY_HEADERS;
                 if (extension.sizeof() > 0)
@@ -224,14 +235,9 @@ public final class TargetOutputEstablishedStreamFactory
                     headers = headers0;
                 }
 
-                this.sourceId = newSourceId;
-                this.target = newTarget;
-                this.targetId = newTargetId;
+                target.setThrottle(targetStream.streamId, this::handleThrottle);
 
-                // TODO: replace with connection pool (start)
-                target.doBegin(newTargetId, 0L, sourceCorrelationId);
-                newTarget.addThrottle(newTargetId, this::handleThrottle);
-                // TODO: replace with connection pool (end)
+                this.sourceId = newSourceId;
 
                 // default status (and reason)
                 String[] status = new String[] { "200", "OK" };
@@ -249,8 +255,7 @@ public final class TargetOutputEstablishedStreamFactory
                     }
                     else
                     {
-                        headersChars.append(toUpperCase(name.charAt(0))).append(name.substring(1))
-                               .append(": ").append(value).append("\r\n");
+                        appendHeader(headersChars, name, value);
                     }
                 });
 
@@ -258,12 +263,39 @@ public final class TargetOutputEstablishedStreamFactory
                         new StringBuilder().append("HTTP/1.1 ").append(status[0]).append(" ").append(status[1]).append("\r\n")
                                            .append(headersChars).append("\r\n").toString();
 
-                final DirectBuffer payload = new UnsafeBuffer(payloadChars.getBytes(US_ASCII));
-
-                target.doData(targetId, payload, 0, payload.capacity());
-
-                this.streamState = this::afterBeginOrData;
-                this.throttleState = this::throttleNextThenSkipWindow;
+                slotIndex = slab.acquire(sourceId);
+                if (slotIndex == NO_SLOT)
+                {
+                    source.doReset(sourceId);
+                    this.streamState = this::streamAfterRejectOrReset;
+                }
+                else
+                {
+                    slotPosition = 0;
+                    MutableDirectBuffer slot = slab.buffer(slotIndex);
+                    if (payloadChars.length() > slot.capacity())
+                    {
+                        slot.putBytes(0,  RESPONSE_HEADERS_TOO_LONG_RESPONSE);
+                        target.doData(targetStream.streamId, slot, 0, RESPONSE_HEADERS_TOO_LONG_RESPONSE.length);
+                        source.doReset(sourceId);
+                        target.removeThrottle(targetStream.streamId);
+                        source.removeStream(sourceId);
+                    }
+                    else
+                    {
+                        byte[] bytes = payloadChars.getBytes(US_ASCII);
+                        slot.putBytes(0, bytes);
+                        slotPosition = bytes.length;
+                        slotOffset = 0;
+                        this.streamState = this::streamBeforeHeadersWritten;
+                        this.throttleState = this::throttleBeforeHeadersWritten;
+                        targetStream.replyTarget.setThrottle(targetStream.streamId, this::handleThrottle);
+                        if (targetStream.window > 0)
+                        {
+                            useTargetWindowToWriteResponseHeaders();
+                        }
+                    }
+                }
             }
             else
             {
@@ -279,17 +311,15 @@ public final class TargetOutputEstablishedStreamFactory
 
             dataRO.wrap(buffer, index, index + length);
 
-            window -= dataRO.length();
-
-            if (window < 0)
+            if (targetStream.window < dataRO.length())
             {
                 processUnexpected(buffer, index, length);
             }
             else
             {
                 final OctetsFW payload = dataRO.payload();
-
-                target.doData(targetId, payload);
+                target.doData(targetStream.streamId, payload);
+                targetStream.window -= dataRO.length();
             }
         }
 
@@ -299,9 +329,38 @@ public final class TargetOutputEstablishedStreamFactory
             int length)
         {
             endRO.wrap(buffer, index, index + length);
+            doEnd();
+        }
 
-            target.removeThrottle(targetId);
+        private void doEnd()
+        {
+            if (targetStream != null && targetStream.endRequested && --targetStream.pendingRequests == 0)
+            {
+                target.doEnd(targetStream.streamId);
+                target.removeThrottle(targetStream.streamId);
+                targetStream.restoreInitialThrottle();
+                this.streamState = this::streamAfterEnd;
+            }
+            else
+            {
+                throttleState = this::throttleBetweenResponses;
+                streamState = this::streamBeforeBegin;
+            }
             source.removeStream(sourceId);
+        }
+
+        private void processUnexpected(
+            DirectBuffer buffer,
+            int index,
+            int length)
+        {
+            frameRO.wrap(buffer, index, index + length);
+
+            final long streamId = frameRO.streamId();
+
+            source.doReset(streamId);
+
+            this.streamState = this::streamAfterRejectOrReset;
         }
 
         private void handleThrottle(
@@ -313,7 +372,24 @@ public final class TargetOutputEstablishedStreamFactory
             throttleState.onMessage(msgTypeId, buffer, index, length);
         }
 
-        private void throttleNextThenSkipWindow(
+        private void throttleBeforeBegin(
+            int msgTypeId,
+            DirectBuffer buffer,
+            int index,
+            int length)
+        {
+            switch (msgTypeId)
+            {
+            case ResetFW.TYPE_ID:
+                processReset(buffer, index, length);
+                break;
+            default:
+                // ignore
+                break;
+            }
+        }
+
+        private void throttleBeforeHeadersWritten(
             int msgTypeId,
             DirectBuffer buffer,
             int index,
@@ -322,7 +398,10 @@ public final class TargetOutputEstablishedStreamFactory
             switch (msgTypeId)
             {
             case WindowFW.TYPE_ID:
-                processNextThenSkipWindow(buffer, index, length);
+                windowRO.wrap(buffer, index, index + length);
+                int update = windowRO.update();
+                targetStream.window += update;
+                useTargetWindowToWriteResponseHeaders();
                 break;
             case ResetFW.TYPE_ID:
                 processReset(buffer, index, length);
@@ -333,7 +412,7 @@ public final class TargetOutputEstablishedStreamFactory
             }
         }
 
-        private void throttleSkipNextWindow(
+        private void throttleBetweenResponses(
             int msgTypeId,
             DirectBuffer buffer,
             int index,
@@ -342,7 +421,9 @@ public final class TargetOutputEstablishedStreamFactory
             switch (msgTypeId)
             {
             case WindowFW.TYPE_ID:
-                processSkipNextWindow(buffer, index, length);
+                windowRO.wrap(buffer, index, index + length);
+                int update = windowRO.update();
+                targetStream.window += update;
                 break;
             case ResetFW.TYPE_ID:
                 processReset(buffer, index, length);
@@ -362,7 +443,7 @@ public final class TargetOutputEstablishedStreamFactory
             switch (msgTypeId)
             {
             case WindowFW.TYPE_ID:
-                processNextWindow(buffer, index, length);
+                processWindow(buffer, index, length);
                 break;
             case ResetFW.TYPE_ID:
                 processReset(buffer, index, length);
@@ -373,42 +454,49 @@ public final class TargetOutputEstablishedStreamFactory
             }
         }
 
-        private void processSkipNextWindow(
-            DirectBuffer buffer,
-            int index,
-            int length)
+        private void useTargetWindowToWriteResponseHeaders()
         {
-            windowRO.wrap(buffer, index, index + length);
-
-            throttleState = this::throttleNextWindow;
+            int bytesDeferred = slotPosition - slotOffset;
+            int writableBytes = Math.min(bytesDeferred, targetStream.window);
+            MutableDirectBuffer slot = slab.buffer(slotIndex);
+            target.doData(targetStream.streamId, slot, slotOffset, writableBytes);
+            targetStream.window -= writableBytes;
+            slotOffset += writableBytes;
+            bytesDeferred -= writableBytes;
+            if (bytesDeferred == 0)
+            {
+                slab.release(slotIndex);
+                slotIndex = NO_SLOT;
+                if (endDeferred)
+                {
+                    doEnd();
+                }
+                else
+                {
+                    streamState = this::streamAfterBeginOrData;
+                    throttleState = this::throttleNextWindow;
+                    if (targetStream.window > 0)
+                    {
+                        doSourceWindow(targetStream.window);
+                    }
+                }
+            }
         }
 
-        private void processNextWindow(
+        private void processWindow(
             DirectBuffer buffer,
             int index,
             int length)
         {
             windowRO.wrap(buffer, index, index + length);
-
             final int update = windowRO.update();
-
-            window += update;
-            source.doWindow(sourceId, update);
+            targetStream.window += update;
+            doSourceWindow(update);
         }
 
-        private void processNextThenSkipWindow(
-            DirectBuffer buffer,
-            int index,
-            int length)
+        private void doSourceWindow(int update)
         {
-            windowRO.wrap(buffer, index, index + length);
-
-            final int update = windowRO.update();
-
-            window += update;
             source.doWindow(sourceId, update);
-
-            throttleState = this::throttleSkipNextWindow;
         }
 
         private void processReset(
@@ -417,7 +505,7 @@ public final class TargetOutputEstablishedStreamFactory
             int length)
         {
             resetRO.wrap(buffer, index, index + length);
-
+            slab.release(slotIndex);
             source.doReset(sourceId);
         }
     }

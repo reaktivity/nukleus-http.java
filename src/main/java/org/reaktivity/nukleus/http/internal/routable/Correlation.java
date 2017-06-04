@@ -21,20 +21,31 @@ import java.util.Objects;
 
 import org.reaktivity.nukleus.http.internal.router.RouteKind;
 
-public class Correlation
+public class Correlation<S>
 {
     private final String source;
     private final long id;
     private final RouteKind established;
+    private final S state;
 
     public Correlation(
         long id,
         String source,
-        RouteKind established)
+        RouteKind established,
+        S state)
     {
         this.id = id;
         this.source = requireNonNull(source, "source");
         this.established = requireNonNull(established, "established");
+        this.state = state;
+    }
+
+    public Correlation(
+            long id,
+            String source,
+            RouteKind established)
+    {
+        this(id, source, established, null);
     }
 
     public String source()
@@ -50,6 +61,11 @@ public class Correlation
     public RouteKind established()
     {
         return established;
+    }
+
+    public S state()
+    {
+        return state;
     }
 
     @Override
@@ -71,10 +87,11 @@ public class Correlation
             return false;
         }
 
-        Correlation that = (Correlation) obj;
+        Correlation<?> that = (Correlation<?>) obj;
         return this.id == that.id &&
                 this.established == that.established &&
-                Objects.equals(this.source, that.source);
+                Objects.equals(this.source, that.source) &&
+                Objects.equals(this.state, that.state);
     }
 
     @Override

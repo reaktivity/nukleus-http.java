@@ -29,6 +29,7 @@ import org.agrona.concurrent.MessageHandler;
 import org.agrona.concurrent.ringbuffer.RingBuffer;
 import org.reaktivity.nukleus.Nukleus;
 import org.reaktivity.nukleus.http.internal.layouts.StreamsLayout;
+import org.reaktivity.nukleus.http.internal.routable.stream.Slab;
 import org.reaktivity.nukleus.http.internal.routable.stream.SourceInputStreamFactory;
 import org.reaktivity.nukleus.http.internal.routable.stream.SourceOutputStreamFactory;
 import org.reaktivity.nukleus.http.internal.routable.stream.TargetInputEstablishedStreamFactory;
@@ -57,7 +58,7 @@ public final class Source implements Nukleus
     private final Long2ObjectHashMap<MessageHandler> streams;
 
     private final EnumMap<RouteKind, Supplier<MessageHandler>> streamFactories;
-    private final LongFunction<Correlation> lookupEstablished;
+    private final LongFunction<Correlation<?>> lookupEstablished;
 
     Source(
         String sourceName,
@@ -67,9 +68,12 @@ public final class Source implements Nukleus
         LongFunction<List<Route>> supplyRoutes,
         LongSupplier supplyTargetId,
         Function<String, Target> supplyTarget,
-        LongObjectBiConsumer<Correlation> correlateNew,
-        LongFunction<Correlation> correlateEstablished,
-        LongFunction<Correlation> lookupEstablished)
+        LongObjectBiConsumer<Correlation<?>> correlateNew,
+        LongFunction<Correlation<?>> correlateEstablished,
+        LongFunction<Correlation<?>> lookupEstablished,
+        int maximumHeadersSize,
+        int memoryForDecodeEncode,
+        int maximumConnectionsPerRoute)
     {
         this.sourceName = sourceName;
         this.partitionName = partitionName;
@@ -80,16 +84,18 @@ public final class Source implements Nukleus
         this.throttleBuffer = layout.throttleBuffer();
         this.streams = new Long2ObjectHashMap<>();
 
-        Target rejectTarget = supplyTarget.apply(sourceName);
         this.streamFactories = new EnumMap<>(RouteKind.class);
-        this.streamFactories.put(RouteKind.INPUT,
-                new SourceInputStreamFactory(this, supplyRoutes, supplyTargetId, rejectTarget, correlateNew)::newStream);
+        Slab slab = new Slab(memoryForDecodeEncode, maximumHeadersSize);
+        this.streamFactories.put(RouteKind.INPUT, new SourceInputStreamFactory(this, supplyRoutes, supplyTargetId,
+                supplyTarget, correlateNew, slab)::newStream);
         this.streamFactories.put(RouteKind.OUTPUT_ESTABLISHED,
-                new TargetOutputEstablishedStreamFactory(this, supplyTarget, supplyTargetId, correlateEstablished)::newStream);
+                new TargetOutputEstablishedStreamFactory(this, supplyTarget, correlateEstablished,
+                        slab)::newStream);
         this.streamFactories.put(RouteKind.OUTPUT,
-                new SourceOutputStreamFactory(this, supplyRoutes, supplyTargetId, correlateNew)::newStream);
-        this.streamFactories.put(RouteKind.INPUT_ESTABLISHED,
-                new TargetInputEstablishedStreamFactory(this, supplyRoutes, supplyTargetId, correlateEstablished)::newStream);
+                new SourceOutputStreamFactory(this, supplyRoutes, supplyTargetId,
+                        correlateNew, slab, maximumConnectionsPerRoute)::newStream);
+        this.streamFactories.put(RouteKind.INPUT_ESTABLISHED, new TargetInputEstablishedStreamFactory(this, supplyTarget,
+                supplyTargetId, correlateEstablished, lookupEstablished, slab)::newStream);
 
         this.lookupEstablished = lookupEstablished;
     }
@@ -174,7 +180,7 @@ public final class Source implements Nukleus
     {
         beginRO.wrap(buffer, index, index + length);
         final long sourceId = beginRO.streamId();
-        final long sourceRef = beginRO.referenceId();
+        final long sourceRef = beginRO.sourceRef();
         final long correlationId = beginRO.correlationId();
 
         RouteKind routeKind = resolve(sourceRef, correlationId);
@@ -196,7 +202,10 @@ public final class Source implements Nukleus
         final int update)
     {
         final WindowFW window = windowRW.wrap(writeBuffer, 0, writeBuffer.capacity())
-                .streamId(streamId).update(update).build();
+                .streamId(streamId)
+                .update(update)
+                .frames(update)
+                .build();
 
         throttleBuffer.write(window.typeId(), window.buffer(), window.offset(), window.sizeof());
     }
@@ -224,7 +233,7 @@ public final class Source implements Nukleus
 
         if (sourceRef == 0L)
         {
-            final Correlation correlation = lookupEstablished.apply(correlationId);
+            final Correlation<?> correlation = lookupEstablished.apply(correlationId);
             if (correlation != null)
             {
                 routeKind = correlation.established();

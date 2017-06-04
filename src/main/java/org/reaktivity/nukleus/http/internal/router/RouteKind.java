@@ -19,14 +19,13 @@ import java.util.function.LongSupplier;
 
 import org.agrona.concurrent.status.AtomicCounter;
 import org.reaktivity.nukleus.http.internal.types.control.Role;
-import org.reaktivity.nukleus.http.internal.types.control.State;
 
 public enum RouteKind
 {
     INPUT
     {
         @Override
-        protected final long nextRef(
+        protected long nextRef(
             LongSupplier getAndIncrement,
             LongSupplier get)
         {
@@ -39,7 +38,7 @@ public enum RouteKind
     OUTPUT_ESTABLISHED
     {
         @Override
-        protected final long nextRef(
+        protected long nextRef(
             LongSupplier getAndIncrement,
             LongSupplier get)
         {
@@ -52,7 +51,7 @@ public enum RouteKind
     OUTPUT
     {
         @Override
-        protected final long nextRef(
+        protected long nextRef(
             LongSupplier getAndIncrement,
             LongSupplier get)
         {
@@ -64,7 +63,7 @@ public enum RouteKind
     INPUT_ESTABLISHED
     {
         @Override
-        protected final long nextRef(
+        protected long nextRef(
             LongSupplier getAndIncrement,
             LongSupplier get)
         {
@@ -117,31 +116,16 @@ public enum RouteKind
     }
 
     public static RouteKind valueOf(
-        Role role,
-        State state)
+        Role role)
     {
         switch (role)
         {
-        case INPUT:
-            switch (state)
-            {
-            case NEW:
-            case NONE:
-                return INPUT;
-            case ESTABLISHED:
-                return INPUT_ESTABLISHED;
-            }
-        case OUTPUT:
-            switch (state)
-            {
-            case NEW:
-            case NONE:
-                return OUTPUT;
-            case ESTABLISHED:
-                return OUTPUT_ESTABLISHED;
-            }
+        case SERVER:
+            return INPUT;
+        case CLIENT:
+            return OUTPUT;
+        default:
+            throw new IllegalArgumentException("Unexpected role and state");
         }
-
-        throw new IllegalArgumentException("Unexpected role and state");
     }
 }

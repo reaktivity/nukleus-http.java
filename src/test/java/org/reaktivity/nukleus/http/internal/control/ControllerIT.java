@@ -51,9 +51,9 @@ public class ControllerIT
 
     @Test
     @Specification({
-        "${route}/input/new/nukleus"
+        "${route}/server/nukleus"
     })
-    public void shouldRouteInputNew() throws Exception
+    public void shouldRouteServer() throws Exception
     {
         long targetRef = new Random().nextLong();
         Map<String, String> headers = new LinkedHashMap<>();
@@ -62,7 +62,7 @@ public class ControllerIT
         k3po.start();
 
         controller.controller(HttpController.class)
-                  .routeInputNew("source", 0L, "target", targetRef, headers)
+                  .routeServer("source", 0L, "target", targetRef, headers)
                   .get();
 
         k3po.finish();
@@ -70,9 +70,9 @@ public class ControllerIT
 
     @Test
     @Specification({
-        "${route}/output/new/nukleus"
+        "${route}/client/nukleus"
     })
-    public void shouldRouteOutputNew() throws Exception
+    public void shouldRouteClient() throws Exception
     {
         long targetRef = new Random().nextLong();
         Map<String, String> headers = new LinkedHashMap<>();
@@ -81,7 +81,7 @@ public class ControllerIT
         k3po.start();
 
         controller.controller(HttpController.class)
-                  .routeOutputNew("source", 0L, "target", targetRef, headers)
+                  .routeClient("source", 0L, "target", targetRef, headers)
                   .get();
 
         k3po.finish();
@@ -89,40 +89,10 @@ public class ControllerIT
 
     @Test
     @Specification({
-        "${route}/output/established/nukleus"
+        "${route}/server/nukleus",
+        "${unroute}/server/nukleus"
     })
-    public void shouldRouteOutputEstablished() throws Exception
-    {
-        k3po.start();
-
-        controller.controller(HttpController.class)
-                  .routeOutputEstablished("target", 0L, "source", 0L, null)
-                  .get();
-
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${route}/input/established/nukleus"
-    })
-    public void shouldRouteInputEstablished() throws Exception
-    {
-        k3po.start();
-
-        controller.controller(HttpController.class)
-                  .routeInputEstablished("target", 0L, "source", 0L, null)
-                  .get();
-
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${route}/input/new/nukleus",
-        "${unroute}/input/new/nukleus"
-    })
-    public void shouldUnrouteInputNew() throws Exception
+    public void shouldUnrouteServer() throws Exception
     {
         long targetRef = new Random().nextLong();
         Map<String, String> headers = new LinkedHashMap<>();
@@ -131,13 +101,13 @@ public class ControllerIT
         k3po.start();
 
         long sourceRef = controller.controller(HttpController.class)
-                  .routeInputNew("source", 0L, "target", targetRef, headers)
+                  .routeServer("source", 0L, "target", targetRef, headers)
                   .get();
 
-        k3po.notifyBarrier("ROUTED_INPUT");
+        k3po.notifyBarrier("ROUTED_SERVER");
 
         controller.controller(HttpController.class)
-                  .unrouteInputNew("source", sourceRef, "target", targetRef, headers)
+                  .unrouteServer("source", sourceRef, "target", targetRef, headers)
                   .get();
 
         k3po.finish();
@@ -145,10 +115,10 @@ public class ControllerIT
 
     @Test
     @Specification({
-        "${route}/output/new/nukleus",
-        "${unroute}/output/new/nukleus"
+        "${route}/client/nukleus",
+        "${unroute}/client/nukleus"
     })
-    public void shouldUnrouteOutputNew() throws Exception
+    public void shouldUnrouteClient() throws Exception
     {
         long targetRef = new Random().nextLong();
         Map<String, String> headers = new LinkedHashMap<>();
@@ -157,57 +127,13 @@ public class ControllerIT
         k3po.start();
 
         long sourceRef = controller.controller(HttpController.class)
-                  .routeOutputNew("source", 0L, "target", targetRef, headers)
+                  .routeClient("source", 0L, "target", targetRef, headers)
                   .get();
 
-        k3po.notifyBarrier("ROUTED_OUTPUT");
+        k3po.notifyBarrier("ROUTED_CLIENT");
 
         controller.controller(HttpController.class)
-                  .unrouteOutputNew("source", sourceRef, "target", targetRef, headers)
-                  .get();
-
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${route}/output/established/nukleus",
-        "${unroute}/output/established/nukleus"
-    })
-    public void shouldUnrouteOutputEstablished() throws Exception
-    {
-        k3po.start();
-
-        long targetRef = controller.controller(HttpController.class)
-                  .routeOutputEstablished("target", 0L, "source", 0L, null)
-                  .get();
-
-        k3po.notifyBarrier("ROUTED_OUTPUT");
-
-        controller.controller(HttpController.class)
-                  .unrouteOutputEstablished("target", targetRef, "source", 0L, null)
-                  .get();
-
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${route}/input/established/nukleus",
-        "${unroute}/input/established/nukleus"
-    })
-    public void shouldUnrouteInputEstablished() throws Exception
-    {
-        k3po.start();
-
-        long targetRef  = controller.controller(HttpController.class)
-                  .routeInputEstablished("target", 0L, "source", 0L, null)
-                  .get();
-
-        k3po.notifyBarrier("ROUTED_INPUT");
-
-        controller.controller(HttpController.class)
-                  .unrouteInputEstablished("target", targetRef, "source", 0L, null)
+                  .unrouteClient("source", sourceRef, "target", targetRef, headers)
                   .get();
 
         k3po.finish();

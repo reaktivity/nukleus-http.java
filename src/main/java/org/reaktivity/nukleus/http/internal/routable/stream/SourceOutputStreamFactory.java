@@ -15,45 +15,92 @@
  */
 package org.reaktivity.nukleus.http.internal.routable.stream;
 
+import static org.reaktivity.nukleus.http.internal.routable.Route.headersMatch;
+import static org.reaktivity.nukleus.http.internal.routable.stream.Slab.NO_SLOT;
+import static org.reaktivity.nukleus.http.internal.router.RouteKind.INPUT_ESTABLISHED;
+import static org.reaktivity.nukleus.http.internal.util.HttpUtil.appendHeader;
+
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.function.Consumer;
 import java.util.function.LongFunction;
 import java.util.function.LongSupplier;
+import java.util.function.Predicate;
 
 import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
+import org.agrona.collections.Long2ObjectHashMap;
 import org.agrona.concurrent.MessageHandler;
 import org.reaktivity.nukleus.http.internal.routable.Correlation;
 import org.reaktivity.nukleus.http.internal.routable.Route;
 import org.reaktivity.nukleus.http.internal.routable.Source;
+import org.reaktivity.nukleus.http.internal.routable.Target;
+import org.reaktivity.nukleus.http.internal.routable.stream.ConnectionPool.Connection;
+import org.reaktivity.nukleus.http.internal.routable.stream.ConnectionPool.ConnectionRequest;
+import org.reaktivity.nukleus.http.internal.types.OctetsFW;
 import org.reaktivity.nukleus.http.internal.types.stream.BeginFW;
 import org.reaktivity.nukleus.http.internal.types.stream.DataFW;
 import org.reaktivity.nukleus.http.internal.types.stream.EndFW;
 import org.reaktivity.nukleus.http.internal.types.stream.FrameFW;
+import org.reaktivity.nukleus.http.internal.types.stream.HttpBeginExFW;
+import org.reaktivity.nukleus.http.internal.types.stream.ResetFW;
+import org.reaktivity.nukleus.http.internal.types.stream.WindowFW;
 import org.reaktivity.nukleus.http.internal.util.function.LongObjectBiConsumer;
 
 public final class SourceOutputStreamFactory
 {
+    private static final Map<String, String> EMPTY_HEADERS = Collections.emptyMap();
+
+    // Pseudo-headers
+    private static final int METHOD = 0;
+    private static final int SCHEME = 1;
+    private static final int AUTHORITY = 2;
+    private static final int PATH = 3;
+
     private final FrameFW frameRO = new FrameFW();
 
     private final BeginFW beginRO = new BeginFW();
+    private final HttpBeginExFW beginExRO = new HttpBeginExFW();
+
     private final DataFW dataRO = new DataFW();
     private final EndFW endRO = new EndFW();
 
+    private final WindowFW windowRO = new WindowFW();
+    private final ResetFW resetRO = new ResetFW();
+
     private final Source source;
-    private final LongSupplier supplyTargetId;
     private final LongFunction<List<Route>> supplyRoutes;
-    private final LongObjectBiConsumer<Correlation> correlateNew;
+    private final LongSupplier supplyTargetId;
+    private final LongObjectBiConsumer<Correlation<?>> correlateNew;
+
+    private final Map<String, Map<Long, ConnectionPool>> connectionPools;
+    private final int maximumConnectionsPerRoute;
+
+    private final Slab slab;
+
+
 
     public SourceOutputStreamFactory(
         Source source,
         LongFunction<List<Route>> supplyRoutes,
         LongSupplier supplyTargetId,
-        LongObjectBiConsumer<Correlation> correlateNew)
+        LongObjectBiConsumer<Correlation<?>> correlateNew,
+        Slab slab,
+        int maximumConnectionsPerRoute)
     {
         this.source = source;
-        this.supplyTargetId = supplyTargetId;
         this.supplyRoutes = supplyRoutes;
+        this.supplyTargetId = supplyTargetId;
         this.correlateNew = correlateNew;
+        this.slab = slab;
+        this.connectionPools = new HashMap<>();
+        this.maximumConnectionsPerRoute = maximumConnectionsPerRoute;
     }
 
     public MessageHandler newStream()
@@ -61,15 +108,30 @@ public final class SourceOutputStreamFactory
         return new SourceOutputStream()::handleStream;
     }
 
-    private final class SourceOutputStream
+    private final class SourceOutputStream implements ConnectionRequest, Consumer<Connection>
     {
-        private MessageHandler currentState;
+        private MessageHandler streamState;
+        private MessageHandler throttleState;
 
         private long sourceId;
+        private long sourceRef;
+        private long correlationId;
+        private Target target;
+        private long targetRef;
+        private Connection connection;
+        private ConnectionRequest nextConnectionRequest;
+        private ConnectionPool connectionPool;
+        private int sourceWindow;
+        private int slotIndex;
+        private int slotPosition;
+        private int slotOffset;
+        private boolean endDeferred;
+        private boolean persistent = true;
 
         private SourceOutputStream()
         {
-            nextState(this::beforeBegin);
+            this.streamState = this::streamBeforeBegin;
+            this.throttleState = this::throttleBeforeBegin;
         }
 
         private void handleStream(
@@ -78,12 +140,12 @@ public final class SourceOutputStreamFactory
             int index,
             int length)
         {
-            currentState.onMessage(msgTypeId, buffer, index, length);
+            streamState.onMessage(msgTypeId, buffer, index, length);
         }
 
-        private void beforeBegin(
+        private void streamBeforeBegin(
             int msgTypeId,
-            MutableDirectBuffer buffer,
+            DirectBuffer buffer,
             int index,
             int length)
         {
@@ -97,7 +159,25 @@ public final class SourceOutputStreamFactory
             }
         }
 
-        private void afterBeginOrData(
+        private void streamBeforeHeadersWritten(
+            int msgTypeId,
+            DirectBuffer buffer,
+            int index,
+            int length)
+        {
+            switch (msgTypeId)
+            {
+            case EndFW.TYPE_ID:
+                endDeferred = true;
+                break;
+            default:
+                slab.release(slotIndex);
+                processUnexpected(buffer, index, length);
+                break;
+            }
+        }
+
+        private void streamAfterBeginOrData(
             int msgTypeId,
             DirectBuffer buffer,
             int index,
@@ -117,7 +197,7 @@ public final class SourceOutputStreamFactory
             }
         }
 
-        private void afterEnd(
+        private void streamAfterEnd(
             int msgTypeId,
             DirectBuffer buffer,
             int index,
@@ -126,7 +206,7 @@ public final class SourceOutputStreamFactory
             processUnexpected(buffer, index, length);
         }
 
-        private void afterReplyOrReset(
+        private void streamAfterReplyOrReset(
             int msgTypeId,
             MutableDirectBuffer buffer,
             int index,
@@ -146,7 +226,7 @@ public final class SourceOutputStreamFactory
 
                 source.removeStream(streamId);
 
-                nextState(this::afterEnd);
+                this.streamState = this::streamAfterEnd;
             }
         }
 
@@ -156,8 +236,139 @@ public final class SourceOutputStreamFactory
             int length)
         {
             beginRO.wrap(buffer, index, index + length);
+            this.sourceId = beginRO.streamId();
+            this.sourceRef = beginRO.sourceRef();
+            this.correlationId = beginRO.correlationId();
+            final OctetsFW extension = beginRO.extension();
 
-            nextState(this::afterBeginOrData);
+            // TODO: avoid object creation
+            Map<String, String> headers = EMPTY_HEADERS;
+            if (extension.sizeof() > 0)
+            {
+                final HttpBeginExFW beginEx = extension.get(beginExRO::wrap);
+                Map<String, String> headers0 = new LinkedHashMap<>();
+                beginEx.headers().forEach(h -> headers0.put(h.name().asString(), h.value().asString()));
+                headers = headers0;
+            }
+            final Optional<Route> optional = resolveTarget(sourceRef, headers);
+
+            if (optional.isPresent())
+            {
+                slotIndex = slab.acquire(sourceId);
+                if (slotIndex == NO_SLOT)
+                {
+                    source.doReset(sourceId);
+                    this.streamState = this::streamAfterReplyOrReset;
+                }
+                else
+                {
+                    byte[] bytes = encodeHeaders(headers, buffer, index, length);
+                    slotPosition = 0;
+                    MutableDirectBuffer slot = slab.buffer(slotIndex);
+                    if (bytes.length > slot.capacity())
+                    {
+                        // TODO: diagnostics (reset reason?)
+                        source.doReset(sourceId);
+                        source.removeStream(sourceId);
+                    }
+                    else
+                    {
+                        slot.putBytes(0, bytes);
+                        slotPosition = bytes.length;
+                        slotOffset = 0;
+                        this.streamState = this::streamBeforeHeadersWritten;
+                        this.throttleState = this::throttleBeforeHeadersWritten;
+                        final Route route = optional.get();
+                        target = route.target();
+                        this.targetRef = route.targetRef();
+                        connectionPool = getConnectionPool(target, targetRef);
+                        connectionPool.acquire(this);
+                    }
+                }
+            }
+            else
+            {
+                processUnexpected(buffer, index, length);
+            }
+        }
+
+        private byte[] encodeHeaders(Map<String, String> headers,
+                                     DirectBuffer buffer,
+                                     int index,
+                                     int length)
+        {
+            String[] pseudoHeaders = new String[4];
+
+            StringBuilder headersChars = new StringBuilder();
+            headers.forEach((name, value) ->
+            {
+                switch(name.toLowerCase())
+                {
+                case ":method":
+                    pseudoHeaders[METHOD] = value;
+                    switch(value.toLowerCase())
+                    {
+                    case "post":
+                    case "insert":
+                        this.persistent = false;
+                    }
+                    break;
+                case ":scheme":
+                    pseudoHeaders[SCHEME] = value;
+                    break;
+                case ":authority":
+                    pseudoHeaders[AUTHORITY] = value;
+                    break;
+                case ":path":
+                    pseudoHeaders[PATH] = value;
+                    break;
+                case "host":
+                    if (pseudoHeaders[AUTHORITY] == null)
+                    {
+                        pseudoHeaders[AUTHORITY] = value;
+                    }
+                    else if (!pseudoHeaders[AUTHORITY].equals(value))
+                    {
+                        processUnexpected(buffer, index, length);
+                    }
+                    break;
+                case "connection":
+                    Arrays.asList(value.toLowerCase().split(",")).stream().forEach((element) ->
+                    {
+                        switch(element)
+                        {
+                        case "close":
+                            this.persistent = false;
+                            break;
+                        }
+                    });
+                    appendHeader(headersChars, name, value);
+                    break;
+                default:
+                    appendHeader(headersChars, name, value);
+                }
+            });
+
+            if (pseudoHeaders[METHOD] == null || pseudoHeaders[SCHEME] == null || pseudoHeaders[PATH] == null
+                    || pseudoHeaders[AUTHORITY] == null)
+            {
+                processUnexpected(buffer, index, length);
+            }
+
+            String payloadChars =
+                    new StringBuilder().append(pseudoHeaders[METHOD]).append(" ").append(pseudoHeaders[PATH])
+                                       .append(" HTTP/1.1").append("\r\n")
+                                       .append("Host").append(": ").append(pseudoHeaders[AUTHORITY]).append("\r\n")
+                                       .append(headersChars).append("\r\n").toString();
+            return payloadChars.getBytes(StandardCharsets.US_ASCII);
+        }
+
+        private ConnectionPool getConnectionPool(final Target target, long targetRef)
+        {
+            Map<Long, ConnectionPool> connectionsByRef = connectionPools.
+                    computeIfAbsent(target.name(), (n) -> new Long2ObjectHashMap<ConnectionPool>());
+            return connectionsByRef.computeIfAbsent(targetRef, (r) ->
+                new ConnectionPool(maximumConnectionsPerRoute, supplyTargetId, target, targetRef));
         }
 
         private void processData(
@@ -167,7 +378,17 @@ public final class SourceOutputStreamFactory
         {
             dataRO.wrap(buffer, index, index + length);
 
-            // TODO
+            sourceWindow -= dataRO.length();
+            if (sourceWindow < 0)
+            {
+                processUnexpected(buffer, index, length);
+            }
+            else
+            {
+                final OctetsFW payload = dataRO.payload();
+                target.doData(connection.targetId, payload);
+                connection.window -= payload.sizeof();
+            }
         }
 
         private void processEnd(
@@ -176,10 +397,15 @@ public final class SourceOutputStreamFactory
             int length)
         {
             endRO.wrap(buffer, index, index + length);
+            doEnd();
+        }
 
-            // TODO
+        private void doEnd()
+        {
+            target.removeThrottle(connection.targetId);
 
-            nextState(this::afterEnd);
+            source.removeStream(sourceId);
+            this.streamState = this::streamAfterEnd;
         }
 
         private void processUnexpected(
@@ -193,13 +419,167 @@ public final class SourceOutputStreamFactory
 
             source.doReset(streamId);
 
-            nextState(this::afterReplyOrReset);
+            this.streamState = this::streamAfterReplyOrReset;
         }
 
-        private void nextState(
-            final MessageHandler nextState)
+        private void handleThrottle(
+            int msgTypeId,
+            MutableDirectBuffer buffer,
+            int index,
+            int length)
         {
-            this.currentState = nextState;
+            throttleState.onMessage(msgTypeId, buffer, index, length);
+        }
+
+        private void throttleBeforeBegin(
+            int msgTypeId,
+            DirectBuffer buffer,
+            int index,
+            int length)
+        {
+            switch (msgTypeId)
+            {
+            case ResetFW.TYPE_ID:
+                processReset(buffer, index, length);
+                break;
+            default:
+                // ignore
+                break;
+            }
+        }
+
+        private void throttleBeforeHeadersWritten(
+            int msgTypeId,
+            DirectBuffer buffer,
+            int index,
+            int length)
+        {
+            switch (msgTypeId)
+            {
+            case WindowFW.TYPE_ID:
+                windowRO.wrap(buffer, index, index + length);
+                connection.window += windowRO.update();
+                useWindowToWriteRequestHeaders();
+                break;
+            case ResetFW.TYPE_ID:
+                processReset(buffer, index, length);
+                break;
+            default:
+                // ignore
+                break;
+            }
+        }
+
+        private void throttleNextWindow(
+            int msgTypeId,
+            DirectBuffer buffer,
+            int index,
+            int length)
+        {
+            switch (msgTypeId)
+            {
+            case WindowFW.TYPE_ID:
+                windowRO.wrap(buffer, index, index + length);
+                int update = windowRO.update();
+                connection.window += update;
+                doSourceWindow(update);
+                break;
+            case ResetFW.TYPE_ID:
+                processReset(buffer, index, length);
+                break;
+            default:
+                // ignore
+                break;
+            }
+        }
+
+        private void useWindowToWriteRequestHeaders()
+        {
+            int writableBytes = Math.min(slotPosition - slotOffset, connection.window);
+            MutableDirectBuffer slot = slab.buffer(slotIndex);
+            target.doData(connection.targetId, slot, slotOffset, writableBytes);
+            connection.window -= writableBytes;
+            slotOffset += writableBytes;
+            int bytesDeferred = slotPosition - slotOffset;
+            if (bytesDeferred == 0)
+            {
+                slab.release(slotIndex);
+                slotIndex = NO_SLOT;
+                if (endDeferred)
+                {
+                    doEnd();
+                }
+                else
+                {
+                    streamState = this::streamAfterBeginOrData;
+                    throttleState = this::throttleNextWindow;
+                    if (connection.window > 0)
+                    {
+                        doSourceWindow(connection.window);
+                    }
+                }
+            }
+        }
+
+        private void doSourceWindow(int update)
+        {
+            sourceWindow += update;
+            source.doWindow(sourceId, update);
+        }
+
+        private void processReset(
+            DirectBuffer buffer,
+            int index,
+            int length)
+        {
+            resetRO.wrap(buffer, index, index + length);
+            slab.release(slotIndex);
+            source.doReset(sourceId);
+        }
+
+        private Optional<Route> resolveTarget(
+            long sourceRef,
+            Map<String, String> headers)
+        {
+            final List<Route> routes = supplyRoutes.apply(sourceRef);
+            final Predicate<Route> predicate = headersMatch(headers);
+
+            return routes.stream().filter(predicate).findFirst();
+        }
+
+        @Override
+        public Consumer<Connection> getConsumer()
+        {
+            return this;
+        }
+
+        @Override
+        public void next(ConnectionRequest request)
+        {
+            nextConnectionRequest = request;
+        }
+
+        @Override
+        public ConnectionRequest next()
+        {
+            return nextConnectionRequest;
+        }
+
+        @Override
+        public void accept(Connection connection)
+        {
+            this.connection = connection;
+            connection.persistent = persistent;
+            final long targetCorrelationId = connection.targetId;
+            ClientConnectReplyState state = new ClientConnectReplyState(connectionPool, connection);
+            final Correlation<ClientConnectReplyState> correlation =
+                    new Correlation<>(correlationId, source.routableName(), INPUT_ESTABLISHED, state);
+            correlateNew.accept(targetCorrelationId, correlation);
+            target.setThrottle(connection.targetId, this::handleThrottle);
+            if (connection.window > 0)
+            {
+                useWindowToWriteRequestHeaders();
+            }
         }
     }
 }

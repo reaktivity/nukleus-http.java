@@ -6,7 +6,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>org.reaktivity</groupId>
   <artifactId>nukleus-http</artifactId>
-  <version>0.4</version>
+  <version>0.5</version>
   <name>HTTP Nukleus Implementation</name>
   <description>HTTP Nukleus Implementation</description>
   <url>https://github.com/reaktivity/nukleus-http.java</url>
@@ -44,13 +44,15 @@
     <checkstyle.suppressions.location>src/conf/checkstyle/suppressions.xml</checkstyle.suppressions.location>
 
     <junit.version>4.12</junit.version>
-    <k3po.version>3.0.0-alpha-54</k3po.version>
-    <jmh.version>1.12</jmh.version>
-    <nukleus.plugin.version>0.7.3</nukleus.plugin.version>
+    <k3po.version>3.0.0-alpha-73</k3po.version>
+    <jmh.version>1.17.4</jmh.version>
+    <jmh.profilers.version>0.1.3</jmh.profilers.version>
+    <nukleus.plugin.version>0.7.8</nukleus.plugin.version>
     <nukleus.version>0.2</nukleus.version>
-    <nukleus.http.spec.version>0.6</nukleus.http.spec.version>
-    <reaktor.test.version>0.1</reaktor.test.version>
+    <nukleus.http.spec.version>0.21</nukleus.http.spec.version>
+    <reaktor.test.version>0.4</reaktor.test.version>
     <reaktor.version>0.1</reaktor.version>
+    <k3po.nukleus.ext.version>0.5</k3po.nukleus.ext.version>
   </properties>
 
   <dependencies>
@@ -111,6 +113,12 @@
       <groupId>org.openjdk.jmh</groupId>
       <artifactId>jmh-generator-annprocess</artifactId>
       <version>${jmh.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.github.biboudis</groupId>
+      <artifactId>jmh-profilers</artifactId>
+      <version>${jmh.profilers.version}</version>
       <scope>test</scope>
     </dependency>
   </dependencies>
@@ -186,6 +194,13 @@
             </goals>
           </execution>
         </executions>
+        <dependencies>
+          <dependency>
+            <groupId>org.reaktivity</groupId>
+            <artifactId>k3po-nukleus-ext</artifactId>
+            <version>${k3po.nukleus.ext.version}</version>
+          </dependency>
+        </dependencies>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
@@ -233,7 +248,7 @@
                   implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                   <mainClass>org.openjdk.jmh.Main</mainClass>
                   <manifestEntries>
-                    <Class-Path>${project.build.directory}/${project.artifactId}-shaded.jar</Class-Path>
+                    <Class-Path>${project.artifactId}-shaded.jar</Class-Path>
                   </manifestEntries>
                 </transformer>
               </transformers>
@@ -246,6 +261,7 @@
                   <include>net.sf.jopt-simple:jopt-simple</include>
                   <include>org.apache.commons:commons-math3</include>
                   <include>commons-cli:commons-cli</include>
+                  <include>com.github.biboudis:jmh-profilers</include>
                 </includes>
               </artifactSet>
             </configuration>

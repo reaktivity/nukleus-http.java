@@ -13,7 +13,7 @@
  * License for the specific language governing permissions and limitations
  * under the License.
  */
-package org.reaktivity.nukleus.http.internal.streams.server.rfc7230;
+package org.reaktivity.nukleus.http.internal.streams.rfc7230.client;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.rules.RuleChain.outerRule;
@@ -27,51 +27,41 @@ import org.kaazing.k3po.junit.annotation.Specification;
 import org.kaazing.k3po.junit.rules.K3poRule;
 import org.reaktivity.reaktor.test.NukleusRule;
 
-public class MessageFormatIT
+public class ArchitectureIT
 {
     private final K3poRule k3po = new K3poRule()
             .addScriptRoot("route", "org/reaktivity/specification/nukleus/http/control/route")
-            .addScriptRoot("streams", "org/reaktivity/specification/nukleus/http/streams/rfc7230/message.format");
+            .addScriptRoot("server", "org/reaktivity/specification/http/rfc7230/architecture")
+            .addScriptRoot("client", "org/reaktivity/specification/nukleus/http/streams/rfc7230/architecture");
 
-    private final TestRule timeout = new DisableOnDebug(new Timeout(5, SECONDS));
+    private final TestRule timeout = new DisableOnDebug(new Timeout(10, SECONDS));
 
     private final NukleusRule nukleus = new NukleusRule("http")
         .directory("target/nukleus-itests")
         .commandBufferCapacity(1024)
         .responseBufferCapacity(1024)
-        .counterValuesBufferCapacity(1024)
-        .streams("http", "source")
-        .streams("source", "http#source")
-        .streams("target", "http#source")
-        .streams("http", "target")
-        .streams("source", "http#target");
+        .counterValuesBufferCapacity(1024);
 
     @Rule
     public final TestRule chain = outerRule(nukleus).around(k3po).around(timeout);
 
     @Test
     @Specification({
-        "${route}/input/new/controller",
-        "${streams}/request.with.content.length/server/source",
-        "${streams}/request.with.content.length/server/target" })
-    public void shouldAcceptRequestWithContentLength() throws Exception
+        "${route}/client/controller",
+        "${client}/request.and.response/client",
+        "${server}/request.and.response/server" })
+    public void shouldCorrelateRequestAndResponse() throws Exception
     {
-        k3po.start();
-        k3po.awaitBarrier("ROUTED_INPUT");
-        k3po.notifyBarrier("ROUTED_OUTPUT");
         k3po.finish();
     }
 
     @Test
     @Specification({
-        "${route}/input/new/controller",
-        "${streams}/request.with.headers/server/source",
-        "${streams}/request.with.headers/server/target" })
-    public void shouldAcceptRequestWithHeaders() throws Exception
+        "${route}/client/controller",
+        "${client}/request.uri.with.percent.chars/client",
+        "${server}/request.uri.with.percent.chars/server" })
+    public void shouldAcceptRequestWithPercentChars() throws Exception
     {
-        k3po.start();
-        k3po.awaitBarrier("ROUTED_INPUT");
-        k3po.notifyBarrier("ROUTED_OUTPUT");
         k3po.finish();
     }
 }
