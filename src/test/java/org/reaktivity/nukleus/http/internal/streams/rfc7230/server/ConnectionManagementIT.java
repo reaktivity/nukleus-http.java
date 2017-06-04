@@ -48,7 +48,7 @@ public class ConnectionManagementIT
 
     @Test
     @Specification({
-        "${route}/input/new/controller",
+        "${route}/server/controller",
         "${client}/request.with.connection.close/client",
         "${server}/request.with.connection.close/server" })
     @Ignore("TODO: SourceOutputEstablishedStream should propagate high-level END after connection:close")
@@ -59,7 +59,7 @@ public class ConnectionManagementIT
 
     @Test
     @Specification({
-        "${route}/input/new/controller",
+        "${route}/server/controller",
         "${client}response.with.connection.close/client",
         "${server}response.with.connection.close/server" })
     @Ignore("TODO: SourceOutputEstablishedStream should propagate high-level END after connection:close")
@@ -70,7 +70,7 @@ public class ConnectionManagementIT
 
     @Test
     @Specification({
-        "${route}/input/new/controller",
+        "${route}/server/controller",
         "${client}/multiple.requests.same.connection/client",
         "${server}/multiple.requests.serialized/server" })
     public void shouldSupportMultipleRequestsOnSameConnection() throws Exception
@@ -80,7 +80,7 @@ public class ConnectionManagementIT
 
     @Test
     @Specification({
-        "${route}/input/new/controller",
+        "${route}/server/controller",
         "${client}/multiple.requests.pipelined/client",
         "${server}/multiple.requests.pipelined/server" })
     @Ignore("TODO: support pipelined requests, at a minimum by serializing them")
@@ -91,7 +91,7 @@ public class ConnectionManagementIT
 
     @Test
     @Specification({
-        "${route}/input/new/controller",
+        "${route}/server/controller",
         "${client}/multiple.requests.pipelined.with.retry/client",
         "${server}/multiple.requests.pipelined.with.retry/server" })
     @Ignore("Only relevant for use of http nukleus as a client. " +
@@ -105,7 +105,7 @@ public class ConnectionManagementIT
 
     @Test
     @Specification({
-        "${route}/input/new/controller",
+        "${route}/server/controller",
         "${client}/first.pipelined.response.has.connection.close/client",
         "${server}/first.pipelined.response.has.connection.close/server" })
     public void clientMustNotReuseConnectionWhenReceivesConnectionClose() throws Exception
@@ -115,7 +115,7 @@ public class ConnectionManagementIT
 
     @Test
     @Specification({
-        "${route}/input/new/controller",
+        "${route}/server/controller",
         "${client}/upgrade.request.and.response/client",
         "${server}/upgrade.request.and.response/server" })
     public void serverGettingUpgradeRequestMustRespondWithUpgradeHeader() throws Exception
@@ -125,7 +125,7 @@ public class ConnectionManagementIT
 
     @Test
     @Specification({
-        "${route}/input/new/controller",
+        "${route}/server/controller",
         "${client}/request.and.upgrade.required.response/client",
         "${server}/request.and.upgrade.required.response/server" })
     public void serverThatSendsUpgradeRequiredMustIncludeUpgradeHeader() throws Exception
@@ -135,7 +135,7 @@ public class ConnectionManagementIT
 
     @Test
     @Specification({
-        "${route}/input/new/controller",
+        "${route}/server/controller",
         "${client}/upgrade.request.and.response.with.data/client",
         "${server}/upgrade.request.and.response.with.data/server" })
     public void serverThatIsUpgradingMustSendA101ResponseBeforeData() throws Exception
@@ -155,7 +155,7 @@ public class ConnectionManagementIT
      */
     // @Test // "http proxy not yet implemented"
     @Specification({
-        "${route}/input/new/controller",
+        "${route}/server/controller",
         "${server}/proxy.must.not.forward.connection.header/client",
         "${server}/proxy.must.not.forward.connection.header/proxy",
         "${server}/proxy.must.not.forward.connection.header/backend" })
@@ -167,7 +167,7 @@ public class ConnectionManagementIT
 
     @Test
     @Specification({
-        "${route}/input/new/controller",
+        "${route}/server/controller",
             "${server}/reverse.proxy.connection.established/client",
             "${server}/reverse.proxy.connection.established/proxy",
             "${server}/reverse.proxy.connection.established/backend" })
@@ -186,7 +186,7 @@ public class ConnectionManagementIT
      */
     @Test
     @Specification({
-        "${route}/input/new/controller",
+        "${route}/server/controller",
         "${server}/proxy.must.not.retry.non.idempotent.requests/client",
         "${server}/proxy.must.not.retry.non.idempotent.requests/proxy",
         "${server}/proxy.must.not.retry.non.idempotent.requests/backend" })

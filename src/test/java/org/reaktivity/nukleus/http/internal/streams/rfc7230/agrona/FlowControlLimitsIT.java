@@ -59,95 +59,73 @@ public class FlowControlLimitsIT
 
     @Test
     @Specification({
-        "${route}/input/new/controller",
+        "${route}/server/controller",
         "${streams}/request.headers.too.long/server/source" })
     public void shouldRejectRequestExceedingMaximumHeadersSize() throws Exception
     {
-        k3po.start();
-        k3po.awaitBarrier("ROUTED_INPUT");
-        k3po.notifyBarrier("ROUTED_OUTPUT");
         k3po.finish();
     }
 
     @Test
     @Specification({
-        "${route}/input/new/controller",
+        "${route}/server/controller",
         "${streams}/response.headers.too.long/server/source",
         "${streams}/response.headers.too.long/server/target" })
     public void shouldNotWriteResponseExceedingMaximumHeadersSize() throws Exception
     {
-        k3po.start();
-        k3po.awaitBarrier("ROUTED_INPUT");
-        k3po.notifyBarrier("ROUTED_OUTPUT");
         k3po.finish();
     }
 
     @Test
     @Specification({
-        "${route}/output/new/controller",
+        "${route}/client/controller",
         "${streams}/response.headers.too.long/client/source",
         "${streams}/response.headers.too.long/client/target"})
     public void shouldRejectResponseExceedingMaximumHeadersSize() throws Exception
     {
-        k3po.start();
-        k3po.awaitBarrier("ROUTED_OUTPUT");
         k3po.finish();
     }
 
     @Test
     @Specification({
-        "${route}/output/new/controller",
+        "${route}/client/controller",
         "${streams}/request.headers.too.long/client/source" })
     public void shouldNotWriteRequestExceedingMaximumHeadersSize() throws Exception
     {
-        k3po.start();
-        k3po.awaitBarrier("ROUTED_OUTPUT");
         k3po.finish();
     }
 
     @Test
     @Specification({
-        "${route}/input/new/controller",
+        "${route}/server/controller",
         "${streams}/request.fragmented.with.content.length/server/source",
         "${streams}/request.fragmented.with.content.length/server/target" })
-    @ScriptProperty("targetInputInitialWindow [0x40 0x00 0x00 0x00]") // 64 bytes, same as max headers size
+    @ScriptProperty("serverConnectInitialWindow [0x40 0x00 0x00 0x00]") // 64 bytes, same as max headers size
     public void shouldAcceptFragmentedRequestWithDataWhenOnlyDataExceedsMaxHttpHeadersSize() throws Exception
     {
-        k3po.start();
-        k3po.awaitBarrier("ROUTED_INPUT");
-        k3po.notifyBarrier("ROUTED_OUTPUT");
         k3po.finish();
     }
 
 
     @Test
     @Specification({
-        "${route}/output/new/controller",
+        "${route}/client/controller",
         "${streams}/response.fragmented.with.content.length/client/source",
         "${streams}/response.fragmented.with.content.length/client/target" })
-    @ScriptProperty("sourceInputInitialWindow [0x40 0x00 0x00 0x00]") // 64 bytes, same as max headers size
+    @ScriptProperty("clientAcceptReplyInitialWindow [0x40 0x00 0x00 0x00]") // 64 bytes, same as max headers size
     public void shouldAcceptFragmentedResponseWithDataWhenOnlyDataExceedsMaxHttpHeadersSize() throws Exception
     {
-        k3po.start();
-        k3po.awaitBarrier("ROUTED_OUTPUT");
-        k3po.notifyBarrier("ROUTED_INPUT");
         k3po.finish();
     }
 
     @Test
     @Specification({
-        "${route}/output/new/controller",
+        "${route}/client/controller",
         "${streams}/response.first.fragment.maximum.headers/client/source",
         "${streams}/response.first.fragment.maximum.headers/client/target" })
-    @ScriptProperty("sourceInputInitialWindow [0x40 0x00 0x00 0x00]") // 64 bytes, same as max headers size
+    @ScriptProperty("clientAcceptReplyInitialWindow [0x40 0x00 0x00 0x00]") // 64 bytes, same as max headers size
     public void shouldAcceptResponseWithFirstFragmentHeadersOfLengthMaxHttpHeadersSize() throws Exception
     {
-        k3po.start();
-        k3po.awaitBarrier("ROUTED_OUTPUT");
-        k3po.notifyBarrier("ROUTED_INPUT");
         k3po.finish();
     }
-
-
 }
-

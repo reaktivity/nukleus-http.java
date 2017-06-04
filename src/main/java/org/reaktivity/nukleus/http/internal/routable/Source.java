@@ -180,7 +180,7 @@ public final class Source implements Nukleus
     {
         beginRO.wrap(buffer, index, index + length);
         final long sourceId = beginRO.streamId();
-        final long sourceRef = beginRO.referenceId();
+        final long sourceRef = beginRO.sourceRef();
         final long correlationId = beginRO.correlationId();
 
         RouteKind routeKind = resolve(sourceRef, correlationId);
@@ -202,7 +202,10 @@ public final class Source implements Nukleus
         final int update)
     {
         final WindowFW window = windowRW.wrap(writeBuffer, 0, writeBuffer.capacity())
-                .streamId(streamId).update(update).build();
+                .streamId(streamId)
+                .update(update)
+                .frames(update)
+                .build();
 
         throttleBuffer.write(window.typeId(), window.buffer(), window.offset(), window.sizeof());
     }

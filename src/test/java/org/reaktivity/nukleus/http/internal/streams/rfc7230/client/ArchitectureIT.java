@@ -47,7 +47,7 @@ public class ArchitectureIT
 
     @Test
     @Specification({
-        "${route}/output/new/controller",
+        "${route}/client/controller",
         "${client}/request.and.response/client",
         "${server}/request.and.response/server" })
     public void shouldCorrelateRequestAndResponse() throws Exception
@@ -57,7 +57,7 @@ public class ArchitectureIT
 
     @Test
     @Specification({
-        "${route}/output/new/controller",
+        "${route}/client/controller",
         "${client}/request.uri.with.percent.chars/client",
         "${server}/request.uri.with.percent.chars/server" })
     public void shouldAcceptRequestWithPercentChars() throws Exception

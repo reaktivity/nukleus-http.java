@@ -52,7 +52,7 @@ public class ConnectionManagementPoolSize1IT
 
     @Test
     @Specification({
-        "${route}/output/new/controller",
+        "${route}/client/controller",
         "${client}/concurrent.requests/client",
         "${server}/multiple.requests.same.connection/server" })
     // With connection pool size limited to one the second concurrent request
@@ -68,7 +68,7 @@ public class ConnectionManagementPoolSize1IT
 
     @Test
     @Specification({
-        "${route}/output/new/controller",
+        "${route}/client/controller",
         "${client}/concurrent.upgrade.requests.and.responses.with.data/client",
         "${server}/concurrent.upgrade.requests.and.responses.with.data/server" })
     public void connectionsLimitShouldNotApplyToUpgradedConnections() throws Exception
@@ -80,6 +80,4 @@ public class ConnectionManagementPoolSize1IT
         k3po.notifyBarrier("WRITE_DATA_REQUEST_TWO");
         k3po.finish();
     }
-
-
 }

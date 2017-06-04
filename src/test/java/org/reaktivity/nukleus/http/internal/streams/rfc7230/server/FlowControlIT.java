@@ -47,7 +47,7 @@ public class FlowControlIT
 
     @Test
     @Specification({
-        "${route}/input/new/controller",
+        "${route}/server/controller",
         "${client}/request.fragmented/client",
         "${server}/request.fragmented/server" })
     public void shouldAcceptFragmentedRequest() throws Exception
@@ -57,7 +57,7 @@ public class FlowControlIT
 
     @Test
     @Specification({
-        "${route}/input/new/controller",
+        "${route}/server/controller",
         "${client}/request.with.content.length.and.end.late.target.window/client",
         "${server}/request.with.content.length.and.end.late.target.window/server" })
     public void shouldWaitForTargetWindowAndWriteDataBeforeProcessingSourceEnd() throws Exception

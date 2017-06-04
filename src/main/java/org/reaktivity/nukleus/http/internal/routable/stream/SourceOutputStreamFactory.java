@@ -237,7 +237,7 @@ public final class SourceOutputStreamFactory
         {
             beginRO.wrap(buffer, index, index + length);
             this.sourceId = beginRO.streamId();
-            this.sourceRef = beginRO.referenceId();
+            this.sourceRef = beginRO.sourceRef();
             this.correlationId = beginRO.correlationId();
             final OctetsFW extension = beginRO.extension();
 
