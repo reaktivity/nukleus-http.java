@@ -136,7 +136,7 @@ public class HttpServerBM
             final Random random = new Random();
             final HttpController controller = reaktor.controller(HttpController.class);
 
-            this.sourceInputRef = controller.routeInputNew("source", 0L, "http", 0L, emptyMap()).get();
+            this.sourceInputRef = controller.routeServer("source", 0L, "http", 0L, emptyMap()).get();
 
             this.sourceInputStreams = controller.streams("source");
 
@@ -147,7 +147,8 @@ public class HttpServerBM
 
             BeginFW begin = beginRW.wrap(writeBuffer, 0, writeBuffer.capacity())
                     .streamId(sourceInputId)
-                    .referenceId(sourceInputRef)
+                    .source("source")
+                    .sourceRef(sourceInputRef)
                     .correlationId(random.nextLong())
                     .extension(e -> e.reset())
                     .build();
@@ -208,7 +209,7 @@ public class HttpServerBM
         {
             HttpController controller = reaktor.controller(HttpController.class);
 
-            controller.unrouteInputNew("source", sourceInputRef, "http", 0L, null).get();
+            controller.unrouteServer("source", sourceInputRef, "http", 0L, null).get();
 
             this.sourceInputStreams.close();
             this.sourceInputStreams = null;

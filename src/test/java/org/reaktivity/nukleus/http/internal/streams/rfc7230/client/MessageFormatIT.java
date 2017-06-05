@@ -48,7 +48,7 @@ public class MessageFormatIT
 
     @Test
     @Specification({
-        "${route}/output/new/controller",
+        "${route}/client/controller",
         "${client}/request.with.headers/client",
         "${server}/request.with.headers/server" })
     public void requestWithHeaders() throws Exception
@@ -58,7 +58,7 @@ public class MessageFormatIT
 
     @Test
     @Specification({
-        "${route}/output/new/controller",
+        "${route}/client/controller",
         "${client}/request.with.content.length/client",
         "${server}/request.with.content.length/server" })
     public void requestWithContentLength() throws Exception
@@ -68,7 +68,7 @@ public class MessageFormatIT
 
     @Test
     @Specification({
-        "${route}/output/new/controller",
+        "${route}/client/controller",
         "${client}/response.with.headers/client",
         "${server}/response.with.headers/server" })
     public void responseWithHeaders() throws Exception
@@ -78,7 +78,7 @@ public class MessageFormatIT
 
     @Test
     @Specification({
-        "${route}/output/new/controller",
+        "${route}/client/controller",
         "${client}/response.with.content.length/client",
         "${server}/response.with.content.length/server" })
     public void responseWithContentLength() throws Exception
@@ -88,7 +88,7 @@ public class MessageFormatIT
 
     @Test
     @Specification({
-        "${route}/output/new/controller",
+        "${route}/client/controller",
         "${client}/post.request.with.no.content/client",
         "${server}/post.request.with.no.content/server" })
     public void postRequestWithNoContent() throws Exception
@@ -98,7 +98,7 @@ public class MessageFormatIT
 
     @Test
     @Specification({
-        "${route}/output/new/controller",
+        "${route}/client/controller",
         "${client}/head.request.and.response/client",
         "${server}/head.request.and.response/server" })
     public void headRequestAndResponse() throws Exception
@@ -108,7 +108,7 @@ public class MessageFormatIT
 
     @Test
     @Specification({
-        "${route}/output/new/controller",
+        "${route}/client/controller",
         "${client}/head.request.and.response.with.content.length/client",
         "${server}/head.request.and.response.with.content.length/server" })
     public void headRequestAndResponseWithContentLength() throws Exception
@@ -118,7 +118,7 @@ public class MessageFormatIT
 
     @Test
     @Specification({
-        "${route}/output/new/controller",
+        "${route}/client/controller",
         "${client}/on.response.proxy.must.remove.space.in.header.with.space.between.header.name.and.colon/client",
         "${server}/on.response.proxy.must.remove.space.in.header.with.space.between.header.name.and.colon/server",
         "${proxy}/on.response.proxy.must.remove.space.in.header.with.space.between.header.name.and.colon/proxy" })
@@ -130,7 +130,7 @@ public class MessageFormatIT
 
     @Test
     @Specification({
-        "${route}/output/new/controller",
+        "${route}/client/controller",
         "${client}/proxy.gets.response.with.multiple.content.lengths/client",
         "${server}/proxy.gets.response.with.multiple.content.lengths/server" })
     @Ignore("proxy tests not tests implemented")
@@ -141,7 +141,7 @@ public class MessageFormatIT
 
     @Test
     @Specification({
-        "${route}/output/new/controller",
+        "${route}/client/controller",
         "${client}/proxy.or.gateway.must.reject.obs.in.header.value/client",
         "${server}/proxy.or.gateway.must.reject.obs.in.header.value/server" })
     @Ignore("proxy tests not tests implemented")
@@ -152,7 +152,7 @@ public class MessageFormatIT
 
     @Test
     @Specification({
-        "${route}/output/new/controller",
+        "${route}/client/controller",
         "${client}/proxy.should.preserve.unrecognized.headers/client",
         "${server}/proxy.should.preserve.unrecognized.headers/server",
         "${proxy}/proxy.should.preserve.unrecognized.headers/proxy" })
@@ -161,6 +161,4 @@ public class MessageFormatIT
     {
         k3po.finish();
     }
-
 }
-

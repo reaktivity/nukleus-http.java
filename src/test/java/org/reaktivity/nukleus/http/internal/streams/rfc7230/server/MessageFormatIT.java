@@ -49,7 +49,7 @@ public class MessageFormatIT
 
     @Test
     @Specification({
-        "${route}/input/new/controller",
+        "${route}/server/controller",
         "${client}/request.with.headers/client",
         "${server}/request.with.headers/server" })
     public void requestWithHeaders() throws Exception
@@ -59,7 +59,7 @@ public class MessageFormatIT
 
     @Test
     @Specification({
-        "${route}/input/new/controller",
+        "${route}/server/controller",
         "${client}/request.with.content.length/client",
         "${server}/request.with.content.length/server" })
     public void requestWithContentLength() throws Exception
@@ -69,7 +69,7 @@ public class MessageFormatIT
 
     @Test
     @Specification({
-        "${route}/input/new/controller",
+        "${route}/server/controller",
         "${client}/response.with.headers/client",
         "${server}/response.with.headers/server" })
     public void responseWithHeaders() throws Exception
@@ -79,7 +79,7 @@ public class MessageFormatIT
 
     @Test
     @Specification({
-        "${route}/input/new/controller",
+        "${route}/server/controller",
         "${client}/response.with.content.length/client",
         "${server}/response.with.content.length/server" })
     public void responseWithContentLength() throws Exception
@@ -89,7 +89,7 @@ public class MessageFormatIT
 
     @Test
     @Specification({
-        "${route}/input/new/controller",
+        "${route}/server/controller",
         "${client}/invalid.request.whitespace.after.start.line/client"})
     public void invalidRequestWhitespaceAfterStartLine() throws Exception
     {
@@ -100,7 +100,7 @@ public class MessageFormatIT
 
     @Test
     @Specification({
-        "${route}/input/new/controller",
+        "${route}/server/controller",
         "${client}/invalid.request.missing.target/client"})
     public void invalidRequestMissingTarget() throws Exception
     {
@@ -109,7 +109,7 @@ public class MessageFormatIT
 
     @Test
     @Specification({
-        "${route}/input/new/controller",
+        "${route}/server/controller",
         "${client}/invalid.request.not.http/client"})
     public void invalidRequestNotHttp() throws Exception
     {
@@ -118,7 +118,7 @@ public class MessageFormatIT
 
     @Test
     @Specification({
-        "${route}/input/new/controller",
+        "${route}/server/controller",
         "${client}/incomplete.request.with.unimplemented.method/client"})
     public void incompleteRequestWithUnimplementedMethod() throws Exception
     {
@@ -127,7 +127,7 @@ public class MessageFormatIT
 
     @Test
     @Specification({
-        "${route}/input/new/controller",
+        "${route}/server/controller",
         "${client}/request.with.unimplemented.method/client"})
     public void requestWithUnimplementedMethod() throws Exception
     {
@@ -136,7 +136,7 @@ public class MessageFormatIT
 
     @Test
     @Specification({
-        "${route}/input/new/controller",
+        "${route}/server/controller",
         "${client}/request.with.extra.CRLF.before.request.line/client",
         "${server}/request.with.extra.CRLF.before.request.line/server" })
     public void robustServerShouldAllowExtraCRLFBeforeRequestLine() throws Exception
@@ -146,7 +146,7 @@ public class MessageFormatIT
 
     @Test
     @Specification({
-        "${route}/input/new/controller",
+        "${route}/server/controller",
         "${client}/request.with.start.line.too.long/client"})
     public void requestWithStartLineTooLong() throws Exception
     {
@@ -155,7 +155,7 @@ public class MessageFormatIT
 
     @Test
     @Specification({
-        "${route}/input/new/controller",
+        "${route}/server/controller",
         "${client}/invalid.request.space.before.colon.in.header/client"})
     public void invalidRequestSpaceBeforeColonInHeader() throws Exception
     {
@@ -164,7 +164,7 @@ public class MessageFormatIT
 
     @Test
     @Specification({
-        "${route}/input/new/controller",
+        "${route}/server/controller",
         "${client}/request.with.obsolete.line.folding/client"})
     public void requestWithObsoleteLineFolding() throws Exception
     {
@@ -173,7 +173,7 @@ public class MessageFormatIT
 
     @Test
     @Specification({
-        "${route}/input/new/controller",
+        "${route}/server/controller",
         "${client}/request.with.header.value.too.long/client"})
     @ScriptProperty("headerSize \"9001\"")
     public void requestWithHeaderValueTooLong() throws Exception
@@ -183,7 +183,7 @@ public class MessageFormatIT
 
     @Test
     @Specification({
-        "${route}/input/new/controller",
+        "${route}/server/controller",
         "${client}/request.with.unknown.transfer.encoding/client"})
     public void requestWithUnknownTransferEncoding() throws Exception
     {
@@ -192,7 +192,7 @@ public class MessageFormatIT
 
     @Test
     @Specification({
-        "${route}/input/new/controller",
+        "${route}/server/controller",
         "${client}/post.request.with.no.content/client",
         "${server}/post.request.with.no.content/server" })
     public void postRequestWithNoContent() throws Exception
@@ -202,7 +202,7 @@ public class MessageFormatIT
 
     @Test
     @Specification({
-        "${route}/input/new/controller",
+        "${route}/server/controller",
         "${client}/head.request.and.response/client",
         "${server}/head.request.and.response/server" })
     public void headRequestAndResponse() throws Exception
@@ -212,7 +212,7 @@ public class MessageFormatIT
 
     @Test
     @Specification({
-        "${route}/input/new/controller",
+        "${route}/server/controller",
         "${client}/head.request.and.response.with.content.length/client",
         "${server}/head.request.and.response.with.content.length/server" })
     public void headRequestAndResponseWithContentLength() throws Exception
@@ -222,7 +222,7 @@ public class MessageFormatIT
 
     @Test
     @Specification({
-        "${route}/input/new/controller",
+        "${route}/server/controller",
         "${client}/invalid.request.multiple.content.lengths/client"})
     public void invalidRequestMultipleContentLengths() throws Exception
     {
@@ -231,7 +231,7 @@ public class MessageFormatIT
 
     @Test
     @Specification({
-        "${route}/input/new/controller",
+        "${route}/server/controller",
         "${client}/gateway.must.reject.request.with.multiple.different.content.length/client",
         "${gateway}/gateway.must.reject.request.with.multiple.different.content.length/gateway",
         "${server}/gateway.must.reject.request.with.multiple.different.content.length/server" })
@@ -243,7 +243,7 @@ public class MessageFormatIT
 
     @Test
     @Specification({
-        "${route}/input/new/controller",
+        "${route}/server/controller",
         "${client}/on.response.proxy.must.remove.space.in.header.with.space.between.header.name.and.colon/client",
         "${server}/on.response.proxy.must.remove.space.in.header.with.space.between.header.name.and.colon/server",
         "${proxy}/on.response.proxy.must.remove.space.in.header.with.space.between.header.name.and.colon/proxy" })
@@ -255,7 +255,7 @@ public class MessageFormatIT
 
     @Test
     @Specification({
-        "${route}/input/new/controller",
+        "${route}/server/controller",
         "${client}/proxy.or.gateway.must.reject.obs.in.header.value/client",
         "${server}/proxy.or.gateway.must.reject.obs.in.header.value/server" })
     @Ignore("proxy tests not implemented")
@@ -266,7 +266,7 @@ public class MessageFormatIT
 
     @Test
     @Specification({
-        "${route}/input/new/controller",
+        "${route}/server/controller",
         "${client}/proxy.should.preserve.unrecongnized.headers/client",
         "${server}/proxy.should.preserve.unrecongnized.headers/server",
         "${proxy}/proxy.should.preserve.unrecongnized.headers/proxy" })

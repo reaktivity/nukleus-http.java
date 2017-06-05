@@ -51,236 +51,181 @@ public class FlowControlIT
 
     @Test
     @Specification({
-        "${route}/input/new/controller",
+        "${route}/server/controller",
         "${streams}/request.fragmented/server/source",
         "${streams}/request.fragmented/server/target" })
     public void shouldAcceptFragmentedRequest() throws Exception
     {
-        k3po.start();
-        k3po.awaitBarrier("ROUTED_INPUT");
-        k3po.notifyBarrier("ROUTED_OUTPUT");
         k3po.finish();
     }
 
     @Test
     @Specification({
-        "${route}/input/new/controller",
+        "${route}/server/controller",
         "${streams}/request.fragmented.with.content.length/server/source",
         "${streams}/request.fragmented.with.content.length/server/target" })
     public void shouldAcceptFragmentedRequestWithContentLength() throws Exception
     {
-        k3po.start();
-        k3po.awaitBarrier("ROUTED_INPUT");
-        k3po.notifyBarrier("ROUTED_OUTPUT");
         k3po.finish();
     }
 
     @Test
     @Specification({
-        "${route}/input/new/controller",
+        "${route}/server/controller",
         "${streams}/request.with.content.flow.controlled/server/source",
         "${streams}/request.with.content.flow.controlled/server/target" })
     public void shouldSplitRequestDataToRespectTargetWindow() throws Exception
     {
-        k3po.start();
-        k3po.awaitBarrier("ROUTED_INPUT");
-        k3po.notifyBarrier("ROUTED_OUTPUT");
         k3po.finish();
     }
 
     @Test
     @Specification({
-        "${route}/input/new/controller",
+        "${route}/server/controller",
         "${streams}/request.with.fragmented.content.flow.controlled/server/source",
         "${streams}/request.with.fragmented.content.flow.controlled/server/target" })
     public void shouldSlabDataWhenTargetWindowStillNegative() throws Exception
     {
-        k3po.start();
-        k3po.awaitBarrier("ROUTED_INPUT");
-        k3po.notifyBarrier("ROUTED_OUTPUT");
         k3po.finish();
     }
 
     @Test
     @Specification({
-        "${route}/input/new/controller",
+        "${route}/server/controller",
         "${streams}/request.with.content.length.and.end.late.target.window/server/source",
         "${streams}/request.with.content.length.and.end.late.target.window/server/target" })
     public void shouldNotProcessSourceEndBeforeGettingWindowAndWritingData() throws Exception
     {
-        k3po.start();
-        k3po.awaitBarrier("ROUTED_INPUT");
-        k3po.notifyBarrier("ROUTED_OUTPUT");
         k3po.finish();
     }
 
     @Test
     @Specification({
-        "${route}/input/new/controller",
+        "${route}/server/controller",
         "${streams}/response.flow.controlled/server/source",
         "${streams}/response.flow.controlled/server/target" })
     public void shouldFlowControlResponse() throws Exception
     {
-        k3po.start();
-        k3po.awaitBarrier("ROUTED_INPUT");
-        k3po.notifyBarrier("ROUTED_OUTPUT");
         k3po.finish();
     }
 
     @Test
     @Specification({
-        "${route}/input/new/controller",
+        "${route}/server/controller",
         "${streams}/response.with.content.flow.controlled/server/source",
         "${streams}/response.with.content.flow.controlled/server/target" })
     public void shouldFlowControlResponseWithContent() throws Exception
     {
-        k3po.start();
-        k3po.awaitBarrier("ROUTED_INPUT");
-        k3po.notifyBarrier("ROUTED_OUTPUT");
         k3po.finish();
     }
 
     @Test
     @Specification({
-        "${route}/input/new/controller",
+        "${route}/server/controller",
         "${streams}/multiple.requests.pipelined/server/source",
         "${streams}/multiple.requests.pipelined/server/target" })
     public void shouldAcceptMultipleRequestsInSameDataFrame() throws Exception
     {
-        k3po.start();
-        k3po.awaitBarrier("ROUTED_INPUT");
-        k3po.notifyBarrier("ROUTED_OUTPUT");
         k3po.finish();
     }
 
     @Test
     @Specification({
-        "${route}/input/new/controller",
+        "${route}/server/controller",
         "${streams}/multiple.requests.pipelined.fragmented/server/source",
         "${streams}/multiple.requests.pipelined.fragmented/server/target" })
     public void shouldAcceptMultipleRequestsInSameDataFrameFragmented() throws Exception
     {
-        k3po.start();
-        k3po.awaitBarrier("ROUTED_INPUT");
-        k3po.notifyBarrier("ROUTED_OUTPUT");
         k3po.finish();
     }
 
     @Test
     @Specification({
-        "${route}/input/new/controller",
+        "${route}/server/controller",
         "${streams}/multiple.requests.with.content.length.pipelined.fragmented/server/source",
         "${streams}/multiple.requests.with.content.length.pipelined.fragmented/server/target" })
     public void shouldAcceptMultipleRequestsWithContentLengthPipelinedFragmented() throws Exception
     {
-        k3po.start();
-        k3po.awaitBarrier("ROUTED_INPUT");
-        k3po.notifyBarrier("ROUTED_OUTPUT");
         k3po.finish();
     }
 
     @Test
     @Specification({
-        "${route}/input/new/controller",
+        "${route}/server/controller",
         "${streams}/multiple.requests.with.response.flow.control/server/source",
         "${streams}/multiple.requests.with.response.flow.control/server/target" })
     public void shouldFlowControlMultipleResponses() throws Exception
     {
-        k3po.start();
-        k3po.awaitBarrier("ROUTED_INPUT");
-        k3po.notifyBarrier("ROUTED_OUTPUT");
         k3po.finish();
     }
 
     @Test
     @Specification({
-        "${route}/output/new/controller",
+        "${route}/client/controller",
         "${streams}/response.fragmented/client/source",
         "${streams}/response.fragmented/client/target" })
     public void shouldAcceptFragmentedResponse() throws Exception
     {
-        k3po.start();
-        k3po.awaitBarrier("ROUTED_OUTPUT");
-        k3po.notifyBarrier("ROUTED_INPUT");
         k3po.finish();
     }
 
     @Test
     @Specification({
-        "${route}/output/new/controller",
+        "${route}/client/controller",
         "${streams}/response.fragmented.with.content.length/client/source",
         "${streams}/response.fragmented.with.content.length/client/target" })
     public void shouldAcceptFragmentedResponseWithContentLength() throws Exception
     {
-        k3po.start();
-        k3po.awaitBarrier("ROUTED_OUTPUT");
-        k3po.notifyBarrier("ROUTED_INPUT");
         k3po.finish();
     }
 
     @Test
     @Specification({
-        "${route}/output/new/controller",
+        "${route}/client/controller",
         "${streams}/response.with.content.flow.controlled/client/source",
         "${streams}/response.with.content.flow.controlled/client/target" })
     public void shouldSplitResponseDataToRespectTargetWindow() throws Exception
     {
-        k3po.start();
-        k3po.awaitBarrier("ROUTED_OUTPUT");
-        k3po.notifyBarrier("ROUTED_INPUT");
         k3po.finish();
     }
 
     @Test
     @Specification({
-        "${route}/output/new/controller",
+        "${route}/client/controller",
         "${streams}/response.with.fragmented.content.flow.controlled/client/source",
         "${streams}/response.with.fragmented.content.flow.controlled/client/target" })
     public void shouldSlabResponseDataWhenTargetWindowStillNegative() throws Exception
     {
-        k3po.start();
-        k3po.awaitBarrier("ROUTED_OUTPUT");
-        k3po.notifyBarrier("ROUTED_INPUT");
         k3po.finish();
     }
 
     @Test
     @Specification({
-        "${route}/output/new/controller",
+        "${route}/client/controller",
         "${streams}/response.with.content.length.and.end.late.target.window/client/source",
         "${streams}/response.with.content.length.and.end.late.target.window/client/target" })
     public void shouldWaitForSourceWindowAndWriteDataBeforeProcessingTargetEnd() throws Exception
     {
-        k3po.start();
-        k3po.awaitBarrier("ROUTED_OUTPUT");
-        k3po.notifyBarrier("ROUTED_INPUT");
         k3po.finish();
     }
 
     @Test
     @Specification({
-        "${route}/output/new/controller",
+        "${route}/client/controller",
         "${streams}/request.flow.controlled/client/source",
         "${streams}/request.flow.controlled/client/target" })
     public void shouldFlowControlRequest() throws Exception
     {
-        k3po.start();
-        k3po.awaitBarrier("ROUTED_OUTPUT");
-        k3po.notifyBarrier("ROUTED_INPUT");
         k3po.finish();
     }
 
     @Test
     @Specification({
-        "${route}/output/new/controller",
+        "${route}/client/controller",
         "${streams}/request.with.content.flow.controlled/client/source",
         "${streams}/request.with.content.flow.controlled/client/target" })
     public void shouldFlowControlRequestWithContent() throws Exception
     {
-        k3po.start();
-        k3po.awaitBarrier("ROUTED_OUTPUT");
-        k3po.notifyBarrier("ROUTED_INPUT");
         k3po.finish();
     }
-
 }

@@ -48,7 +48,7 @@ public class ConnectionManagementIT
 
     @Test
     @Specification({
-        "${route}/output/new/controller",
+        "${route}/client/controller",
         "${client}/request.with.connection.close/client",
         "${server}/request.with.connection.close/server" })
     @Ignore("TODO: SourceOutputStream should propagate high-level END after connection:close")
@@ -59,9 +59,9 @@ public class ConnectionManagementIT
 
     @Test
     @Specification({
-        "${route}/output/new/controller",
-        "${client}response.with.connection.close/client",
-        "${server}response.with.connection.close/server" })
+        "${route}/client/controller",
+        "${client}/response.with.connection.close/client",
+        "${server}/response.with.connection.close/server" })
     public void responseWithConnectionClose() throws Exception
     {
         k3po.finish();
@@ -69,7 +69,7 @@ public class ConnectionManagementIT
 
     @Test
     @Specification({
-        "${route}/output/new/controller",
+        "${route}/client/controller",
         "${client}/multiple.requests.serialized/client",
         "${server}/multiple.requests.same.connection/server" })
     public void multipleRequestsSameConnection() throws Exception
@@ -83,7 +83,7 @@ public class ConnectionManagementIT
 
     @Test
     @Specification({
-        "${route}/output/new/controller",
+        "${route}/client/controller",
         "${client}/concurrent.requests/client",
         "${server}/concurrent.requests.different.connections/server" })
     public void concurrentRequestsDifferentConnections() throws Exception
@@ -93,7 +93,7 @@ public class ConnectionManagementIT
 
     @Test
     @Specification({
-        "${route}/output/new/controller",
+        "${route}/client/controller",
         "${client}/multiple.requests.pipelined/client",
         "${server}/multiple.requests.pipelined/server" })
     @Ignore("Issuing pipelined requests is not yet implemented")
@@ -104,7 +104,7 @@ public class ConnectionManagementIT
 
     @Test
     @Specification({
-        "${route}/output/new/controller",
+        "${route}/client/controller",
         "${client}/multiple.requests.pipelined.with.retry/client",
         "${server}/multiple.requests.pipelined.with.retry/server" })
     @Ignore("Issuing pipelined requests is not yet implemented")
@@ -115,7 +115,7 @@ public class ConnectionManagementIT
 
     @Test
     @Specification({
-        "${route}/output/new/controller",
+        "${route}/client/controller",
         "${client}/first.pipelined.response.has.connection.close/client",
         "${server}/first.pipelined.response.has.connection.close/server" })
     @Ignore("Issuing pipelined requests is not yet implemented")
@@ -126,7 +126,7 @@ public class ConnectionManagementIT
 
     @Test
     @Specification({
-        "${route}/output/new/controller",
+        "${route}/client/controller",
         "${client}/upgrade.request.and.response/client",
         "${server}/upgrade.request.and.response/server" })
     public void upgradeRequestandResponse() throws Exception
@@ -136,7 +136,7 @@ public class ConnectionManagementIT
 
     @Test
     @Specification({
-        "${route}/output/new/controller",
+        "${route}/client/controller",
         "${client}/request.and.upgrade.required.response/client",
         "${server}/request.and.upgrade.required.response/server" })
     public void requestAndUpgradeRequiredResponse() throws Exception
@@ -146,7 +146,7 @@ public class ConnectionManagementIT
 
     @Test
     @Specification({
-        "${route}/output/new/controller",
+        "${route}/client/controller",
         "${client}/upgrade.request.and.response.with.data/client",
         "${server}/upgrade.request.and.response.with.data/server" })
     public void upgradeRequestAndResponseWithData() throws Exception
@@ -166,7 +166,7 @@ public class ConnectionManagementIT
      */
     @Test
     @Specification({
-        "${route}/output/new/controller",
+        "${route}/client/controller",
         "${server}/proxy.must.not.forward.connection.header/client",
         "${server}/proxy.must.not.forward.connection.header/proxy",
         "${server}/proxy.must.not.forward.connection.header/backend" })
@@ -178,7 +178,7 @@ public class ConnectionManagementIT
 
     @Test
     @Specification({
-        "${route}/output/new/controller",
+        "${route}/client/controller",
             "${server}/reverse.proxy.connection.established/client",
             "${server}/reverse.proxy.connection.established/proxy",
             "${server}/reverse.proxy.connection.established/backend" })
@@ -197,7 +197,7 @@ public class ConnectionManagementIT
      */
     @Test
     @Specification({
-        "${route}/output/new/controller",
+        "${route}/client/controller",
         "${server}/proxy.must.not.retry.non.idempotent.requests/client",
         "${server}/proxy.must.not.retry.non.idempotent.requests/proxy",
         "${server}/proxy.must.not.retry.non.idempotent.requests/backend" })
@@ -206,5 +206,4 @@ public class ConnectionManagementIT
     {
         k3po.finish();
     }
-
 }

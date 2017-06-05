@@ -287,7 +287,7 @@ public final class TargetInputEstablishedStreamFactory
             beginRO.wrap(buffer, index, index + length);
 
             this.sourceId = beginRO.streamId();
-            final long sourceRef = beginRO.referenceId();
+            final long sourceRef = beginRO.sourceRef();
             this.clientConnectCorrelationId = beginRO.correlationId();
 
             final Correlation<?> correlation = lookupEstablished.apply(clientConnectCorrelationId);

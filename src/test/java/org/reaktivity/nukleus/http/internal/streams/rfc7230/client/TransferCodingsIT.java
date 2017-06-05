@@ -48,7 +48,7 @@ public class TransferCodingsIT
 
     @Test
     @Specification({
-        "${route}/output/new/controller",
+        "${route}/client/controller",
         "${client}/request.transfer.encoding.chunked/client",
         "${server}/request.transfer.encoding.chunked/server" })
     @Ignore // TODO: implement chunked request encoding
@@ -59,7 +59,7 @@ public class TransferCodingsIT
 
     @Test
     @Specification({
-        "${route}/output/new/controller",
+        "${route}/client/controller",
         "${client}/response.transfer.encoding.chunked/client",
         "${server}/response.transfer.encoding.chunked/server" })
     public void responseTransferEncodingChunked() throws Exception
@@ -83,7 +83,7 @@ public class TransferCodingsIT
 
     @Test
     @Specification({
-        "${route}/output/new/controller",
+        "${route}/client/controller",
         "${client}/request.transfer.encoding.chunked.with.trailer/client",
         "${server}/request.transfer.encoding.chunked.with.trailer/server" })
     @Ignore // TODO: implement chunked request encoding
@@ -94,7 +94,7 @@ public class TransferCodingsIT
 
     @Test
     @Specification({
-        "${route}/output/new/controller",
+        "${route}/client/controller",
         "${client}/response.transfer.encoding.chunked.with.trailer/client",
         "${server}/response.transfer.encoding.chunked.with.trailer/server" })
     public void responseTransferEncodingChunkedWithTrailer() throws Exception
