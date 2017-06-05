@@ -24,6 +24,7 @@ import static org.reaktivity.nukleus.http.internal.util.BufferUtil.limitOfBytes;
 import java.net.URI;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -203,6 +204,23 @@ public final class SourceInputStreamFactory
             }
         }
 
+        private void streamBeforeEnd(
+            int msgTypeId,
+            MutableDirectBuffer buffer,
+            int index,
+            int length)
+        {
+            switch (msgTypeId)
+            {
+            case EndFW.TYPE_ID:
+                processEnd(buffer, index, length);
+                break;
+            default:
+                processUnexpected(buffer, index, length);
+                break;
+            }
+        }
+
         private void streamAfterEnd(
             int msgTypeId,
             DirectBuffer buffer,
@@ -212,7 +230,7 @@ public final class SourceInputStreamFactory
             processUnexpected(buffer, index, length);
         }
 
-        private void streamAfterRejectOrReset(
+        private void streamAfterReset(
             int msgTypeId,
             MutableDirectBuffer buffer,
             int index,
@@ -252,13 +270,13 @@ public final class SourceInputStreamFactory
         {
             source.doReset(streamId);
 
-            this.streamState = this::streamAfterRejectOrReset;
+            this.streamState = this::streamAfterReset;
         }
 
         private void processInvalidRequest(int status, String message)
         {
             this.decoderState = decodeSkipData;
-            this.streamState = this::streamAfterRejectOrReset;
+            this.streamState = this::streamAfterReset;
             if (slotIndex != NO_SLOT)
             {
                 slab.release(slotIndex);
@@ -452,7 +470,6 @@ public final class SourceInputStreamFactory
             int length)
         {
             dataRO.wrap(buffer, index, index + length);
-
             window -= dataRO.length();
 
             if (window < 0)
@@ -669,11 +686,23 @@ public final class SourceInputStreamFactory
                         switchTarget(newTarget, newTargetId);
 
                         hasUpgrade = headers.containsKey("upgrade");
+                        String connectionOptions = headers.get("connection");
+                        if (connectionOptions != null)
+                        {
+                            Arrays.asList(connectionOptions.toLowerCase().split(",")).stream().forEach((element) ->
+                            {
+                                if (element.equals("close"))
+                                {
+                                    correlation.state().persistent = false;
+                                }
+                            });
+                        }
                         if (hasUpgrade)
                         {
                             // TODO: wait for 101 first
                             decoderState = decodeHttpDataAfterUpgrade;
                             throttleState = this::throttleForHttpDataAfterUpgrade;
+                            correlation.state().persistent = false;
                         }
                         else if ((contentRemaining = parseInt(headers.getOrDefault("content-length", "0"))) > 0)
                         {
@@ -683,7 +712,7 @@ public final class SourceInputStreamFactory
                         else
                         {
                             // no content
-                            target.doHttpEnd(targetId);
+                            httpRequestComplete();
                         }
                     }
                     else
@@ -785,9 +814,7 @@ public final class SourceInputStreamFactory
 
             if (contentRemaining == 0)
             {
-                target.doHttpEnd(targetId);
-                decoderState = decodeBeforeHttpBegin;
-                throttleState = this::throttleIgnoreWindow;
+                httpRequestComplete();
             }
             return result;
         };
@@ -816,6 +843,25 @@ public final class SourceInputStreamFactory
             target.doHttpEnd(targetId);
             return limit;
         };
+
+        private void httpRequestComplete()
+        {
+            target.doHttpEnd(targetId);
+            // TODO: target.removeThrottle(targetId);
+            decoderState = decodeBeforeHttpBegin;
+            throttleState = this::throttleIgnoreWindow;
+
+            if (correlation.state().persistent)
+            {
+                this.streamState = this::streamAfterBeginOrData;
+                this.decoderState = decodeBeforeHttpBegin;
+                ensureSourceWindow(maximumHeadersSize);
+            }
+            else
+            {
+                this.streamState = this::streamBeforeEnd;
+            }
+        }
 
         private Optional<Route> resolveTarget(
             long sourceRef,
@@ -968,6 +1014,7 @@ public final class SourceInputStreamFactory
                 ensureSourceWindow(availableTargetWindow);
                 if (window == availableTargetWindow)
                 {
+                    // Windows are now aligned
                     throttleState = this::throttlePropagateWindow;
                 }
             }
@@ -995,7 +1042,7 @@ public final class SourceInputStreamFactory
 
         private void doSourceWindow(int update)
         {
-            this.window += update;
+            window += update;
             source.doWindow(sourceId, update);
         }
 
