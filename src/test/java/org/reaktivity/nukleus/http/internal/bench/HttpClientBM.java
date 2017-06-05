@@ -74,7 +74,7 @@ import org.reaktivity.nukleus.http.internal.types.stream.EndFW;
 import org.reaktivity.nukleus.http.internal.types.stream.HttpBeginExFW;
 import org.reaktivity.nukleus.http.internal.types.stream.ResetFW;
 import org.reaktivity.nukleus.http.internal.types.stream.WindowFW;
-import org.reaktivity.reaktor.internal.Reaktor;
+import org.reaktivity.reaktor.Reaktor;
 
 @State(Scope.Benchmark)
 @BenchmarkMode(Mode.Throughput)
@@ -116,7 +116,11 @@ public class HttpClientBM
             configuration = new Configuration(properties);
             ensureDirectoryExists(configuration.directory().toFile(), configuration.directory().toString());
 
-            reaktor = Reaktor.init(configuration, n -> "http".equals(n), HttpController.class::isAssignableFrom);
+            reaktor = Reaktor.builder()
+                         .config(configuration)
+                         .discover((String t) -> "http".equals(t))
+                         .discover(HttpController.class::isAssignableFrom)
+                         .build();
         }
 
         @Setup(Level.Iteration)
@@ -133,7 +137,11 @@ public class HttpClientBM
             {
                 LangUtil.rethrowUnchecked(ex);
             }
-            reaktor = Reaktor.init(configuration, n -> "http".equals(n), HttpController.class::isAssignableFrom);
+            reaktor = Reaktor.builder()
+                    .config(configuration)
+                    .discover((String t) -> "http".equals(t))
+                    .discover(HttpController.class::isAssignableFrom)
+                    .build();
             reaktor.start();
             System.out.println("Reaktor started");
 
