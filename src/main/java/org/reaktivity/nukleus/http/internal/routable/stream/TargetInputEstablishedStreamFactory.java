@@ -48,6 +48,8 @@ import org.reaktivity.nukleus.http.internal.types.stream.WindowFW;
 public final class TargetInputEstablishedStreamFactory
 {
     private static final byte[] CRLFCRLF_BYTES = "\r\n\r\n".getBytes(StandardCharsets.US_ASCII);
+    private static final byte[] CRLF_BYTES = "\r\n".getBytes(StandardCharsets.US_ASCII);
+    private static final byte[] COLON_BYTES = ";".getBytes(StandardCharsets.US_ASCII);
 
     private final FrameFW frameRO = new FrameFW();
 
@@ -107,6 +109,8 @@ public final class TargetInputEstablishedStreamFactory
         private long sourceCorrelationId;
         private int window;
         private int contentRemaining;
+        private boolean isChunkedTransfer;
+        private int chunkSizeRemaining;
         private ClientConnectReplyState clientConnectReplyState;
         private long clientConnectCorrelationId;
         private int availableTargetWindow;
@@ -523,9 +527,14 @@ public final class TargetInputEstablishedStreamFactory
                     this.decoderState = decodeHttpDataAfterUpgrade;
                     throttleState = this::throttleForHttpDataAfterUpgrade;
                 }
-                else if ((contentRemaining = parseInt(headers.getOrDefault("content-length", "0"))) > 0)
+                else if (contentRemaining > 0)
                 {
                     decoderState = decodeHttpData;
+                    throttleState = this::throttleForHttpData;
+                }
+                else if (isChunkedTransfer)
+                {
+                    decoderState = decodeHttpChunk;
                     throttleState = this::throttleForHttpData;
                 }
                 else
@@ -544,6 +553,9 @@ public final class TargetInputEstablishedStreamFactory
             headers.put(":status", start[1]);
 
             Pattern headerPattern = Pattern.compile("([^\\s:]+)\\s*:\\s*(.*)");
+            boolean contentLengthFound = false;
+            contentRemaining = 0;
+            isChunkedTransfer = false;
             for (int i = 1; i < lines.length; i++)
             {
                 Matcher headerMatcher = headerPattern.matcher(lines[i]);
@@ -554,7 +566,37 @@ public final class TargetInputEstablishedStreamFactory
 
                 String name = headerMatcher.group(1).toLowerCase();
                 String value = headerMatcher.group(2);
-                headers.put(name, value);
+
+                if ("transfer-encoding".equals(name))
+                {
+                    // TODO: support other transfer encodings
+                    if (contentLengthFound || !"chunked".equals(value))
+                    {
+                        processInvalidResponse();
+                    }
+                    else
+                    {
+                        isChunkedTransfer = true;
+                        headers.put(name, value);
+                    }
+                }
+                else if ("content-length".equals(name))
+                {
+                    if (contentLengthFound || isChunkedTransfer)
+                    {
+                        processInvalidResponse();
+                    }
+                    else
+                    {
+                        contentRemaining = parseInt(value);
+                        contentLengthFound = true;
+                        headers.put(name, value);
+                    }
+                }
+                else
+                {
+                    headers.put(name, value);
+                }
             }
 
             return headers;
@@ -583,6 +625,84 @@ public final class TargetInputEstablishedStreamFactory
 
             return result;
         };
+
+        private DecoderState decodeHttpChunk = (payload, offset, limit) ->
+        {
+            int result = limit;
+            final int endOfHeaderAt = limitOfBytes(payload, offset, limit, CRLF_BYTES);
+            if (endOfHeaderAt == -1)
+            {
+                result = offset;
+            }
+            else
+            {
+                int colonAt = limitOfBytes(payload, offset, limit, COLON_BYTES);
+                int chunkSizeLimit = colonAt == -1 ? endOfHeaderAt - 2 : colonAt - 1;
+                int chunkSizeLength = chunkSizeLimit - offset;
+                try
+                {
+                    chunkSizeRemaining = Integer.parseInt(payload.getStringWithoutLengthUtf8(offset, chunkSizeLength), 16);
+                }
+                catch (NumberFormatException ex)
+                {
+                    processInvalidResponse();
+                }
+                if (chunkSizeRemaining == 0)
+                {
+                    httpResponseComplete();
+                }
+                else
+                {
+                    decoderState = this::decodeHttpChunkData;
+                    result = endOfHeaderAt;
+                }
+            }
+            return result;
+        };
+
+        private final DecoderState decodeHttpChunkEnd = (payload, offset, limit) ->
+        {
+            int length = limit - offset;
+            int result = offset;
+            if (length > 1)
+            {
+                if (payload.getByte(offset) != '\r'
+                    || payload.getByte(offset + 1) != '\n')
+                {
+                    processInvalidResponse();
+                }
+                else
+                {
+                    decoderState = decodeHttpChunk;
+                    result = offset + 2;
+                }
+            }
+            return result;
+        };
+
+        private int decodeHttpChunkData(DirectBuffer payload, int offset, int limit)
+        {
+            int result = offset;
+            final int length = limit - offset;
+
+            // TODO: consider chunks
+            int writableBytes = Math.min(length, chunkSizeRemaining);
+            writableBytes = Math.min(availableTargetWindow, writableBytes);
+
+            if (writableBytes > 0)
+            {
+                target.doHttpData(targetId, payload, offset, writableBytes);
+                availableTargetWindow -= writableBytes;
+                chunkSizeRemaining -= writableBytes;
+            }
+            result = offset + writableBytes;
+
+            if (chunkSizeRemaining == 0)
+            {
+                decoderState = decodeHttpChunkEnd;
+            }
+            return result;
+        }
 
         private DecoderState decodeHttpDataAfterUpgrade = (payload, offset, limit) ->
         {

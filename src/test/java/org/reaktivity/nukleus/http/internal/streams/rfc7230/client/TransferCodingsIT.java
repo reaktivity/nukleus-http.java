@@ -28,7 +28,6 @@ import org.kaazing.k3po.junit.annotation.Specification;
 import org.kaazing.k3po.junit.rules.K3poRule;
 import org.reaktivity.reaktor.test.NukleusRule;
 
-@Ignore // TODO: implement chunked transfer
 public class TransferCodingsIT
 {
     private final K3poRule k3po = new K3poRule()
@@ -36,7 +35,7 @@ public class TransferCodingsIT
             .addScriptRoot("server", "org/reaktivity/specification/http/rfc7230/transfer.codings")
             .addScriptRoot("client", "org/reaktivity/specification/nukleus/http/streams/rfc7230/transfer.codings");
 
-    private final TestRule timeout = new DisableOnDebug(new Timeout(10, SECONDS));
+    private final TestRule timeout = new DisableOnDebug(new Timeout(6, SECONDS));
 
     private final NukleusRule nukleus = new NukleusRule("http")
         .directory("target/nukleus-itests")
@@ -52,6 +51,7 @@ public class TransferCodingsIT
         "${route}/output/new/controller",
         "${client}/request.transfer.encoding.chunked/client",
         "${server}/request.transfer.encoding.chunked/server" })
+    @Ignore // TODO: implement chunked request encoding
     public void requestTransferEncodingChunked() throws Exception
     {
         k3po.finish();
@@ -86,6 +86,7 @@ public class TransferCodingsIT
         "${route}/output/new/controller",
         "${client}/request.transfer.encoding.chunked.with.trailer/client",
         "${server}/request.transfer.encoding.chunked.with.trailer/server" })
+    @Ignore // TODO: implement chunked request encoding
     public void requestTransferEncodingChunkedWithTrailer() throws Exception
     {
         k3po.finish();

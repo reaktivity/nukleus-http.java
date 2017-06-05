@@ -122,8 +122,8 @@ public final class SourceInputStreamFactory
         private long sourceRef;
         private int window;
         private int contentRemaining;
-        boolean isChunkedTransfer;
-        int chunkSizeRemaining;
+        private boolean isChunkedTransfer;
+        private int chunkSizeRemaining;
         private int availableTargetWindow;
         private boolean hasUpgrade;
         private Correlation<ServerAcceptState> correlation;
