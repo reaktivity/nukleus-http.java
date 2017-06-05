@@ -790,6 +790,7 @@ public final class SourceInputStreamFactory
                     else
                     {
                         isChunkedTransfer = true;
+                        headers.put(name, value);
                     }
 
                 }
