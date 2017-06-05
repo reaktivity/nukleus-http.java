@@ -57,6 +57,7 @@ public final class SourceInputStreamFactory
 {
     private static final byte[] CRLFCRLF_BYTES = "\r\n\r\n".getBytes(StandardCharsets.US_ASCII);
     private static final byte[] CRLF_BYTES = "\r\n".getBytes(StandardCharsets.US_ASCII);
+    private static final byte[] COLON_BYTES = ";".getBytes(StandardCharsets.US_ASCII);
     private static final byte[] SPACE = " ".getBytes(StandardCharsets.US_ASCII);
     private static final int MAXIMUM_METHOD_BYTES = "OPTIONS".length();
 
@@ -121,6 +122,8 @@ public final class SourceInputStreamFactory
         private long sourceRef;
         private int window;
         private int contentRemaining;
+        boolean isChunkedTransfer;
+        int chunkSizeRemaining;
         private int availableTargetWindow;
         private boolean hasUpgrade;
         private Correlation<ServerAcceptState> correlation;
@@ -596,11 +599,7 @@ public final class SourceInputStreamFactory
             int result = offset;
             if (payload.getByte(offset) == '\r')
             {
-                if (length == 1)
-                {
-                    result = offset + 1;
-                }
-                else if (payload.getByte(offset+1) == '\n')
+                if (length > 1 && payload.getByte(offset+1) == '\n')
                 {
                     // RFC 3270 3.5.  Message Parsing Robustness: skip empty line (CRLF) before request-line
                     result = offset + 2;
@@ -680,10 +679,10 @@ public final class SourceInputStreamFactory
                         correlateNew.accept(targetCorrelationId, correlation);
 
                         availableTargetWindow = 0;
+                        switchTarget(newTarget, newTargetId);
                         newTarget.doHttpBegin(newTargetId, targetRef, newTargetId,
                                 hs -> headers.forEach((k, v) -> hs.item(i -> i.name(k).value(v))));
                         targetBeginIssued = true;
-                        switchTarget(newTarget, newTargetId);
 
                         hasUpgrade = headers.containsKey("upgrade");
                         String connectionOptions = headers.get("connection");
@@ -704,9 +703,14 @@ public final class SourceInputStreamFactory
                             throttleState = this::throttleForHttpDataAfterUpgrade;
                             correlation.state().persistent = false;
                         }
-                        else if ((contentRemaining = parseInt(headers.getOrDefault("content-length", "0"))) > 0)
+                        else if (contentRemaining > 0)
                         {
                             decoderState = decodeHttpData;
+                            throttleState = this::throttleForHttpData;
+                        }
+                        else if (isChunkedTransfer)
+                        {
+                            decoderState = decodeHttpChunk;
                             throttleState = this::throttleForHttpData;
                         }
                         else
@@ -742,6 +746,8 @@ public final class SourceInputStreamFactory
 
             Pattern headerPattern = Pattern.compile("([^\\s:]+):\\s*(.*)");
             boolean contentLengthFound = false;
+            contentRemaining = 0;
+            isChunkedTransfer = false;
             for (int i = 1; i < lines.length; i++)
             {
                 Matcher headerMatcher = headerPattern.matcher(lines[i]);
@@ -767,22 +773,36 @@ public final class SourceInputStreamFactory
                         headers.put(":authority", value);
                     }
                 }
-                else if ("transfer-encoding".equals(name) &&  (!"chunked".equals(value)))
-                {
-                    // TODO: support other transfer encodings
-                    httpStatus.status = 501;
-                    httpStatus.message = "Unsupported transfer-encoding " + value;
-                    break;
-                }
-                else if ("content-length".equals(name))
+                else if ("transfer-encoding".equals(name))
                 {
                     if (contentLengthFound)
                     {
                         httpStatus.status = 400;
                         httpStatus.message = "Bad Request";
                     }
+                    else if (!"chunked".equals(value))
+                    {
+                        // TODO: support other transfer encodings
+                        httpStatus.status = 501;
+                        httpStatus.message = "Unsupported transfer-encoding " + value;
+                        break;
+                    }
                     else
                     {
+                        isChunkedTransfer = true;
+                    }
+
+                }
+                else if ("content-length".equals(name))
+                {
+                    if (contentLengthFound || isChunkedTransfer)
+                    {
+                        httpStatus.status = 400;
+                        httpStatus.message = "Bad Request";
+                    }
+                    else
+                    {
+                        contentRemaining = parseInt(value);
                         contentLengthFound = true;
                         headers.put(name, value);
                     }
@@ -818,6 +838,84 @@ public final class SourceInputStreamFactory
             }
             return result;
         };
+
+        private DecoderState decodeHttpChunk = (payload, offset, limit) ->
+        {
+            int result = limit;
+            final int endOfHeaderAt = limitOfBytes(payload, offset, limit, CRLF_BYTES);
+            if (endOfHeaderAt == -1)
+            {
+                result = offset;
+            }
+            else
+            {
+                int colonAt = limitOfBytes(payload, offset, limit, COLON_BYTES);
+                int chunkSizeLimit = colonAt == -1 ? endOfHeaderAt - 2 : colonAt - 1;
+                int chunkSizeLength = chunkSizeLimit - offset;
+                try
+                {
+                    chunkSizeRemaining = Integer.parseInt(payload.getStringWithoutLengthUtf8(offset, chunkSizeLength), 16);
+                }
+                catch (NumberFormatException ex)
+                {
+                    processInvalidRequest(400,  "Bad Request");
+                }
+                if (chunkSizeRemaining == 0)
+                {
+                    httpRequestComplete();
+                }
+                else
+                {
+                    decoderState = this::decodeHttpChunkData;
+                    result = endOfHeaderAt;
+                }
+            }
+            return result;
+        };
+
+        private final DecoderState decodeHttpChunkEnd = (payload, offset, limit) ->
+        {
+            int length = limit - offset;
+            int result = offset;
+            if (length > 1)
+            {
+                if (payload.getByte(offset) != '\r'
+                    || payload.getByte(offset + 1) != '\n')
+                {
+                    processInvalidRequest(400,  "Bad Request");
+                }
+                else
+                {
+                    decoderState = decodeHttpChunk;
+                    result = offset + 2;
+                }
+            }
+            return result;
+        };
+
+        private int decodeHttpChunkData(DirectBuffer payload, int offset, int limit)
+        {
+            int result = offset;
+            final int length = limit - offset;
+
+            // TODO: consider chunks
+            int writableBytes = Math.min(length, chunkSizeRemaining);
+            writableBytes = Math.min(availableTargetWindow, writableBytes);
+
+            if (writableBytes > 0)
+            {
+                target.doHttpData(targetId, payload, offset, writableBytes);
+                availableTargetWindow -= writableBytes;
+                chunkSizeRemaining -= writableBytes;
+            }
+            result = offset + writableBytes;
+
+            if (chunkSizeRemaining == 0)
+            {
+                decoderState = decodeHttpChunkEnd;
+            }
+            return result;
+        }
 
         private DecoderState decodeHttpDataAfterUpgrade = (payload, offset, limit) ->
         {
@@ -1073,7 +1171,7 @@ public final class SourceInputStreamFactory
     @FunctionalInterface
     private interface DecoderState
     {
-        int decode(DirectBuffer buffer, int offset, int length);
+        int decode(DirectBuffer buffer, int offset, int limit);
     }
 
     private static final class HttpStatus
@@ -1112,6 +1210,6 @@ public final class SourceInputStreamFactory
             }
             return result;
         }
-    };
+    }
 
 }

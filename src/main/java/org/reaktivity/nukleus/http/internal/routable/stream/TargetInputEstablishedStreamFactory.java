@@ -810,6 +810,6 @@ public final class TargetInputEstablishedStreamFactory
     @FunctionalInterface
     private interface DecoderState
     {
-        int decode(DirectBuffer buffer, int offset, int length);
+        int decode(DirectBuffer buffer, int offset, int limit);
     }
 }

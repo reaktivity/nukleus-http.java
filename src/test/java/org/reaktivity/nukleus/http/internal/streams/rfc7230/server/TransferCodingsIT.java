@@ -28,7 +28,6 @@ import org.kaazing.k3po.junit.annotation.Specification;
 import org.kaazing.k3po.junit.rules.K3poRule;
 import org.reaktivity.reaktor.test.NukleusRule;
 
-@Ignore // TODO: implement chunked transfer
 public class TransferCodingsIT
 {
     private final K3poRule k3po = new K3poRule()
@@ -53,6 +52,16 @@ public class TransferCodingsIT
         "${client}/request.transfer.encoding.chunked/client",
         "${server}/request.transfer.encoding.chunked/server" })
     public void requestTransferEncodingChunked() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/input/new/controller",
+        "${client}/invalid.chunked.request.no.crlf.at.end.of.chunk/client",
+        "${server}/invalid.chunked.request.no.crlf.at.end.of.chunk/server" })
+    public void invalidRequestTransferEncodingChunked() throws Exception
     {
         k3po.finish();
     }
