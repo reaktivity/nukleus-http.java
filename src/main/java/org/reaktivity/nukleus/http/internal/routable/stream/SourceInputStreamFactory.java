@@ -57,7 +57,7 @@ public final class SourceInputStreamFactory
 {
     private static final byte[] CRLFCRLF_BYTES = "\r\n\r\n".getBytes(StandardCharsets.US_ASCII);
     private static final byte[] CRLF_BYTES = "\r\n".getBytes(StandardCharsets.US_ASCII);
-    private static final byte[] COLON_BYTES = ";".getBytes(StandardCharsets.US_ASCII);
+    private static final byte[] SEMICOLON_BYTES = ";".getBytes(StandardCharsets.US_ASCII);
     private static final byte[] SPACE = " ".getBytes(StandardCharsets.US_ASCII);
     private static final int MAXIMUM_METHOD_BYTES = "OPTIONS".length();
 
@@ -278,7 +278,7 @@ public final class SourceInputStreamFactory
 
         private void processInvalidRequest(int status, String message)
         {
-            this.decoderState = decodeSkipData;
+            this.decoderState = this::decodeSkipData;
             this.streamState = this::streamAfterReset;
             if (slotIndex != NO_SLOT)
             {
@@ -376,7 +376,7 @@ public final class SourceInputStreamFactory
             this.sourceCorrelationId = beginRO.correlationId();
 
             this.streamState = this::streamAfterBeginOrData;
-            this.decoderState = decodeBeforeHttpBegin;
+            this.decoderState = this::decodeBeforeHttpBegin;
 
             // Proactively issue BEGIN on server accept reply since we only support bidirectional transport
             long replyStreamId = supplyStreamId.getAsLong();
@@ -548,7 +548,10 @@ public final class SourceInputStreamFactory
             slotPosition = dataLength;
         }
 
-        private DecoderState decodeHttpBegin = (payload, offset, limit) ->
+        private int decodeHttpBegin(
+                final DirectBuffer payload,
+                final int offset,
+                final int limit)
         {
             int result = limit;
             final int endOfHeadersAt = limitOfBytes(payload, offset, limit, CRLFCRLF_BYTES);
@@ -593,7 +596,10 @@ public final class SourceInputStreamFactory
             return result;
         };
 
-        private final DecoderState decodeBeforeHttpBegin = (payload, offset, limit) ->
+        private int decodeBeforeHttpBegin(
+                final DirectBuffer payload,
+                final int offset,
+                final int limit)
         {
             int length = limit - offset;
             int result = offset;
@@ -607,7 +613,7 @@ public final class SourceInputStreamFactory
             }
             else
             {
-                decoderState = decodeHttpBegin;
+                decoderState = this::decodeHttpBegin;
             }
             return result;
         };
@@ -699,18 +705,18 @@ public final class SourceInputStreamFactory
                         if (hasUpgrade)
                         {
                             // TODO: wait for 101 first
-                            decoderState = decodeHttpDataAfterUpgrade;
+                            decoderState = this::decodeHttpDataAfterUpgrade;
                             throttleState = this::throttleForHttpDataAfterUpgrade;
                             correlation.state().persistent = false;
                         }
                         else if (contentRemaining > 0)
                         {
-                            decoderState = decodeHttpData;
+                            decoderState = this::decodeHttpData;
                             throttleState = this::throttleForHttpData;
                         }
                         else if (isChunkedTransfer)
                         {
-                            decoderState = decodeHttpChunk;
+                            decoderState = this::decodeHttpChunk;
                             throttleState = this::throttleForHttpData;
                         }
                         else
@@ -817,7 +823,10 @@ public final class SourceInputStreamFactory
             return headers;
         }
 
-        private DecoderState decodeHttpData = (payload, offset, limit) ->
+        private int decodeHttpData(
+                final DirectBuffer payload,
+                final int offset,
+                final int limit)
         {
             final int length = limit - offset;
 
@@ -840,7 +849,10 @@ public final class SourceInputStreamFactory
             return result;
         };
 
-        private DecoderState decodeHttpChunk = (payload, offset, limit) ->
+        private int decodeHttpChunk(
+                final DirectBuffer payload,
+                final int offset,
+                final int limit)
         {
             int result = limit;
             final int endOfHeaderAt = limitOfBytes(payload, offset, limit, CRLF_BYTES);
@@ -850,7 +862,7 @@ public final class SourceInputStreamFactory
             }
             else
             {
-                int colonAt = limitOfBytes(payload, offset, limit, COLON_BYTES);
+                int colonAt = limitOfBytes(payload, offset, limit, SEMICOLON_BYTES);
                 int chunkSizeLimit = colonAt == -1 ? endOfHeaderAt - 2 : colonAt - 1;
                 int chunkSizeLength = chunkSizeLimit - offset;
                 try
@@ -874,7 +886,10 @@ public final class SourceInputStreamFactory
             return result;
         };
 
-        private final DecoderState decodeHttpChunkEnd = (payload, offset, limit) ->
+        private int decodeHttpChunkEnd(
+                final DirectBuffer payload,
+                final int offset,
+                final int limit)
         {
             int length = limit - offset;
             int result = offset;
@@ -887,14 +902,17 @@ public final class SourceInputStreamFactory
                 }
                 else
                 {
-                    decoderState = decodeHttpChunk;
+                    decoderState = this::decodeHttpChunk;
                     result = offset + 2;
                 }
             }
             return result;
         };
 
-        private int decodeHttpChunkData(DirectBuffer payload, int offset, int limit)
+        private int decodeHttpChunkData(
+                final DirectBuffer payload,
+                final int offset,
+                final int limit)
         {
             int result = offset;
             final int length = limit - offset;
@@ -913,12 +931,15 @@ public final class SourceInputStreamFactory
 
             if (chunkSizeRemaining == 0)
             {
-                decoderState = decodeHttpChunkEnd;
+                decoderState = this::decodeHttpChunkEnd;
             }
             return result;
         }
 
-        private DecoderState decodeHttpDataAfterUpgrade = (payload, offset, limit) ->
+        private int decodeHttpDataAfterUpgrade(
+                final DirectBuffer payload,
+                final int offset,
+                final int limit)
         {
             final int length = limit - offset;
             int writableBytes = Math.min(length, availableTargetWindow);
@@ -930,13 +951,19 @@ public final class SourceInputStreamFactory
             return offset + writableBytes;
         };
 
-        private DecoderState decodeSkipData = (payload, offset, limit) ->
+        private int decodeSkipData(
+                final DirectBuffer payload,
+                final int offset,
+                final int limit)
         {
             return limit;
         };
 
         @SuppressWarnings("unused")
-        private DecoderState decodeHttpEnd = (payload, offset, limit) ->
+        private int decodeHttpEnd(
+                final DirectBuffer payload,
+                final int offset,
+                final int limit)
         {
             // TODO: consider chunks, trailers
             target.doHttpEnd(targetId);
@@ -947,13 +974,13 @@ public final class SourceInputStreamFactory
         {
             target.doHttpEnd(targetId);
             // TODO: target.removeThrottle(targetId);
-            decoderState = decodeBeforeHttpBegin;
+            decoderState = this::decodeBeforeHttpBegin;
             throttleState = this::throttleIgnoreWindow;
 
             if (correlation.state().persistent)
             {
                 this.streamState = this::streamAfterBeginOrData;
-                this.decoderState = decodeBeforeHttpBegin;
+                this.decoderState = this::decodeBeforeHttpBegin;
                 ensureSourceWindow(maximumHeadersSize);
             }
             else
