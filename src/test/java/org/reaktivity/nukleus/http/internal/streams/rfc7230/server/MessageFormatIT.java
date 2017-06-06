@@ -119,6 +119,15 @@ public class MessageFormatIT
     @Test
     @Specification({
         "${route}/server/controller",
+        "${client}/incomplete.request.with.unimplemented.method/client"})
+    public void incompleteRequestWithUnimplementedMethod() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/server/controller",
         "${client}/request.with.unimplemented.method/client"})
     public void requestWithUnimplementedMethod() throws Exception
     {
