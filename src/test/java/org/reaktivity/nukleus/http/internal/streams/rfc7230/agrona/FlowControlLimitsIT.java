@@ -60,15 +60,6 @@ public class FlowControlLimitsIT
     @Test
     @Specification({
         "${route}/server/controller",
-        "${streams}/request.headers.too.long/server/source" })
-    public void shouldRejectRequestExceedingMaximumHeadersSize() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${route}/server/controller",
         "${streams}/response.headers.too.long/server/source",
         "${streams}/response.headers.too.long/server/target" })
     public void shouldNotWriteResponseExceedingMaximumHeadersSize() throws Exception

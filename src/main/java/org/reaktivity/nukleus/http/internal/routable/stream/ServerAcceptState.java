@@ -32,6 +32,7 @@ final class ServerAcceptState
     int window;
     int pendingRequests;
     boolean endRequested;
+    boolean persistent = true;
 
     ServerAcceptState(long streamId, Target replyTarget, MessageHandler initialThrottle)
     {

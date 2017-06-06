@@ -24,6 +24,7 @@ import static org.reaktivity.nukleus.http.internal.util.BufferUtil.limitOfBytes;
 import java.net.URI;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -56,34 +57,9 @@ public final class SourceInputStreamFactory
 {
     private static final byte[] CRLFCRLF_BYTES = "\r\n\r\n".getBytes(StandardCharsets.US_ASCII);
     private static final byte[] CRLF_BYTES = "\r\n".getBytes(StandardCharsets.US_ASCII);
+    private static final byte[] SEMICOLON_BYTES = ";".getBytes(StandardCharsets.US_ASCII);
     private static final byte[] SPACE = " ".getBytes(StandardCharsets.US_ASCII);
     private static final int MAXIMUM_METHOD_BYTES = "OPTIONS".length();
-
-    private enum StandardMethods
-    {
-        GET,
-        HEAD,
-        POST,
-        PUT,
-        DELETE,
-        CONNECT,
-        OPTIONS,
-        TRACE;
-
-        static StandardMethods parse(String name)
-        {
-            StandardMethods result;
-            try
-            {
-                result = valueOf(name);
-            }
-            catch (IllegalArgumentException e)
-            {
-                result = null;
-            }
-            return result;
-        }
-    };
 
     private final FrameFW frameRO = new FrameFW();
 
@@ -103,17 +79,6 @@ public final class SourceInputStreamFactory
     private final Slab slab;
     private final MutableDirectBuffer temporarySlot;
 
-    private class HttpStatus
-    {
-        int status;
-        String message;
-
-        void reset()
-        {
-            status = 200;
-            message = "OK";
-        }
-    }
     private final HttpStatus httpStatus = new HttpStatus();
 
     public SourceInputStreamFactory(
@@ -157,9 +122,12 @@ public final class SourceInputStreamFactory
         private long sourceRef;
         private int window;
         private int contentRemaining;
+        private boolean isChunkedTransfer;
+        private int chunkSizeRemaining;
         private int availableTargetWindow;
         private boolean hasUpgrade;
         private Correlation<ServerAcceptState> correlation;
+        private boolean targetBeginIssued;
 
         @Override
         public String toString()
@@ -208,7 +176,7 @@ public final class SourceInputStreamFactory
             switch (msgTypeId)
             {
             case DataFW.TYPE_ID:
-                deferAndProcessData(buffer, index, length);
+                deferAndProcessDataFrame(buffer, index, length);
                 break;
             case EndFW.TYPE_ID:
                 deferEnd(buffer, index, length);
@@ -229,11 +197,24 @@ public final class SourceInputStreamFactory
             {
             case DataFW.TYPE_ID:
                 processData(buffer, index, length);
-                if (slotIndex != NO_SLOT)
-                {
-                    streamState = this::streamWithDeferredData;
-                }
                 break;
+            case EndFW.TYPE_ID:
+                processEnd(buffer, index, length);
+                break;
+            default:
+                processUnexpected(buffer, index, length);
+                break;
+            }
+        }
+
+        private void streamBeforeEnd(
+            int msgTypeId,
+            MutableDirectBuffer buffer,
+            int index,
+            int length)
+        {
+            switch (msgTypeId)
+            {
             case EndFW.TYPE_ID:
                 processEnd(buffer, index, length);
                 break;
@@ -252,7 +233,7 @@ public final class SourceInputStreamFactory
             processUnexpected(buffer, index, length);
         }
 
-        private void streamAfterRejectOrReset(
+        private void streamAfterReset(
             int msgTypeId,
             MutableDirectBuffer buffer,
             int index,
@@ -292,10 +273,36 @@ public final class SourceInputStreamFactory
         {
             source.doReset(streamId);
 
-            this.streamState = this::streamAfterRejectOrReset;
+            this.streamState = this::streamAfterReset;
         }
 
         private void processInvalidRequest(int status, String message)
+        {
+            this.decoderState = this::decodeSkipData;
+            this.streamState = this::streamAfterReset;
+            if (slotIndex != NO_SLOT)
+            {
+                slab.release(slotIndex);
+                slotIndex = NO_SLOT;
+            }
+            if (targetBeginIssued)
+            {
+                // Drain data from source before resetting to allow its writes to complete
+                throttleState = SourceInputStream.this::throttlePropagateWindow;
+                doSourceWindow(maximumHeadersSize);
+
+                // We can't write back an HTTP error response because we already forwarded the request to the target
+                source.doReset(sourceId);
+                target.doHttpEnd(targetId);
+                doEnd();
+            }
+            else
+            {
+                writeErrorResponse(status, message);
+            }
+        }
+
+        private void writeErrorResponse(int status, String message)
         {
             Target serverAcceptReply = supplyTarget.apply(source.name());
             long serverAcceptReplyStreamId = correlation.state().streamId;
@@ -308,13 +315,6 @@ public final class SourceInputStreamFactory
 
             final DirectBuffer payload = new UnsafeBuffer(payloadText.toString().getBytes(StandardCharsets.UTF_8));
 
-            this.decoderState = this::decodeSkipData;
-            this.streamState = this::streamAfterRejectOrReset;
-            if (slotIndex != NO_SLOT)
-            {
-                slab.release(slotIndex);
-                slotIndex = NO_SLOT;
-            }
             int writableBytes = Math.min(correlation.state().window, payload.capacity());
             if (writableBytes > 0)
             {
@@ -380,9 +380,9 @@ public final class SourceInputStreamFactory
 
             // Proactively issue BEGIN on server accept reply since we only support bidirectional transport
             long replyStreamId = supplyStreamId.getAsLong();
-            Target replyTarget = supplyTarget.apply(source.name());
-            ServerAcceptState state = new ServerAcceptState(replyStreamId, replyTarget, this::loopBackThrottle);
-            replyTarget.doBegin(replyStreamId, 0L, sourceCorrelationId);
+            Target sourceReply = supplyTarget.apply(source.name());
+            ServerAcceptState state = new ServerAcceptState(replyStreamId, sourceReply, this::loopBackThrottle);
+            sourceReply.doBegin(replyStreamId, 0L, sourceCorrelationId);
             this.correlation = new Correlation<>(sourceCorrelationId, source.routableName(),
                     OUTPUT_ESTABLISHED, state);
 
@@ -407,16 +407,38 @@ public final class SourceInputStreamFactory
                 final OctetsFW payload = dataRO.payload();
                 final int limit = payload.limit();
                 int offset = payload.offset();
-                decode(payload.buffer(), offset, limit);
+
+                offset = decode(payload.buffer(), offset, limit);
+
+                if (offset < limit)
+                {
+                    assert slotIndex == NO_SLOT;
+                    slotOffset = slotPosition = 0;
+                    slotIndex = slab.acquire(sourceId);
+                    if (slotIndex == NO_SLOT)
+                    {
+                        // Out of slab memory
+                        processInvalidRequest(503, "Service Unavailable");
+                    }
+                    else
+                    {
+                        streamState = this::streamWithDeferredData;
+                        deferAndProcessData(buffer, offset, limit);
+                    }
+                }
             }
         }
 
-        private void decode(DirectBuffer buffer, int offset, int limit)
+        private int decode(DirectBuffer buffer, int offset, int limit)
         {
-            while (offset < limit)
+            boolean decoderStateChanged = true;
+            while (offset < limit && decoderStateChanged)
             {
+                DecoderState previous = decoderState;
                 offset = decoderState.decode(buffer, offset, limit);
+                decoderStateChanged = previous != decoderState;
             }
+            return offset;
         }
 
         private void processEnd(
@@ -445,13 +467,12 @@ public final class SourceInputStreamFactory
             }
         }
 
-        private void deferAndProcessData(
+        private void deferAndProcessDataFrame(
             DirectBuffer buffer,
             int index,
             int length)
         {
             dataRO.wrap(buffer, index, index + length);
-
             window -= dataRO.length();
 
             if (window < 0)
@@ -461,23 +482,38 @@ public final class SourceInputStreamFactory
             else
             {
                 final OctetsFW payload = dataRO.payload();
-                final int offset = payload.offset();
-                final int dataLength = payload.limit() - offset;
-                if (slotPosition + dataLength > slab.slotCapacity())
+                deferAndProcessData(payload.buffer(), payload.offset(), payload.limit());
+            }
+        }
+
+        private void deferAndProcessData(DirectBuffer buffer, int offset, int limit)
+        {
+            final int dataLength = limit - offset;
+            if (slotPosition + dataLength > slab.slotCapacity())
+            {
+                alignSlotData();
+            }
+            MutableDirectBuffer slot = slab.buffer(slotIndex);
+            slot.putBytes(slotPosition, buffer, offset, dataLength);
+            slotPosition += dataLength;
+            processDeferredData();
+            if (window == 0)
+            {
+                // Increase source window to ensure we can receive the largest possible amount of data we can slab
+                int cachedBytes = slotPosition - slotOffset;
+                ensureSourceWindow(slab.slotCapacity() - cachedBytes);
+                if (window == 0)
                 {
-                    alignSlotData();
+                    throw new IllegalStateException("Decoder failed to detect headers or chunk too long");
                 }
-                MutableDirectBuffer slot = slab.buffer(slotIndex);
-                slot.putBytes(slotPosition, payload.buffer(), offset, dataLength);
-                slotPosition += dataLength;
-                processDeferredData();
             }
         }
 
         private void processDeferredData()
         {
             MutableDirectBuffer slot = slab.buffer(slotIndex);
-            decode(slot, slotOffset, slotPosition);
+            int offset = decode(slot, slotOffset, slotPosition);
+            slotOffset = offset;
             if (slotOffset == slotPosition)
             {
                 slab.release(slotIndex);
@@ -512,108 +548,75 @@ public final class SourceInputStreamFactory
             slotPosition = dataLength;
         }
 
-        private int decodeBeforeHttpBegin(
-            final DirectBuffer payload,
-            final int offset,
-            final int limit)
-        {
-            int length = limit - offset;
-            int result = offset;
-            decoderState = this::decodeHttpBegin;
-            if (payload.getByte(offset) == '\r')
-            {
-                if (length == 1)
-                {
-                    decoderState = this::decodeBeforeHttpBeginAfterCR;
-                    result = offset + 1;
-                }
-                else if (payload.getByte(offset+1) == '\n')
-                {
-                    // RFC 3270 3.5.  Message Parsing Robustness: skip empty line (CRLF) before request-line
-                    result = offset + 2;
-                    decoderState = this::decodeBeforeHttpBegin;
-                }
-            }
-            return result;
-        }
-
-        private int decodeBeforeHttpBeginAfterCR(
-            final DirectBuffer payload,
-            final int offset,
-            final int limit)
-        {
-            int result = limit;
-            if (payload.getByte(offset) == '\n')
-            {
-                // RFC 3270 3.5.  Message Parsing Robustness: skip empty line (CRLF) before request-line
-                decoderState = this::decodeBeforeHttpBegin;
-                result = offset + 1;
-            }
-            else
-            {
-                processInvalidRequest(400, "Bad Request");
-            }
-            return result;
-        }
-
         private int decodeHttpBegin(
-            final DirectBuffer payload,
-            final int offset,
-            final int limit)
+                final DirectBuffer payload,
+                final int offset,
+                final int limit)
         {
             int result = limit;
             final int endOfHeadersAt = limitOfBytes(payload, offset, limit, CRLFCRLF_BYTES);
             if (endOfHeadersAt == -1)
             {
-                int length = limit - offset;
-                if (slotIndex == NO_SLOT)
-                {
-                    // Incomplete request, not yet cached
-                    slotIndex = slab.acquire(sourceId);
-                }
+                // Incomplete request, signal we can't consume the data
+                result = offset;
 
-                if (slotIndex == NO_SLOT)
+                int length = limit - offset;
+                int firstSpaceCheckLimit = Math.min(offset + 1 + MAXIMUM_METHOD_BYTES, limit);
+                int firstSpace = limitOfBytes(payload, offset, firstSpaceCheckLimit, SPACE);
+                if (firstSpace != -1)
                 {
-                    // Out of slab memory
-                    processInvalidRequest(503, "Service Unavailable");
-                }
-                else
-                {
-                    slotOffset = 0;
-                    MutableDirectBuffer buffer = slab.buffer(slotIndex);
-                    buffer.putBytes(0, payload, offset, length);
-                    slotPosition = length;
-                    int firstSpace = limitOfBytes(buffer, slotOffset, slotPosition, SPACE);
-                    if (firstSpace > MAXIMUM_METHOD_BYTES)
+                    String method = payload.getStringWithoutLengthUtf8(offset, length).split("\\s+")[0];
+                    if (StandardMethods.parse(method) == null)
                     {
-                        processInvalidRequest(400, "Bad Request");
+                        processInvalidRequest(501, "Not Implemented");
                     }
-                    if (window == 0)
+                }
+                else  if (firstSpace == -1 && length > MAXIMUM_METHOD_BYTES)
+                {
+                    processInvalidRequest(400, "Bad Request");
+                }
+                if (length >= maximumHeadersSize)
+                {
+                    int firstCRLF = limitOfBytes(payload, offset, limit, CRLF_BYTES);
+                    if (firstCRLF == -1 || firstCRLF > maximumHeadersSize)
                     {
-                        // Increase source window to ensure we can receive the largest possible request headers
-                        ensureSourceWindow(maximumHeadersSize - length);
-                        if (window < 2)
-                        {
-                            int firstCRLF = limitOfBytes(buffer, slotOffset, slotPosition, CRLF_BYTES);
-                            if (firstCRLF == -1 || firstCRLF > maximumHeadersSize)
-                            {
-                                processInvalidRequest(414, "Request URI too long");
-                            }
-                            else
-                            {
-                                processInvalidRequest(431, "Request Header Fields Too Large");
-                            }
-                        }
+                        processInvalidRequest(414, "Request URI too long");
+                    }
+                    else
+                    {
+                        processInvalidRequest(431, "Request Header Fields Too Large");
                     }
                 }
             }
             else
             {
                 decodeCompleteHttpBegin(payload, offset, endOfHeadersAt - offset);
-                result = slotOffset = endOfHeadersAt;
+                result = endOfHeadersAt;
             }
             return result;
-        }
+        };
+
+        private int decodeBeforeHttpBegin(
+                final DirectBuffer payload,
+                final int offset,
+                final int limit)
+        {
+            int length = limit - offset;
+            int result = offset;
+            if (payload.getByte(offset) == '\r')
+            {
+                if (length > 1 && payload.getByte(offset+1) == '\n')
+                {
+                    // RFC 3270 3.5.  Message Parsing Robustness: skip empty line (CRLF) before request-line
+                    result = offset + 2;
+                }
+            }
+            else
+            {
+                decoderState = this::decodeHttpBegin;
+            }
+            return result;
+        };
 
         private void decodeCompleteHttpBegin(
             final DirectBuffer payload,
@@ -682,26 +685,44 @@ public final class SourceInputStreamFactory
                         correlateNew.accept(targetCorrelationId, correlation);
 
                         availableTargetWindow = 0;
+                        switchTarget(newTarget, newTargetId);
                         newTarget.doHttpBegin(newTargetId, targetRef, newTargetId,
                                 hs -> headers.forEach((k, v) -> hs.item(i -> i.name(k).value(v))));
-                        switchTarget(newTarget, newTargetId);
+                        targetBeginIssued = true;
 
                         hasUpgrade = headers.containsKey("upgrade");
+                        String connectionOptions = headers.get("connection");
+                        if (connectionOptions != null)
+                        {
+                            Arrays.asList(connectionOptions.toLowerCase().split(",")).stream().forEach((element) ->
+                            {
+                                if (element.equals("close"))
+                                {
+                                    correlation.state().persistent = false;
+                                }
+                            });
+                        }
                         if (hasUpgrade)
                         {
                             // TODO: wait for 101 first
                             decoderState = this::decodeHttpDataAfterUpgrade;
                             throttleState = this::throttleForHttpDataAfterUpgrade;
+                            correlation.state().persistent = false;
                         }
-                        else if ((contentRemaining = parseInt(headers.getOrDefault("content-length", "0"))) > 0)
+                        else if (contentRemaining > 0)
                         {
                             decoderState = this::decodeHttpData;
+                            throttleState = this::throttleForHttpData;
+                        }
+                        else if (isChunkedTransfer)
+                        {
+                            decoderState = this::decodeHttpChunk;
                             throttleState = this::throttleForHttpData;
                         }
                         else
                         {
                             // no content
-                            target.doHttpEnd(targetId);
+                            httpRequestComplete();
                         }
                     }
                     else
@@ -731,6 +752,8 @@ public final class SourceInputStreamFactory
 
             Pattern headerPattern = Pattern.compile("([^\\s:]+):\\s*(.*)");
             boolean contentLengthFound = false;
+            contentRemaining = 0;
+            isChunkedTransfer = false;
             for (int i = 1; i < lines.length; i++)
             {
                 Matcher headerMatcher = headerPattern.matcher(lines[i]);
@@ -756,22 +779,37 @@ public final class SourceInputStreamFactory
                         headers.put(":authority", value);
                     }
                 }
-                else if ("transfer-encoding".equals(name) &&  (!"chunked".equals(value)))
-                {
-                    // TODO: support other transfer encodings
-                    httpStatus.status = 501;
-                    httpStatus.message = "Unsupported transfer-encoding " + value;
-                    break;
-                }
-                else if ("content-length".equals(name))
+                else if ("transfer-encoding".equals(name))
                 {
                     if (contentLengthFound)
                     {
                         httpStatus.status = 400;
                         httpStatus.message = "Bad Request";
                     }
+                    else if (!"chunked".equals(value))
+                    {
+                        // TODO: support other transfer encodings
+                        httpStatus.status = 501;
+                        httpStatus.message = "Unsupported transfer-encoding " + value;
+                        break;
+                    }
                     else
                     {
+                        isChunkedTransfer = true;
+                        headers.put(name, value);
+                    }
+
+                }
+                else if ("content-length".equals(name))
+                {
+                    if (contentLengthFound || isChunkedTransfer)
+                    {
+                        httpStatus.status = 400;
+                        httpStatus.message = "Bad Request";
+                    }
+                    else
+                    {
+                        contentRemaining = parseInt(value);
                         contentLengthFound = true;
                         headers.put(name, value);
                     }
@@ -786,9 +824,9 @@ public final class SourceInputStreamFactory
         }
 
         private int decodeHttpData(
-            DirectBuffer payload,
-            final int offset,
-            final int limit)
+                final DirectBuffer payload,
+                final int offset,
+                final int limit)
         {
             final int length = limit - offset;
 
@@ -801,41 +839,107 @@ public final class SourceInputStreamFactory
                 target.doHttpData(targetId, payload, offset, writableBytes);
                 availableTargetWindow -= writableBytes;
                 contentRemaining -= writableBytes;
-                slotOffset += writableBytes;
             }
-            if (slotIndex == NO_SLOT && writableBytes < length)
-            {
-                slotIndex = slab.acquire(sourceId);
-                if (slotIndex == NO_SLOT)
-                {
-                    // We can't write back an HTTP error response because we already forwarded the begin to the target
-                    source.doReset(sourceId);
-                    target.doHttpEnd(targetId);
-                    doEnd();
-                    return limit;
-                }
-                slotOffset = 0;
-                MutableDirectBuffer buffer = slab.buffer(slotIndex);
-                buffer.putBytes(0, payload, offset, length);
-                slotPosition = length;
-            }
+            int result = offset + writableBytes;
+
             if (contentRemaining == 0)
             {
-                target.doHttpEnd(targetId);
-                decoderState = this::decodeBeforeHttpBegin;
-                throttleState = this::throttleIgnoreWindow;
-                if (writableBytes < length)
+                httpRequestComplete();
+            }
+            return result;
+        };
+
+        private int decodeHttpChunk(
+                final DirectBuffer payload,
+                final int offset,
+                final int limit)
+        {
+            int result = limit;
+            final int endOfHeaderAt = limitOfBytes(payload, offset, limit, CRLF_BYTES);
+            if (endOfHeaderAt == -1)
+            {
+                result = offset;
+            }
+            else
+            {
+                int colonAt = limitOfBytes(payload, offset, limit, SEMICOLON_BYTES);
+                int chunkSizeLimit = colonAt == -1 ? endOfHeaderAt - 2 : colonAt - 1;
+                int chunkSizeLength = chunkSizeLimit - offset;
+                try
                 {
-                    processDeferredData();
+                    chunkSizeRemaining = Integer.parseInt(payload.getStringWithoutLengthUtf8(offset, chunkSizeLength), 16);
+                }
+                catch (NumberFormatException ex)
+                {
+                    processInvalidRequest(400,  "Bad Request");
+                }
+                if (chunkSizeRemaining == 0)
+                {
+                    httpRequestComplete();
+                }
+                else
+                {
+                    decoderState = this::decodeHttpChunkData;
+                    result = endOfHeaderAt;
                 }
             }
-            return limit;
+            return result;
+        };
+
+        private int decodeHttpChunkEnd(
+                final DirectBuffer payload,
+                final int offset,
+                final int limit)
+        {
+            int length = limit - offset;
+            int result = offset;
+            if (length > 1)
+            {
+                if (payload.getByte(offset) != '\r'
+                    || payload.getByte(offset + 1) != '\n')
+                {
+                    processInvalidRequest(400,  "Bad Request");
+                }
+                else
+                {
+                    decoderState = this::decodeHttpChunk;
+                    result = offset + 2;
+                }
+            }
+            return result;
+        };
+
+        private int decodeHttpChunkData(
+                final DirectBuffer payload,
+                final int offset,
+                final int limit)
+        {
+            int result = offset;
+            final int length = limit - offset;
+
+            // TODO: consider chunks
+            int writableBytes = Math.min(length, chunkSizeRemaining);
+            writableBytes = Math.min(availableTargetWindow, writableBytes);
+
+            if (writableBytes > 0)
+            {
+                target.doHttpData(targetId, payload, offset, writableBytes);
+                availableTargetWindow -= writableBytes;
+                chunkSizeRemaining -= writableBytes;
+            }
+            result = offset + writableBytes;
+
+            if (chunkSizeRemaining == 0)
+            {
+                decoderState = this::decodeHttpChunkEnd;
+            }
+            return result;
         }
 
         private int decodeHttpDataAfterUpgrade(
-            DirectBuffer payload,
-            int offset,
-            int limit)
+                final DirectBuffer payload,
+                final int offset,
+                final int limit)
         {
             final int length = limit - offset;
             int writableBytes = Math.min(length, availableTargetWindow);
@@ -843,46 +947,46 @@ public final class SourceInputStreamFactory
             {
                 target.doHttpData(targetId, payload, offset, writableBytes);
                 availableTargetWindow -= writableBytes;
-                slotOffset += writableBytes;
             }
-            if (slotIndex == NO_SLOT && writableBytes < length)
-            {
-                slotIndex = slab.acquire(sourceId);
-                if (slotIndex == NO_SLOT)
-                {
-                    // We can't write back an HTTP error response because we already forwarded the begin to the target
-                    source.doReset(sourceId);
-                    target.doHttpEnd(targetId);
-                    doEnd();
-                }
-                else
-                {
-                    slotOffset = 0;
-                    MutableDirectBuffer buffer = slab.buffer(slotIndex);
-                    buffer.putBytes(0, payload, offset, length);
-                    slotPosition = length;
-                }
-            }
-            return limit;
-        }
+            return offset + writableBytes;
+        };
 
         private int decodeSkipData(
-                DirectBuffer payload,
-                int offset,
-                int limit)
+                final DirectBuffer payload,
+                final int offset,
+                final int limit)
         {
             return limit;
-        }
+        };
 
         @SuppressWarnings("unused")
         private int decodeHttpEnd(
-            DirectBuffer payload,
-            int offset,
-            int limit)
+                final DirectBuffer payload,
+                final int offset,
+                final int limit)
         {
             // TODO: consider chunks, trailers
             target.doHttpEnd(targetId);
             return limit;
+        };
+
+        private void httpRequestComplete()
+        {
+            target.doHttpEnd(targetId);
+            // TODO: target.removeThrottle(targetId);
+            decoderState = this::decodeBeforeHttpBegin;
+            throttleState = this::throttleIgnoreWindow;
+
+            if (correlation.state().persistent)
+            {
+                this.streamState = this::streamAfterBeginOrData;
+                this.decoderState = this::decodeBeforeHttpBegin;
+                ensureSourceWindow(maximumHeadersSize);
+            }
+            else
+            {
+                this.streamState = this::streamBeforeEnd;
+            }
         }
 
         private Optional<Route> resolveTarget(
@@ -1036,6 +1140,7 @@ public final class SourceInputStreamFactory
                 ensureSourceWindow(availableTargetWindow);
                 if (window == availableTargetWindow)
                 {
+                    // Windows are now aligned
                     throttleState = this::throttlePropagateWindow;
                 }
             }
@@ -1063,7 +1168,7 @@ public final class SourceInputStreamFactory
 
         private void doSourceWindow(int update)
         {
-            this.window += update;
+            window += update;
             source.doWindow(sourceId, update);
         }
 
@@ -1085,6 +1190,7 @@ public final class SourceInputStreamFactory
             }
             target = newTarget;
             targetId = newTargetId;
+            targetBeginIssued = false;
             newTarget.setThrottle(newTargetId, this::handleThrottle);
             throttleState = SourceInputStream.this::throttleIgnoreWindow;
         }
@@ -1093,7 +1199,45 @@ public final class SourceInputStreamFactory
     @FunctionalInterface
     private interface DecoderState
     {
-        int decode(DirectBuffer buffer, int offset, int length);
+        int decode(DirectBuffer buffer, int offset, int limit);
+    }
+
+    private static final class HttpStatus
+    {
+        int status;
+        String message;
+
+        void reset()
+        {
+            status = 200;
+            message = "OK";
+        }
+    }
+
+    private enum StandardMethods
+    {
+        GET,
+        HEAD,
+        POST,
+        PUT,
+        DELETE,
+        CONNECT,
+        OPTIONS,
+        TRACE;
+
+        static StandardMethods parse(String name)
+        {
+            StandardMethods result;
+            try
+            {
+                result = valueOf(name);
+            }
+            catch (IllegalArgumentException e)
+            {
+                result = null;
+            }
+            return result;
+        }
     }
 
 }

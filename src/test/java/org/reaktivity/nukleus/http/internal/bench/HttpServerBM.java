@@ -66,7 +66,7 @@ import org.reaktivity.nukleus.http.internal.types.stream.BeginFW;
 import org.reaktivity.nukleus.http.internal.types.stream.DataFW;
 import org.reaktivity.nukleus.http.internal.types.stream.ResetFW;
 import org.reaktivity.nukleus.http.internal.types.stream.WindowFW;
-import org.reaktivity.reaktor.internal.Reaktor;
+import org.reaktivity.reaktor.Reaktor;
 
 @State(Scope.Benchmark)
 @BenchmarkMode(Mode.Throughput)
@@ -101,8 +101,11 @@ public class HttpServerBM
                 LangUtil.rethrowUnchecked(ex);
             }
 
-            reaktor = Reaktor.launch(configuration, n -> "http".equals(n), HttpController.class::isAssignableFrom);
-        }
+            reaktor = Reaktor.builder()
+                    .config(configuration)
+                    .discover((String t) -> "http".equals(t))
+                    .discover(HttpController.class::isAssignableFrom)
+                    .build();        }
 
         private final BeginFW beginRO = new BeginFW();
         private final DataFW dataRO = new DataFW();
