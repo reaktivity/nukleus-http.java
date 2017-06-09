@@ -34,7 +34,7 @@ public class HttpNukleusFactorySpiTest
         Properties properties = new Properties();
         properties.setProperty(Configuration.DIRECTORY_PROPERTY_NAME, "target/nukleus-tests");
         Configuration config = new Configuration(properties);
-        Nukleus nukleus = factory.create("http", config);
+        Nukleus nukleus = factory.create("http", config, null);
         assertThat(nukleus, instanceOf(Nukleus.class));
     }
 

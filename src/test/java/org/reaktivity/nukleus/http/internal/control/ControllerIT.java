@@ -30,7 +30,7 @@ import org.junit.rules.Timeout;
 import org.kaazing.k3po.junit.annotation.Specification;
 import org.kaazing.k3po.junit.rules.K3poRule;
 import org.reaktivity.nukleus.http.internal.HttpController;
-import org.reaktivity.reaktor.test.ControllerRule;
+import org.reaktivity.reaktor.test.ReaktorRule;
 
 public class ControllerIT
 {
@@ -40,11 +40,12 @@ public class ControllerIT
 
     private final TestRule timeout = new DisableOnDebug(new Timeout(5, SECONDS));
 
-    private final ControllerRule controller = new ControllerRule(HttpController.class)
+    private final ReaktorRule controller = new ReaktorRule()
         .directory("target/nukleus-itests")
         .commandBufferCapacity(1024)
         .responseBufferCapacity(1024)
-        .counterValuesBufferCapacity(1024);
+        .counterValuesBufferCapacity(1024)
+        .controller(HttpController.class::isAssignableFrom);
 
     @Rule
     public final TestRule chain = outerRule(k3po).around(timeout).around(controller);

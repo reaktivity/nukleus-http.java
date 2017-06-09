@@ -24,14 +24,12 @@ import java.util.regex.Pattern;
 import org.agrona.collections.Long2ObjectHashMap;
 import org.agrona.concurrent.status.AtomicCounter;
 import org.reaktivity.nukleus.Nukleus;
-import org.reaktivity.nukleus.Reaktive;
 import org.reaktivity.nukleus.http.internal.Context;
 import org.reaktivity.nukleus.http.internal.conductor.Conductor;
 import org.reaktivity.nukleus.http.internal.routable.Correlation;
 import org.reaktivity.nukleus.http.internal.routable.Routable;
 import org.reaktivity.nukleus.http.internal.types.control.Role;
 
-@Reaktive
 public final class Router extends Nukleus.Composite
 {
     private static final Pattern SOURCE_NAME = Pattern.compile("([^#]+).*");

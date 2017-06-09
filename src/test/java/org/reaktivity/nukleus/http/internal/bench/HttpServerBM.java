@@ -102,10 +102,12 @@ public class HttpServerBM
             }
 
             reaktor = Reaktor.builder()
-                    .config(configuration)
-                    .discover((String t) -> "http".equals(t))
-                    .discover(HttpController.class::isAssignableFrom)
-                    .build();        }
+                             .config(configuration)
+                             .nukleus("http"::equals)
+                             .controller(HttpController.class::isAssignableFrom)
+                             .errorHandler(ex -> ex.printStackTrace(System.err))
+                             .build();
+        }
 
         private final BeginFW beginRO = new BeginFW();
         private final DataFW dataRO = new DataFW();
