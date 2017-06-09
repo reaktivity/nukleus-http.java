@@ -120,8 +120,9 @@ public class HttpClientBM
 
             reaktor = Reaktor.builder()
                          .config(configuration)
-                         .discover((String t) -> "http".equals(t))
-                         .discover(HttpController.class::isAssignableFrom)
+                         .nukleus("http"::equals)
+                         .controller(HttpController.class::isAssignableFrom)
+                         .errorHandler(ex -> ex.printStackTrace(System.err))
                          .build();
         }
 
@@ -141,8 +142,9 @@ public class HttpClientBM
             }
             reaktor = Reaktor.builder()
                     .config(configuration)
-                    .discover((String t) -> "http".equals(t))
-                    .discover(HttpController.class::isAssignableFrom)
+                    .nukleus("http"::equals)
+                    .controller(HttpController.class::isAssignableFrom)
+                    .errorHandler(ex -> ex.printStackTrace(System.err))
                     .build();
             reaktor.start();
             System.out.println("Reaktor started");
