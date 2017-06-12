@@ -380,7 +380,7 @@ public final class SourceInputStreamFactory
 
             // Proactively issue BEGIN on server accept reply since we only support bidirectional transport
             long replyStreamId = supplyStreamId.getAsLong();
-            Target sourceReply = supplyTarget.apply(source.name());
+            Target sourceReply = supplyTarget.apply(source.routableName());
             ServerAcceptState state = new ServerAcceptState(replyStreamId, sourceReply, this::loopBackThrottle);
             sourceReply.doBegin(replyStreamId, 0L, sourceCorrelationId);
             this.correlation = new Correlation<>(sourceCorrelationId, source.routableName(),
