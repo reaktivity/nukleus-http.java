@@ -304,7 +304,7 @@ public final class SourceInputStreamFactory
 
         private void writeErrorResponse(int status, String message)
         {
-            Target serverAcceptReply = supplyTarget.apply(source.name());
+            Target serverAcceptReply = supplyTarget.apply(source.routableName());
             long serverAcceptReplyStreamId = correlation.state().streamId;
             switchTarget(serverAcceptReply, serverAcceptReplyStreamId);
 
