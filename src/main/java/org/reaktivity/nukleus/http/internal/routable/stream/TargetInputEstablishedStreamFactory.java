@@ -413,10 +413,6 @@ public final class TargetInputEstablishedStreamFactory
                 // Increase source window to ensure we can receive the largest possible amount of data we can slab
                 int cachedBytes = slotPosition - slotOffset;
                 ensureSourceWindow(slab.slotCapacity() - cachedBytes);
-                if (window == 0)
-                {
-                    throw new IllegalStateException("Decoder failed to detect headers or chunk too long");
-                }
             }
         }
 
