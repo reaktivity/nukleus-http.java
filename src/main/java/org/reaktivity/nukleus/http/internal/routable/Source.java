@@ -197,6 +197,7 @@ public final class Source implements Nukleus
         }
     }
 
+    @Deprecated
     public void doWindow(
         final long streamId,
         final int update)
@@ -205,6 +206,20 @@ public final class Source implements Nukleus
                 .streamId(streamId)
                 .update(update)
                 .frames(update)
+                .build();
+
+        throttleBuffer.write(window.typeId(), window.buffer(), window.offset(), window.sizeof());
+    }
+
+    public void doWindow(
+        final long streamId,
+        final int update,
+        final int frames)
+    {
+        final WindowFW window = windowRW.wrap(writeBuffer, 0, writeBuffer.capacity())
+                .streamId(streamId)
+                .update(update)
+                .frames(frames)
                 .build();
 
         throttleBuffer.write(window.typeId(), window.buffer(), window.offset(), window.sizeof());
