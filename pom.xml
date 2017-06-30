@@ -50,8 +50,7 @@
     <nukleus.plugin.version>0.10</nukleus.plugin.version>
     <nukleus.version>0.3</nukleus.version>
     <nukleus.http.spec.version>0.24</nukleus.http.spec.version>
-    <reaktor.test.version>0.5</reaktor.test.version>
-    <reaktor.version>0.3</reaktor.version>
+    <reaktor.test.version>develop-SNAPSHOT</reaktor.test.version>
     <k3po.nukleus.ext.version>0.5</k3po.nukleus.ext.version>
   </properties>
 
@@ -66,12 +65,6 @@
       <artifactId>nukleus-http.spec</artifactId>
       <version>${nukleus.http.spec.version}</version>
       <scope>provided</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.reaktivity</groupId>
-      <artifactId>reaktor</artifactId>
-      <version>${reaktor.version}</version>
-      <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.reaktivity</groupId>
