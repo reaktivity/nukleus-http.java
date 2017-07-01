@@ -528,6 +528,7 @@ public final class TargetInputEstablishedStreamFactory
                     clientConnectReplyState.releaseConnection(upgraded);
                     this.decoderState = this::decodeHttpDataAfterUpgrade;
                     throttleState = this::handleThrottleAfterBegin;
+                    windowHandler = this::handleWindow;
                 }
                 else if (contentRemaining > 0)
                 {
@@ -541,11 +542,13 @@ public final class TargetInputEstablishedStreamFactory
                 {
                     decoderState = this::decodeHttpChunk;
                     throttleState = this::handleThrottleAfterBegin;
+                    windowHandler = this::handleWindow;
                 }
                 else
                 {
                     // no content
                     httpResponseComplete();
+                    windowHandler = this::handleWindow;
                 }
             }
         }
@@ -777,8 +780,11 @@ public final class TargetInputEstablishedStreamFactory
 
             final int sourceWindowDelta = Math.max(maximumHeadersSize - sourceWindowBytes, 0);
 
-            sourceWindowBytes += sourceWindowDelta;
-            sourceWindowFrames += sourceWindowDelta;
+            sourceWindowBytes = sourceWindowDelta;
+            sourceWindowFrames = sourceWindowDelta;
+
+            sourceWindowBytesAdjustment = 0;
+            sourceWindowFramesAdjustment = 0;
 
             source.doWindow(sourceId, sourceWindowDelta, sourceWindowDelta);
         }
@@ -865,10 +871,35 @@ public final class TargetInputEstablishedStreamFactory
         private void handleContentWindow(
             WindowFW window)
         {
-            sourceWindowBytesDeltaRemaining -= window.update();
-            sourceWindowBytesAdjustment += Math.min(sourceWindowBytesDeltaRemaining, 0);
+            final int targetWindowBytesDelta = window.update();
+            final int targetWindowFramesDelta = window.frames();
 
-            handleWindow(window);
+            targetWindowBytes += targetWindowBytesDelta;
+            targetWindowFrames += targetWindowFramesDelta;
+
+            if (slotIndex != NO_SLOT)
+            {
+                decodeBufferedData();
+            }
+
+            if (sourceWindowBytesDeltaRemaining > 0)
+            {
+                final int sourceWindowBytesDelta =
+                        Math.min(targetWindowBytes - sourceWindowBytes, sourceWindowBytesDeltaRemaining);
+                final int sourceWindowFramesDelta = targetWindowFramesDelta + sourceWindowFramesAdjustment;
+
+                sourceWindowBytes += Math.max(sourceWindowBytesDelta, 0);
+                sourceWindowBytesAdjustment = Math.min(sourceWindowBytesDelta, 0);
+
+                sourceWindowFrames += Math.max(sourceWindowFramesDelta, 0);
+                sourceWindowFramesAdjustment = Math.min(sourceWindowFramesDelta, 0);
+
+                if (sourceWindowBytesDelta > 0 || sourceWindowFramesDelta > 0)
+                {
+                    source.doWindow(sourceId, Math.max(sourceWindowBytesDelta, 0), Math.max(sourceWindowFramesDelta, 0));
+                    sourceWindowBytesDeltaRemaining -= Math.max(sourceWindowBytesDelta, 0);
+                }
+            }
         }
 
         private void handleWindow(
