@@ -50,7 +50,7 @@
     <nukleus.plugin.version>0.10</nukleus.plugin.version>
     <nukleus.version>0.3</nukleus.version>
     <nukleus.http.spec.version>develop-SNAPSHOT</nukleus.http.spec.version>
-    <reaktor.test.version>develop-SNAPSHOT</reaktor.test.version>
+    <reaktor.test.version>0.9</reaktor.test.version>
     <k3po.nukleus.ext.version>0.5</k3po.nukleus.ext.version>
   </properties>
 

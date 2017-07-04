@@ -18,11 +18,13 @@ package org.reaktivity.nukleus.http.internal.streams.rfc7230.server;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.rules.RuleChain.outerRule;
 
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.DisableOnDebug;
 import org.junit.rules.TestRule;
 import org.junit.rules.Timeout;
+import org.kaazing.k3po.junit.annotation.ScriptProperty;
 import org.kaazing.k3po.junit.annotation.Specification;
 import org.kaazing.k3po.junit.rules.K3poRule;
 import org.reaktivity.reaktor.test.NukleusRule;
@@ -31,8 +33,8 @@ public class FlowControlIT
 {
     private final K3poRule k3po = new K3poRule()
             .addScriptRoot("route", "org/reaktivity/specification/nukleus/http/control/route")
-            .addScriptRoot("client", "org/reaktivity/specification/http/rfc7230/flow.control")
-            .addScriptRoot("server", "org/reaktivity/specification/nukleus/http/streams/rfc7230/flow.control");
+            .addScriptRoot("client", "org/reaktivity/specification/http/rfc7230/")
+            .addScriptRoot("server", "org/reaktivity/specification/nukleus/http/streams/rfc7230/");
 
     private final TestRule timeout = new DisableOnDebug(new Timeout(5, SECONDS));
 
@@ -48,8 +50,31 @@ public class FlowControlIT
     @Test
     @Specification({
         "${route}/server/controller",
-        "${client}/request.fragmented/client",
-        "${server}/request.fragmented/server" })
+        "${client}/flow.control/multiple.requests.pipelined.fragmented/client",
+        "${server}/connection.management/multiple.requests.serialized/server" })
+    @Ignore("TODO: support pipelined requests, at a minimum by serializing them")
+    public void shouldAcceptMultipleRequestsInSameDataFrameFragmented() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/server/controller",
+        "${client}/connection.management/multiple.requests.pipelined/client",
+        "${server}/connection.management/multiple.requests.serialized/server" })
+    @Ignore("TODO: support pipelined requests, at a minimum by serializing them")
+    @ScriptProperty("clientInitialWindow \"89\"")
+    public void shouldFlowControlMultipleResponses() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/server/controller",
+        "${client}/flow.control/request.fragmented/client",
+        "${server}/message.format/request.with.headers/server" })
     public void shouldAcceptFragmentedRequest() throws Exception
     {
         k3po.finish();
@@ -58,11 +83,24 @@ public class FlowControlIT
     @Test
     @Specification({
         "${route}/server/controller",
-        "${client}/request.with.content.length.and.end.late.target.window/client",
-        "${server}/request.with.content.length.and.end.late.target.window/server" })
-    public void shouldWaitForTargetWindowAndWriteDataBeforeProcessingSourceEnd() throws Exception
+        "${client}/message.format/request.with.content.length/client",
+        "${server}/message.format/request.with.content.length/server" })
+    @ScriptProperty("serverInitialWindow \"3\"")
+    public void shouldSplitRequestDataToRespectTargetWindow() throws Exception
     {
         k3po.finish();
     }
+
+    @Test
+    @Specification({
+        "${route}/server/controller",
+        "${client}/flow.control/request.fragmented.with.content.length/client",
+        "${server}/message.format/request.with.content.length/server" })
+    public void shouldAcceptFragmentedRequestWithContentLength() throws Exception
+    {
+        k3po.finish();
+    }
+
+
 
 }
