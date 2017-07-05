@@ -101,6 +101,37 @@ public class FlowControlIT
         k3po.finish();
     }
 
+    @Test
+    @Specification({
+        "${route}/server/controller",
+        "${client}/flow.control/request.fragmented.with.content.length/client",
+        "${server}/message.format/request.with.content.length/server"})
+    @ScriptProperty("serverInitialWindow \"3\"")
+    public void shouldFlowControlFragmentedRequestWithContent() throws Exception
+    {
+        k3po.finish();
+    }
 
+    @Test
+    @Specification({
+        "${route}/server/controller",
+        "${client}/flow.control/request.with.content.length.and.transport.close/client",
+        "${server}/message.format/request.with.content.length/server" })
+    public void shouldDeferEndProcessingUntilRequestProcessed() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/server/controller",
+        "${client}/connection.management/upgrade.request.and.response.with.data/client",
+        "${server}/connection.management/upgrade.request.and.response.with.data/server"})
+    @ScriptProperty({"clientInitialWindow \"11\"",
+                     "serverInitialWindow \"9\""})
+    public void shouldFlowControlDataAfterUpgrade() throws Exception
+    {
+        k3po.finish();
+    }
 
 }

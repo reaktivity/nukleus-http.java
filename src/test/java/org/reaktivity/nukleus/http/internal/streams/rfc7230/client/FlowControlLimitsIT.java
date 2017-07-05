@@ -17,18 +17,20 @@ package org.reaktivity.nukleus.http.internal.streams.rfc7230.client;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.rules.RuleChain.outerRule;
+import static org.reaktivity.nukleus.http.internal.Context.MAXIMUM_HEADERS_SIZE_PROPERTY_NAME;
+import static org.reaktivity.nukleus.http.internal.Context.MEMORY_FOR_DECODE_PROPERTY_NAME;
 
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.DisableOnDebug;
 import org.junit.rules.TestRule;
 import org.junit.rules.Timeout;
-import org.kaazing.k3po.junit.annotation.ScriptProperty;
 import org.kaazing.k3po.junit.annotation.Specification;
 import org.kaazing.k3po.junit.rules.K3poRule;
+import org.reaktivity.nukleus.http.internal.test.SystemPropertiesRule;
 import org.reaktivity.reaktor.test.NukleusRule;
 
-public class FlowControlIT
+public class FlowControlLimitsIT
 {
     private final K3poRule k3po = new K3poRule()
             .addScriptRoot("route", "org/reaktivity/specification/nukleus/http/control/route")
@@ -37,6 +39,11 @@ public class FlowControlIT
 
     private final TestRule timeout = new DisableOnDebug(new Timeout(10, SECONDS));
 
+    private final TestRule properties = new SystemPropertiesRule()
+        .setProperty(MAXIMUM_HEADERS_SIZE_PROPERTY_NAME, "64")
+        .setProperty(MEMORY_FOR_DECODE_PROPERTY_NAME, "64");
+
+
     private final NukleusRule nukleus = new NukleusRule("http")
         .directory("target/nukleus-itests")
         .commandBufferCapacity(1024)
@@ -44,40 +51,14 @@ public class FlowControlIT
         .counterValuesBufferCapacity(1024);
 
     @Rule
-    public final TestRule chain = outerRule(nukleus).around(k3po).around(timeout);
+    public final TestRule chain = outerRule(properties).around(nukleus).around(k3po).around(timeout);
 
     @Test
     @Specification({
         "${route}/client/controller",
-        "${client}/architecture/request.and.response/client",
-        "${server}/architecture/request.and.response/server" })
-    @ScriptProperty("serverInitialWindow \"3\"")
-    public void shouldFlowControlRequest() throws Exception
+        "${client}/flow.control/request.headers.too.long/client"})
+    public void shouldNotWriteRequestExceedingMaximumHeadersSize() throws Exception
     {
         k3po.finish();
     }
-
-    @Test
-    @Specification({
-        "${route}/client/controller",
-        "${client}/message.format/request.with.content.length/client",
-        "${server}/message.format/request.with.content.length/server"})
-    @ScriptProperty("serverInitialWindow \"9\"")
-    public void shouldFlowControlRequestWithContent() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${route}/client/controller",
-        "${client}/connection.management/upgrade.request.and.response.with.data/client",
-        "${server}/connection.management/upgrade.request.and.response.with.data/server"})
-    @ScriptProperty({"clientInitialWindow \"11\"",
-                     "serverInitialWindow \"9\""})
-    public void shouldFlowControlDataAfterUpgrade() throws Exception
-    {
-        k3po.finish();
-    }
-
 }
