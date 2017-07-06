@@ -195,7 +195,7 @@ public final class TargetInputEstablishedStreamFactory
             {
             case DataFW.TYPE_ID:
                 final DataFW data = dataRO.wrap(buffer, index, index + length);
-                handleData(data);
+                handleDataWhenNotBuffering(data);
                 break;
             case EndFW.TYPE_ID:
                 final EndFW end = endRO.wrap(buffer, index, index + length);
@@ -306,7 +306,7 @@ public final class TargetInputEstablishedStreamFactory
             }
         }
 
-        private void handleData(
+        private void handleDataWhenNotBuffering(
             DataFW data)
         {
             sourceWindowBytes -= data.length();
@@ -531,12 +531,13 @@ public final class TargetInputEstablishedStreamFactory
                     clientConnectReplyState.releaseConnection(upgraded);
                     this.decoderState = this::decodeHttpDataAfterUpgrade;
                     throttleState = this::handleThrottleAfterBegin;
+                    windowHandler = this::handleWindow;
                 }
                 else if (contentRemaining > 0)
                 {
                     decoderState = this::decodeHttpData;
                     throttleState = this::handleThrottleAfterBegin;
-                    windowHandler = this::handleContentWindow;
+                    windowHandler = this::handleBoundedWindow;
 
                     sourceWindowBytesDeltaRemaining = Math.max(contentRemaining - content, 0);
                 }
@@ -544,11 +545,17 @@ public final class TargetInputEstablishedStreamFactory
                 {
                     decoderState = this::decodeHttpChunk;
                     throttleState = this::handleThrottleAfterBegin;
+                    windowHandler = this::handleBoundedWindow;
+
+                    // 0\r\n\r\n
+                    sourceWindowBytesAdjustment += 5;
+                    sourceWindowBytesAdjustment -= content;
                 }
                 else
                 {
                     // no content
                     httpResponseComplete();
+                    windowHandler = this::handleWindow;
                 }
             }
         }
@@ -645,15 +652,15 @@ public final class TargetInputEstablishedStreamFactory
         {
             int result = limit;
 
-            final int endOfHeaderAt = limitOfBytes(payload, offset, limit, CRLF_BYTES);
-            if (endOfHeaderAt == -1)
+            final int endOfChunkExtensionAt = limitOfBytes(payload, offset, limit, CRLF_BYTES);
+            if (endOfChunkExtensionAt == -1)
             {
                 result = offset;
             }
             else
             {
-                final int colonAt = limitOfBytes(payload, offset, limit, SEMICOLON_BYTES);
-                final int chunkSizeLimit = colonAt == -1 ? endOfHeaderAt - 2 : colonAt - 1;
+                final int semicolonAt = limitOfBytes(payload, offset, limit, SEMICOLON_BYTES);
+                final int chunkSizeLimit = semicolonAt == -1 ? endOfChunkExtensionAt - 2 : semicolonAt - 1;
                 final int chunkSizeLength = chunkSizeLimit - offset;
 
                 try
@@ -672,8 +679,11 @@ public final class TargetInputEstablishedStreamFactory
                 }
                 else
                 {
+                    sourceWindowBytesAdjustment += chunkSizeLength + CRLF_BYTES.length + CRLF_BYTES.length;
+                    sourceWindowBytesDeltaRemaining += chunkSizeRemaining;
+
                     decoderState = this::decodeHttpChunkData;
-                    result = endOfHeaderAt;
+                    result = endOfChunkExtensionAt;
                 }
             }
 
@@ -778,12 +788,16 @@ public final class TargetInputEstablishedStreamFactory
             this.streamState = this::handleStreamWhenNotBuffering;
             this.decoderState = this::decodeHttpBegin;
 
-            final int sourceWindowDelta = Math.max(maximumHeadersSize - sourceWindowBytes, 0);
+            final int sourceWindowBytesDelta = maximumHeadersSize - sourceWindowBytes + sourceWindowBytesAdjustment;
 
-            sourceWindowBytes += sourceWindowDelta;
-            sourceWindowFrames += sourceWindowDelta;
+            sourceWindowBytes += sourceWindowBytesDelta;
+            sourceWindowFrames = maximumHeadersSize;
 
-            source.doWindow(sourceId, sourceWindowDelta, sourceWindowDelta);
+            // TODO: Support HTTP/1.1 Pipelined Responses (may be buffered already)
+            sourceWindowBytesAdjustment = 0;
+            sourceWindowFramesAdjustment = 0;
+
+            source.doWindow(sourceId, sourceWindowBytesDelta, sourceWindowBytesDelta);
         }
 
         private void httpResponseComplete()
@@ -865,13 +879,39 @@ public final class TargetInputEstablishedStreamFactory
             }
         }
 
-        private void handleContentWindow(
+        private void handleBoundedWindow(
             WindowFW window)
         {
-            sourceWindowBytesDeltaRemaining -= window.update();
-            sourceWindowBytesAdjustment += Math.min(sourceWindowBytesDeltaRemaining, 0);
+            final int targetWindowBytesDelta = window.update();
+            final int targetWindowFramesDelta = window.frames();
 
-            handleWindow(window);
+            targetWindowBytes += targetWindowBytesDelta;
+            targetWindowFrames += targetWindowFramesDelta;
+
+            if (slotIndex != NO_SLOT)
+            {
+                decodeBufferedData();
+            }
+
+            if (sourceWindowBytesDeltaRemaining > 0)
+            {
+                final int sourceWindowBytesDelta =
+                        Math.min(targetWindowBytes - sourceWindowBytes, sourceWindowBytesDeltaRemaining) +
+                        sourceWindowBytesAdjustment;
+                final int sourceWindowFramesDelta = targetWindowFramesDelta + sourceWindowFramesAdjustment;
+
+                sourceWindowBytes += Math.max(sourceWindowBytesDelta, 0);
+                sourceWindowBytesAdjustment = Math.min(sourceWindowBytesDelta, 0);
+
+                sourceWindowFrames += Math.max(sourceWindowFramesDelta, 0);
+                sourceWindowFramesAdjustment = Math.min(sourceWindowFramesDelta, 0);
+
+                if (sourceWindowBytesDelta > 0 || sourceWindowFramesDelta > 0)
+                {
+                    source.doWindow(sourceId, Math.max(sourceWindowBytesDelta, 0), Math.max(sourceWindowFramesDelta, 0));
+                    sourceWindowBytesDeltaRemaining -= Math.max(sourceWindowBytesDelta, 0);
+                }
+            }
         }
 
         private void handleWindow(
