@@ -855,24 +855,28 @@ public final class SourceInputStreamFactory
                 final int limit)
         {
             int result = limit;
-            final int endOfHeaderAt = limitOfBytes(payload, offset, limit, CRLF_BYTES);
-            if (endOfHeaderAt == -1)
+
+            final int chunkHeaderLimit = limitOfBytes(payload, offset, limit, CRLF_BYTES);
+            if (chunkHeaderLimit == -1)
             {
                 result = offset;
             }
             else
             {
-                int colonAt = limitOfBytes(payload, offset, limit, SEMICOLON_BYTES);
-                int chunkSizeLimit = colonAt == -1 ? endOfHeaderAt - 2 : colonAt - 1;
-                int chunkSizeLength = chunkSizeLimit - offset;
+                final int colonAt = limitOfBytes(payload, offset, chunkHeaderLimit, SEMICOLON_BYTES);
+                final int chunkSizeLimit = colonAt == -1 ? chunkHeaderLimit - 2 : colonAt - 1;
+                final int chunkSizeLength = chunkSizeLimit - offset;
+
                 try
                 {
-                    chunkSizeRemaining = Integer.parseInt(payload.getStringWithoutLengthUtf8(offset, chunkSizeLength), 16);
+                    final String chunkSizeHex = payload.getStringWithoutLengthUtf8(offset, chunkSizeLength);
+                    chunkSizeRemaining = Integer.parseInt(chunkSizeHex, 16);
                 }
                 catch (NumberFormatException ex)
                 {
                     processInvalidRequest(400,  "Bad Request");
                 }
+
                 if (chunkSizeRemaining == 0)
                 {
                     httpRequestComplete();
@@ -880,9 +884,10 @@ public final class SourceInputStreamFactory
                 else
                 {
                     decoderState = this::decodeHttpChunkData;
-                    result = endOfHeaderAt;
+                    result = chunkHeaderLimit;
                 }
             }
+
             return result;
         };
 
