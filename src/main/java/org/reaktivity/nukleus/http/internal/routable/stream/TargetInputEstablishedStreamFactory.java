@@ -649,15 +649,15 @@ public final class TargetInputEstablishedStreamFactory
         {
             int result = limit;
 
-            final int endOfChunkExtensionAt = limitOfBytes(payload, offset, limit, CRLF_BYTES);
-            if (endOfChunkExtensionAt == -1)
+            final int chunkHeaderLimit = limitOfBytes(payload, offset, limit, CRLF_BYTES);
+            if (chunkHeaderLimit == -1)
             {
                 result = offset;
             }
             else
             {
-                final int semicolonAt = limitOfBytes(payload, offset, limit, SEMICOLON_BYTES);
-                final int chunkSizeLimit = semicolonAt == -1 ? endOfChunkExtensionAt - 2 : semicolonAt - 1;
+                final int semicolonAt = limitOfBytes(payload, offset, chunkHeaderLimit, SEMICOLON_BYTES);
+                final int chunkSizeLimit = semicolonAt == -1 ? chunkHeaderLimit - 2 : semicolonAt - 1;
                 final int chunkSizeLength = chunkSizeLimit - offset;
 
                 try
@@ -680,7 +680,7 @@ public final class TargetInputEstablishedStreamFactory
                     sourceWindowBytesDeltaRemaining += chunkSizeRemaining;
 
                     decoderState = this::decodeHttpChunkData;
-                    result = endOfChunkExtensionAt;
+                    result = chunkHeaderLimit;
                 }
             }
 
