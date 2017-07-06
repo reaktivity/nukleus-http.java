@@ -13,7 +13,7 @@
  * License for the specific language governing permissions and limitations
  * under the License.
  */
-package org.reaktivity.nukleus.http.internal.streams.rfc7230.client;
+package org.reaktivity.nukleus.http.internal.streams.rfc7230.server;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.rules.RuleChain.outerRule;
@@ -34,15 +34,14 @@ public class FlowControlLimitsIT
 {
     private final K3poRule k3po = new K3poRule()
             .addScriptRoot("route", "org/reaktivity/specification/nukleus/http/control/route")
-            .addScriptRoot("server", "org/reaktivity/specification/http/rfc7230")
-            .addScriptRoot("client", "org/reaktivity/specification/nukleus/http/streams/rfc7230");
+            .addScriptRoot("client", "org/reaktivity/specification/http/rfc7230/")
+            .addScriptRoot("server", "org/reaktivity/specification/nukleus/http/streams/rfc7230/");
 
-    private final TestRule timeout = new DisableOnDebug(new Timeout(10, SECONDS));
+    private final TestRule timeout = new DisableOnDebug(new Timeout(5, SECONDS));
 
     private final TestRule properties = new SystemPropertiesRule()
         .setProperty(MAXIMUM_HEADERS_SIZE_PROPERTY_NAME, "64")
         .setProperty(MEMORY_FOR_DECODE_PROPERTY_NAME, "64");
-
 
     private final NukleusRule nukleus = new NukleusRule("http")
         .directory("target/nukleus-itests")
@@ -55,32 +54,12 @@ public class FlowControlLimitsIT
 
     @Test
     @Specification({
-        "${route}/client/controller",
-        "${client}/flow.control/request.headers.too.long/client"})
-    public void shouldNotWriteRequestExceedingMaximumHeadersSize() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${route}/client/controller",
-        "${client}/flow.control/response.first.fragment.maximum.headers/client",
-        "${server}/flow.control/response.first.fragment.maximum.headers/server"})
-    public void shouldAcceptResponseWithFirstFragmentHeadersOfLengthMaxHttpHeadersSize() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${route}/client/controller",
-        "${client}/flow.control/response.headers.too.long/client.no.response",
+        "${route}/server/controller",
+        "${client}/flow.control/response.headers.too.long/client.5xx.response",
         "${server}/flow.control/response.headers.too.long/server.response.reset"})
     public void shouldRejectResponseWithHeadersTooLong() throws Exception
     {
         k3po.finish();
     }
-
 
 }

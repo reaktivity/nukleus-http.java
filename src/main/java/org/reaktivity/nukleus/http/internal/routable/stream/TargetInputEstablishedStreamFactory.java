@@ -450,7 +450,10 @@ public final class TargetInputEstablishedStreamFactory
             streamState = this::handleStreamAfterEnd;
 
             source.removeStream(sourceId);
-            target.removeThrottle(targetId);
+            if (target != null)
+            {
+                target.removeThrottle(targetId);
+            }
             slab.release(slotIndex);
             slotIndex = NO_SLOT;
         }

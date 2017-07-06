@@ -134,4 +134,15 @@ public class FlowControlIT
         k3po.finish();
     }
 
+    @Test
+    @Specification({
+        "${route}/server/controller",
+        "${client}/architecture/request.and.response/client",
+        "${server}/architecture/request.and.response/server"})
+    @ScriptProperty("clientInitialWindow \"11\"")
+    public void shouldFlowControlResponse() throws Exception
+    {
+        k3po.finish();
+    }
+
 }

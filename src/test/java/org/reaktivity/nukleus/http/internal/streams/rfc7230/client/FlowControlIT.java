@@ -80,4 +80,24 @@ public class FlowControlIT
         k3po.finish();
     }
 
+    @Test
+    @Specification({
+        "${route}/client/controller",
+        "${client}/message.format/response.with.headers/client",
+        "${server}/flow.control/response.fragmented/server"})
+    public void shouldProcessFragmentedResponse() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/client/controller",
+        "${client}/message.format/response.with.content.length/client",
+        "${server}/flow.control/response.fragmented.with.content.length/server"})
+    public void shouldProcessFragmentedResponseWithContentLength() throws Exception
+    {
+        k3po.finish();
+    }
+
 }
