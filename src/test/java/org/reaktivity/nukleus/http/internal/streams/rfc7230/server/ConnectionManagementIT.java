@@ -82,7 +82,7 @@ public class ConnectionManagementIT
     @Specification({
         "${route}/server/controller",
         "${client}/multiple.requests.pipelined/client",
-        "${server}/multiple.requests.pipelined/server" })
+        "${server}/concurrent.requests/server" })
     @Ignore("TODO: support pipelined requests, at a minimum by serializing them")
     public void shouldSupporttHttpPipelining() throws Exception
     {
