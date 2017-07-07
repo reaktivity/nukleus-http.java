@@ -80,4 +80,18 @@ public class ConnectionManagementPoolSize1IT
         k3po.notifyBarrier("WRITE_DATA_REQUEST_TWO");
         k3po.finish();
     }
+
+    @Test
+    @Specification({
+        "${route}/client/controller",
+        "${client}/request.and.5xx.response/client",
+        "${client}/request.and.5xx.response/client",
+        "${server}/request.incomplete.response.headers.and.end/server",
+        "${server}/request.incomplete.response.headers.and.end/server" })
+    public void endDuringResponseHeadersinShouldReleaseConnection() throws Exception
+    {
+        k3po.start();
+        k3po.finish();
+    }
+
 }
