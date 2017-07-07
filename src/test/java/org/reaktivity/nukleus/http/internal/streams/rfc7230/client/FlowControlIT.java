@@ -100,4 +100,36 @@ public class FlowControlIT
         k3po.finish();
     }
 
+    @Test
+    @Specification({
+        "${route}/client/controller",
+        "${client}/message.format/response.with.content.length/client",
+        "${server}/message.format/response.with.content.length/server"})
+    @ScriptProperty("clientInitialWindow \"9\"")
+    public void shouldFlowControlResponseWithContentLength() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/client/controller",
+        "${client}/message.format/response.with.content.length/client",
+        "${server}/flow.control/response.fragmented.with.content.length/server"})
+    @ScriptProperty("clientInitialWindow \"9\"")
+    public void shouldFlowControlFragmenteResponseWithContentLength() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/client/controller",
+        "${client}/message.format/response.with.content.length//client",
+        "${server}/flow.control/response.with.content.length.and.transport.close/server" })
+    public void shouldDeferEndProcessingUntilResponseProcessed() throws Exception
+    {
+        k3po.finish();
+    }
+
 }

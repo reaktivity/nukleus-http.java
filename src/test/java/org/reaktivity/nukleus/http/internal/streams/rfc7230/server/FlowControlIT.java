@@ -145,4 +145,15 @@ public class FlowControlIT
         k3po.finish();
     }
 
+    @Test
+    @Specification({
+        "${route}/server/controller",
+        "${client}/message.format/response.with.content.length/client",
+        "${server}/message.format/response.with.content.length/server"})
+    @ScriptProperty("clientInitialWindow \"9\"")
+    public void shouldFlowControlResponseWithContentLength() throws Exception
+    {
+        k3po.finish();
+    }
+
 }
