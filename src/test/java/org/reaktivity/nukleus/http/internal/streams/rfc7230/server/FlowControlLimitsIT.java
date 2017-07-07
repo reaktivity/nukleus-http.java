@@ -13,7 +13,7 @@
  * License for the specific language governing permissions and limitations
  * under the License.
  */
-package org.reaktivity.nukleus.http.internal.streams.rfc7230.agrona;
+package org.reaktivity.nukleus.http.internal.streams.rfc7230.server;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.rules.RuleChain.outerRule;
@@ -25,59 +25,41 @@ import org.junit.Test;
 import org.junit.rules.DisableOnDebug;
 import org.junit.rules.TestRule;
 import org.junit.rules.Timeout;
-import org.kaazing.k3po.junit.annotation.ScriptProperty;
 import org.kaazing.k3po.junit.annotation.Specification;
 import org.kaazing.k3po.junit.rules.K3poRule;
 import org.reaktivity.nukleus.http.internal.test.SystemPropertiesRule;
 import org.reaktivity.reaktor.test.NukleusRule;
 
-public class FlowControlAfterUpgradeIT
+public class FlowControlLimitsIT
 {
     private final K3poRule k3po = new K3poRule()
             .addScriptRoot("route", "org/reaktivity/specification/nukleus/http/control/route")
-            .addScriptRoot("streams", "org/reaktivity/specification/nukleus/http/streams/rfc7230/flow.control/agrona");
+            .addScriptRoot("client", "org/reaktivity/specification/http/rfc7230/")
+            .addScriptRoot("server", "org/reaktivity/specification/nukleus/http/streams/rfc7230/");
 
     private final TestRule timeout = new DisableOnDebug(new Timeout(5, SECONDS));
 
     private final TestRule properties = new SystemPropertiesRule()
-        .setProperty(MAXIMUM_HEADERS_SIZE_PROPERTY_NAME, "128")
-        .setProperty(MEMORY_FOR_DECODE_PROPERTY_NAME, "128");
+        .setProperty(MAXIMUM_HEADERS_SIZE_PROPERTY_NAME, "64")
+        .setProperty(MEMORY_FOR_DECODE_PROPERTY_NAME, "64");
 
     private final NukleusRule nukleus = new NukleusRule("http")
         .directory("target/nukleus-itests")
         .commandBufferCapacity(1024)
         .responseBufferCapacity(1024)
-        .counterValuesBufferCapacity(1024)
-        .streams("http", "source")
-        .streams("source", "http#source")
-        .streams("target", "http#source")
-        .streams("http", "target")
-        .streams("source", "http#target");
+        .counterValuesBufferCapacity(1024);
 
     @Rule
     public final TestRule chain = outerRule(properties).around(nukleus).around(k3po).around(timeout);
 
-
     @Test
     @Specification({
         "${route}/server/controller",
-        "${streams}/request.with.upgrade.and.data/server/source",
-        "${streams}/request.with.upgrade.and.data/server/target" })
-    @ScriptProperty("serverConnectInitialWindow [0x80 0x00 0x00 0x00]") // 128 bytes, same as max headers size
-    public void shouldFlowControlRequestDataAfterUpgrade() throws Exception
+        "${client}/flow.control/response.headers.too.long/client.5xx.response",
+        "${server}/flow.control/response.headers.too.long/server.response.reset"})
+    public void shouldRejectResponseWithHeadersTooLong() throws Exception
     {
         k3po.finish();
     }
 
-    @Test
-    @Specification({
-        "${route}/server/controller",
-        "${streams}/response.with.upgrade.and.data/server/source",
-        "${streams}/response.with.upgrade.and.data/server/target" })
-    @ScriptProperty("serverAcceptReplyInitialWindow [0x80 0x00 0x00 0x00]") // 128 bytes, same as max headers size
-    public void shouldFlowControlResponseDataAfterUpgrade() throws Exception
-    {
-        k3po.finish();
-    }
 }
-
