@@ -534,6 +534,8 @@ public final class SourceOutputStreamFactory
         {
             resetRO.wrap(buffer, index, index + length);
             slab.release(slotIndex);
+            connection.persistent = false;
+            connectionPool.release(connection, false);
             source.doReset(sourceId);
         }
 

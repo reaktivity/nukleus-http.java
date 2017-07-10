@@ -84,11 +84,37 @@ public class ConnectionManagementPoolSize1IT
     @Test
     @Specification({
         "${route}/client/controller",
-        "${client}/request.and.5xx.response/client",
-        "${client}/request.and.5xx.response/client",
+        "${client}/request.and.503.response/client",
+        "${client}/request.and.503.response/client",
         "${server}/request.incomplete.response.headers.and.end/server",
         "${server}/request.incomplete.response.headers.and.end/server" })
-    public void endDuringResponseHeadersinShouldReleaseConnection() throws Exception
+    public void shouldReleaseConnectionWhenEndReceivedAfterIncompleteResponseHeaders() throws Exception
+    {
+        k3po.start();
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/client/controller",
+        "${client}/../architecture/request.and.response/client",
+        "${server}/request.response.and.end/server",
+        "${client}/../architecture/request.and.response/client",
+        "${server}/request.response.and.end/server" })
+    public void shouldReleaseConnectionWhenEndReceivedAfterCompleteResponse() throws Exception
+    {
+        k3po.start();
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/client/controller",
+        "${client}/../architecture/request.and.response/client",
+        "${server}/request.response.and.reset/server",
+        "${client}/../architecture/request.and.response/client",
+        "${server}/request.response.and.reset/server" })
+    public void shouldReleaseConnectionWhenResetReceivedAfterCompleteResponse() throws Exception
     {
         k3po.start();
         k3po.finish();

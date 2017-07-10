@@ -20,7 +20,9 @@ import java.util.Queue;
 import java.util.function.Consumer;
 import java.util.function.LongSupplier;
 
+import org.agrona.MutableDirectBuffer;
 import org.reaktivity.nukleus.http.internal.routable.Target;
+import org.reaktivity.nukleus.http.internal.types.stream.ResetFW;
 
 /**
  * A set of connections (target streams) to be used to talk to a given target on a given route (targetRef)
@@ -68,6 +70,7 @@ final class ConnectionPool
         connection.targetId = supplyTargetId.getAsLong();
         long targetCorrelationId = connection.targetId;
         target.doBegin(connection.targetId, targetRef, targetCorrelationId);
+        target.setThrottle(connection.targetId, connection::releaseOnReset);
         connectionsInUse++;
         return connection;
     }
@@ -76,6 +79,7 @@ final class ConnectionPool
     {
         if (connection.persistent)
         {
+            target.setThrottle(connection.targetId, connection::releaseOnReset);
             availableConnections.add(connection);
         }
         else
@@ -125,6 +129,20 @@ final class ConnectionPool
         int window;
         long targetId;
         boolean persistent = true;
+
+        private void releaseOnReset(int msgTypeId, MutableDirectBuffer buffer, int index, int length)
+        {
+            switch (msgTypeId)
+            {
+            case ResetFW.TYPE_ID:
+                persistent = false;
+                release(this, false);
+                break;
+            default:
+                // ignore
+                break;
+            }
+        }
     }
 
 }

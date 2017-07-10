@@ -35,7 +35,7 @@ final class ClientConnectReplyState
     public String toString()
     {
         return String.format(
-                "%s[streamId=%016x, target=%s, window=%d, started=%b, pendingResponses=%d]",
+                "%s[streamId=%016x, window=%d, pendingResponses=%d]",
                 getClass().getSimpleName(), connection.targetId, connection.window, pendingResponses);
     }
 

@@ -52,6 +52,12 @@ public final class TargetInputEstablishedStreamFactory
     private static final byte[] CRLF_BYTES = "\r\n".getBytes(StandardCharsets.US_ASCII);
     private static final byte[] SEMICOLON_BYTES = ";".getBytes(StandardCharsets.US_ASCII);
 
+    private enum ResponseState
+    {
+        BEFORE_HEADERS, HEADERS, DATA, FINAL;
+    };
+
+
     private final FrameFW frameRO = new FrameFW();
 
     private final BeginFW beginRO = new BeginFW();
@@ -98,6 +104,8 @@ public final class TargetInputEstablishedStreamFactory
         private MessageHandler streamState;
         private MessageHandler throttleState;
         private DecoderState decoderState;
+        private ResponseState responseState;
+
         private int slotIndex = NO_SLOT;
         private int slotOffset = 0;
         private int slotPosition;
@@ -279,6 +287,7 @@ public final class TargetInputEstablishedStreamFactory
         {
             this.decoderState = this::decodeSkipData;
             this.streamState = this::handleStreamAfterReset;
+            this.responseState = ResponseState.FINAL;
 
             // Drain data from source before resetting to allow its writes to complete
             source.doWindow(sourceId, maximumHeadersSize, maximumHeadersSize);
@@ -463,6 +472,7 @@ public final class TargetInputEstablishedStreamFactory
             final int offset,
             final int limit)
         {
+            this.responseState = ResponseState.HEADERS;
             int result = limit;
 
             final int endOfHeadersAt = limitOfBytes(payload, offset, limit, CRLFCRLF_BYTES);
@@ -532,12 +542,14 @@ public final class TargetInputEstablishedStreamFactory
                     this.decoderState = this::decodeHttpDataAfterUpgrade;
                     throttleState = this::handleThrottleAfterBegin;
                     windowHandler = this::handleWindow;
+                    this.responseState = ResponseState.DATA;
                 }
                 else if (contentRemaining > 0)
                 {
                     decoderState = this::decodeHttpData;
                     throttleState = this::handleThrottleAfterBegin;
                     windowHandler = this::handleBoundedWindow;
+                    this.responseState = ResponseState.DATA;
 
                     sourceWindowBytesDeltaRemaining = Math.max(contentRemaining - content, 0);
                 }
@@ -546,6 +558,7 @@ public final class TargetInputEstablishedStreamFactory
                     decoderState = this::decodeHttpChunk;
                     throttleState = this::handleThrottleAfterBegin;
                     windowHandler = this::handleBoundedWindow;
+                    this.responseState = ResponseState.DATA;
 
                     // 0\r\n\r\n
                     sourceWindowBytesAdjustment += 5;
@@ -787,6 +800,7 @@ public final class TargetInputEstablishedStreamFactory
         {
             this.streamState = this::handleStreamWhenNotBuffering;
             this.decoderState = this::decodeHttpBegin;
+            this.responseState = ResponseState.BEFORE_HEADERS;
 
             final int sourceWindowBytesDelta = maximumHeadersSize - sourceWindowBytes + sourceWindowBytesAdjustment;
 
@@ -812,6 +826,7 @@ public final class TargetInputEstablishedStreamFactory
             else
             {
                 this.streamState = this::handleStreamBeforeEnd;
+                this.responseState = ResponseState.FINAL;
             }
 
             clientConnectReplyState.releaseConnection(false);
@@ -949,6 +964,7 @@ public final class TargetInputEstablishedStreamFactory
             slab.release(slotIndex);
             source.doReset(sourceId);
         }
+
     }
 
     @FunctionalInterface
