@@ -21,6 +21,7 @@ import java.util.function.Consumer;
 import java.util.function.LongSupplier;
 
 import org.agrona.MutableDirectBuffer;
+import org.reaktivity.nukleus.http.internal.routable.Source;
 import org.reaktivity.nukleus.http.internal.routable.Target;
 import org.reaktivity.nukleus.http.internal.types.stream.ResetFW;
 
@@ -66,27 +67,26 @@ final class ConnectionPool
 
     private Connection newConnection()
     {
-        Connection connection = new Connection();
-        connection.targetId = supplyTargetId.getAsLong();
-        long targetCorrelationId = connection.targetId;
-        target.doBegin(connection.targetId, targetRef, targetCorrelationId);
-        target.setThrottle(connection.targetId, connection::releaseOnReset);
+        Connection connection = new Connection(supplyTargetId.getAsLong());
+        long targetCorrelationId = connection.outputStreamId;
+        target.doBegin(connection.outputStreamId, targetRef, targetCorrelationId);
+        target.setThrottle(connection.outputStreamId, connection::throttleReleaseOnReset);
         connectionsInUse++;
         return connection;
     }
 
-    public void release(Connection connection, boolean upgraded)
+    public void release(Connection connection, boolean doEndIfNotPersistent)
     {
         if (connection.persistent)
         {
-            target.setThrottle(connection.targetId, connection::releaseOnReset);
+            target.setThrottle(connection.outputStreamId, connection::throttleReleaseOnReset);
             availableConnections.add(connection);
         }
         else
         {
-            if (!upgraded)
+            if (doEndIfNotPersistent)
             {
-                target.doEnd(connection.targetId);
+                target.doEnd(connection.outputStreamId);
             }
             connectionsInUse--;
         }
@@ -126,17 +126,35 @@ final class ConnectionPool
 
     public class Connection
     {
+        final long outputStreamId;
         int window;
-        long targetId;
         boolean persistent = true;
 
-        private void releaseOnReset(int msgTypeId, MutableDirectBuffer buffer, int index, int length)
+        private long inputStreamId;
+        private Source input;
+
+        Connection(long targetStreamId)
+        {
+            this.outputStreamId = targetStreamId;
+        }
+
+        void setInput(Source source, long sourceId)
+        {
+            input = source;
+            inputStreamId = sourceId;
+        }
+
+        private void throttleReleaseOnReset(int msgTypeId, MutableDirectBuffer buffer, int index, int length)
         {
             switch (msgTypeId)
             {
             case ResetFW.TYPE_ID:
                 persistent = false;
                 release(this, false);
+                if (input != null)
+                {
+                    input.doReset(inputStreamId);
+                }
                 break;
             default:
                 // ignore

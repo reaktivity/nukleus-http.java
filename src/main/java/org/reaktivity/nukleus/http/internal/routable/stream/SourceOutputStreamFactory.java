@@ -386,7 +386,7 @@ public final class SourceOutputStreamFactory
             else
             {
                 final OctetsFW payload = dataRO.payload();
-                target.doData(connection.targetId, payload);
+                target.doData(connection.outputStreamId, payload);
                 connection.window -= payload.sizeof();
             }
         }
@@ -402,7 +402,7 @@ public final class SourceOutputStreamFactory
 
         private void doEnd()
         {
-            target.removeThrottle(connection.targetId);
+            target.removeThrottle(connection.outputStreamId);
 
             source.removeStream(sourceId);
             this.streamState = this::streamAfterEnd;
@@ -497,7 +497,7 @@ public final class SourceOutputStreamFactory
         {
             int writableBytes = Math.min(slotPosition - slotOffset, connection.window);
             MutableDirectBuffer slot = slab.buffer(slotIndex);
-            target.doData(connection.targetId, slot, slotOffset, writableBytes);
+            target.doData(connection.outputStreamId, slot, slotOffset, writableBytes);
             connection.window -= writableBytes;
             slotOffset += writableBytes;
             int bytesDeferred = slotPosition - slotOffset;
@@ -572,12 +572,12 @@ public final class SourceOutputStreamFactory
         {
             this.connection = connection;
             connection.persistent = persistent;
-            final long targetCorrelationId = connection.targetId;
+            final long targetCorrelationId = connection.outputStreamId;
             ClientConnectReplyState state = new ClientConnectReplyState(connectionPool, connection);
             final Correlation<ClientConnectReplyState> correlation =
                     new Correlation<>(correlationId, source.routableName(), INPUT_ESTABLISHED, state);
             correlateNew.accept(targetCorrelationId, correlation);
-            target.setThrottle(connection.targetId, this::handleThrottle);
+            target.setThrottle(connection.outputStreamId, this::handleThrottle);
             if (connection.window > 0)
             {
                 useWindowToWriteRequestHeaders();

@@ -38,6 +38,7 @@ import org.agrona.concurrent.UnsafeBuffer;
 import org.reaktivity.nukleus.http.internal.routable.Correlation;
 import org.reaktivity.nukleus.http.internal.routable.Source;
 import org.reaktivity.nukleus.http.internal.routable.Target;
+import org.reaktivity.nukleus.http.internal.routable.stream.ConnectionPool.Connection;
 import org.reaktivity.nukleus.http.internal.types.OctetsFW;
 import org.reaktivity.nukleus.http.internal.types.stream.BeginFW;
 import org.reaktivity.nukleus.http.internal.types.stream.DataFW;
@@ -120,8 +121,9 @@ public final class TargetInputEstablishedStreamFactory
         private int contentRemaining;
         private boolean isChunkedTransfer;
         private int chunkSizeRemaining;
-        private ClientConnectReplyState clientConnectReplyState;
         private long clientConnectCorrelationId;
+        private ConnectionPool connectionPool;
+        private Connection connection;
 
         private int sourceWindowBytes;
         private int targetWindowBytes;
@@ -283,17 +285,21 @@ public final class TargetInputEstablishedStreamFactory
             this.streamState = this::handleStreamAfterReset;
         }
 
-        private void handleInvalidResponse()
+        private void handleInvalidResponse(boolean resetSource)
         {
             this.decoderState = this::decodeSkipData;
             this.streamState = this::handleStreamAfterReset;
             this.responseState = ResponseState.FINAL;
 
-            // Drain data from source before resetting to allow its writes to complete
-            source.doWindow(sourceId, maximumHeadersSize, maximumHeadersSize);
+            if (resetSource)
+            {
+                // Drain data from source before resetting to allow its writes to complete
+                source.doWindow(sourceId, maximumHeadersSize, maximumHeadersSize);
+                source.doReset(sourceId);
+            }
 
-            source.doReset(sourceId);
-            doCleanup();
+            connection.persistent = false;
+            doCleanup(false);
         }
 
         private void handleBegin(
@@ -303,8 +309,12 @@ public final class TargetInputEstablishedStreamFactory
             final long sourceRef = begin.sourceRef();
             this.clientConnectCorrelationId = begin.correlationId();
 
-            final Correlation<?> correlation = lookupEstablished.apply(clientConnectCorrelationId);
-
+            @SuppressWarnings("unchecked")
+            final Correlation<ClientConnectReplyState> correlation =
+                    (Correlation<ClientConnectReplyState>)lookupEstablished.apply(clientConnectCorrelationId);
+            correlation.state().connection.setInput(source, sourceId);
+            connection = correlation.state().connection;
+            connectionPool = correlation.state().connectionPool;
             if (sourceRef == 0L && correlation != null)
             {
                 httpResponseBegin();
@@ -346,7 +356,19 @@ public final class TargetInputEstablishedStreamFactory
         {
             final long streamId = end.streamId();
             assert streamId == sourceId;
-            doCleanup();
+
+            switch (responseState)
+            {
+            case HEADERS:
+            case DATA:
+                // Incomplete response
+                handleInvalidResponse(false);
+                break;
+            case BEFORE_HEADERS:
+            case FINAL:
+                connection.persistent = false;
+                doCleanup(true);
+            }
         }
 
         private int decode(DirectBuffer buffer, int offset, int limit)
@@ -371,7 +393,8 @@ public final class TargetInputEstablishedStreamFactory
             {
                 // Out of slab memory
                 source.doReset(sourceId);
-                doCleanup();
+                connection.persistent = false;
+                doCleanup(false);
             }
             else
             {
@@ -426,7 +449,8 @@ public final class TargetInputEstablishedStreamFactory
                 streamState = this::handleStreamWhenNotBuffering;
                 if (endDeferred)
                 {
-                    doCleanup();
+                    connection.persistent = false;
+                    doCleanup(true);
                 }
             }
         }
@@ -440,7 +464,15 @@ public final class TargetInputEstablishedStreamFactory
             final long streamId = endRO.streamId();
             assert streamId == sourceId;
 
-            endDeferred = true;
+            switch (responseState)
+            {
+            case BEFORE_HEADERS:
+                // Waiting for window to finish writing response to application
+                endDeferred = true;
+                break;
+            default:
+                handleEnd(endRO);
+            }
         }
 
         private void alignSlotData()
@@ -453,7 +485,7 @@ public final class TargetInputEstablishedStreamFactory
             slotPosition = dataLength;
         }
 
-        private void doCleanup()
+        private void doCleanup(boolean doEnd)
         {
             decoderState = (b, o, l) -> o;
             streamState = this::handleStreamAfterEnd;
@@ -465,6 +497,7 @@ public final class TargetInputEstablishedStreamFactory
             }
             slab.release(slotIndex);
             slotIndex = NO_SLOT;
+            connectionPool.release(connection, doEnd);
         }
 
         private int decodeHttpBegin(
@@ -483,7 +516,7 @@ public final class TargetInputEstablishedStreamFactory
                 int length = limit - offset;
                 if (length >= maximumHeadersSize)
                 {
-                    handleInvalidResponse();
+                    handleInvalidResponse(true);
                 }
             }
             else
@@ -509,7 +542,7 @@ public final class TargetInputEstablishedStreamFactory
             Matcher versionMatcher = versionPattern.matcher(start[0]);
             if (!versionMatcher.matches())
             {
-                handleInvalidResponse();
+                handleInvalidResponse(true);
             }
             else
             {
@@ -530,15 +563,15 @@ public final class TargetInputEstablishedStreamFactory
                     {
                         if (element.equals("close"))
                         {
-                            clientConnectReplyState.connection.persistent = false;
+                            connection.persistent = false;
                         }
                     });
                 }
 
                 if (upgraded)
                 {
-                    clientConnectReplyState.connection.persistent = false;
-                    clientConnectReplyState.releaseConnection(upgraded);
+                    connection.persistent = false;
+                    connectionPool.release(connection, true);
                     this.decoderState = this::decodeHttpDataAfterUpgrade;
                     throttleState = this::handleThrottleAfterBegin;
                     windowHandler = this::handleWindow;
@@ -600,7 +633,7 @@ public final class TargetInputEstablishedStreamFactory
                     // TODO: support other transfer encodings
                     if (contentLengthFound || !"chunked".equals(value))
                     {
-                        handleInvalidResponse();
+                        handleInvalidResponse(true);
                     }
                     else
                     {
@@ -612,7 +645,7 @@ public final class TargetInputEstablishedStreamFactory
                 {
                     if (contentLengthFound || isChunkedTransfer)
                     {
-                        handleInvalidResponse();
+                        handleInvalidResponse(true);
                     }
                     else
                     {
@@ -637,7 +670,6 @@ public final class TargetInputEstablishedStreamFactory
         {
             final int length = limit - offset;
 
-            // TODO: consider chunks
             final int remainingBytes = Math.min(length, contentRemaining);
             final int targetWindow = targetWindowFrames == 0 ? 0 : targetWindowBytes;
             final int writableBytes = Math.min(targetWindow, remainingBytes);
@@ -683,7 +715,7 @@ public final class TargetInputEstablishedStreamFactory
                 }
                 catch (NumberFormatException ex)
                 {
-                    handleInvalidResponse();
+                    handleInvalidResponse(true);
                 }
 
                 if (chunkSizeRemaining == 0)
@@ -716,7 +748,7 @@ public final class TargetInputEstablishedStreamFactory
                 if (payload.getByte(offset) != '\r'
                     || payload.getByte(offset + 1) != '\n')
                 {
-                    handleInvalidResponse();
+                    handleInvalidResponse(true);
                 }
                 else
                 {
@@ -735,7 +767,6 @@ public final class TargetInputEstablishedStreamFactory
         {
             final int length = limit - offset;
 
-            // TODO: consider chunks
             final int remainingBytes = Math.min(length, chunkSizeRemaining);
             final int targetWindow = targetWindowFrames == 0 ? 0 : targetWindowBytes;
             final int writableBytes = Math.min(targetWindow, remainingBytes);
@@ -792,7 +823,7 @@ public final class TargetInputEstablishedStreamFactory
         {
             // TODO: consider chunks, trailers
             target.doHttpEnd(targetId);
-            clientConnectReplyState.releaseConnection(false);
+            connectionPool.release(connection, true);
             return limit;
         }
 
@@ -818,8 +849,9 @@ public final class TargetInputEstablishedStreamFactory
         {
             target.doHttpEnd(targetId);
             target.removeThrottle(targetId);
+            target = null;
 
-            if (clientConnectReplyState.connection.persistent)
+            if (connection.persistent)
             {
                 httpResponseBegin();
             }
@@ -829,16 +861,13 @@ public final class TargetInputEstablishedStreamFactory
                 this.responseState = ResponseState.FINAL;
             }
 
-            clientConnectReplyState.releaseConnection(false);
+            connectionPool.release(connection, true);
         }
 
         private void resolveTarget()
         {
             @SuppressWarnings("unchecked")
-            final Correlation<ClientConnectReplyState> correlation =
-                    (Correlation<ClientConnectReplyState>) correlateEstablished.apply(clientConnectCorrelationId);
-
-            clientConnectReplyState = correlation.state();
+            final Correlation<?> correlation = correlateEstablished.apply(clientConnectCorrelationId);
             this.target = supplyTarget.apply(correlation.source());
             this.targetId = supplyStreamId.getAsLong();
             this.sourceCorrelationId = correlation.id();
@@ -963,6 +992,8 @@ public final class TargetInputEstablishedStreamFactory
         {
             slab.release(slotIndex);
             source.doReset(sourceId);
+            connection.persistent = false;
+            connectionPool.release(connection, false);
         }
 
     }

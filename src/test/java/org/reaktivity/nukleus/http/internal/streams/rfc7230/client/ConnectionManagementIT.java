@@ -161,7 +161,6 @@ public class ConnectionManagementIT
         "${server}/request.incomplete.response.headers.and.end/server" })
     public void shouldGive503ResponseWhenResponseStreamEndsBeforeHeadersComplete() throws Exception
     {
-        k3po.start();
         k3po.finish();
     }
 
@@ -172,7 +171,6 @@ public class ConnectionManagementIT
         "${server}/request.incomplete.response.headers.and.end/server" })
     public void shouldGive503ResponseWhenRequestStreamIsResetBeforeResponseHeadersAllReceived() throws Exception
     {
-        k3po.start();
         k3po.finish();
     }
 
@@ -185,7 +183,6 @@ public class ConnectionManagementIT
         "${server}/request.incomplete.response.headers.and.end/server" })
     public void shouldReleaseConnectionWhenEndReceivedAfterIncompleteResponseHeaders() throws Exception
     {
-        k3po.start();
         k3po.finish();
     }
 
@@ -196,7 +193,6 @@ public class ConnectionManagementIT
         "${server}/request.response.and.end/server" })
     public void shouldEndOutputWhenEndReceivedAfterCompleteResponse() throws Exception
     {
-        k3po.start();
         k3po.finish();
     }
 
@@ -207,7 +203,6 @@ public class ConnectionManagementIT
         "${server}/request.response.and.reset/server" })
     public void shouldEndOutputWhenResetReceivedAfterCompleteResponse() throws Exception
     {
-        k3po.start();
         k3po.finish();
     }
 
@@ -218,7 +213,6 @@ public class ConnectionManagementIT
         "${server}/request.no.response.and.end/server" })
     public void shouldGive503ResponseWhenResponseStreamEndsBeforeResponseReceived() throws Exception
     {
-        k3po.start();
         k3po.finish();
     }
 
@@ -229,7 +223,6 @@ public class ConnectionManagementIT
         "${server}/request.no.response.and.end/server" })
     public void shouldGive503ResponseWhenRequestStreamIsResetBeforeResponseReceived() throws Exception
     {
-        k3po.start();
         k3po.finish();
     }
 
