@@ -178,8 +178,6 @@ public class ConnectionManagementIT
     @Specification({
         "${route}/client/controller",
         "${client}/request.and.503.response/client",
-        "${client}/request.and.503.response/client",
-        "${server}/request.incomplete.response.headers.and.end/server",
         "${server}/request.incomplete.response.headers.and.end/server" })
     public void shouldReleaseConnectionWhenEndReceivedAfterIncompleteResponseHeaders() throws Exception
     {
@@ -226,6 +224,15 @@ public class ConnectionManagementIT
         k3po.finish();
     }
 
+    @Test
+    @Specification({
+        "${route}/client/controller",
+        "${client}/response.with.content.length.is.reset/client",
+        "${server}/response.with.content.length.is.reset/server" })
+    public void responseWithContentLengthIsReset() throws Exception
+    {
+        k3po.finish();
+    }
 
     // Proxy tests only have "cooked" versions
 

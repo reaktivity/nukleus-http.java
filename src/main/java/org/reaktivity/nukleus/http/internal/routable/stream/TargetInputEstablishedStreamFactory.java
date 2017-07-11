@@ -467,6 +467,7 @@ public final class TargetInputEstablishedStreamFactory
             switch (responseState)
             {
             case BEFORE_HEADERS:
+            case DATA:
                 // Waiting for window to finish writing response to application
                 endDeferred = true;
                 break;
@@ -571,7 +572,7 @@ public final class TargetInputEstablishedStreamFactory
                 if (upgraded)
                 {
                     connection.persistent = false;
-                    connectionPool.release(connection, true);
+                    connectionPool.release(connection, false);
                     this.decoderState = this::decodeHttpDataAfterUpgrade;
                     throttleState = this::handleThrottleAfterBegin;
                     windowHandler = this::handleWindow;
