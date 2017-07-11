@@ -159,7 +159,7 @@ public class ConnectionManagementIT
         "${route}/client/controller",
         "${client}/request.and.503.response/client",
         "${server}/request.incomplete.response.headers.and.end/server" })
-    public void shouldGive503ResponseWhenResponseStreamEndsBeforeHeadersComplete() throws Exception
+    public void shouldGive503ResponseWhenResponseStreamEndsBeforeResponseHeadersComplete() throws Exception
     {
         k3po.finish();
     }
@@ -168,8 +168,8 @@ public class ConnectionManagementIT
     @Specification({
         "${route}/client/controller",
         "${client}/request.and.503.response/client",
-        "${server}/request.incomplete.response.headers.and.end/server" })
-    public void shouldGive503ResponseWhenRequestStreamIsResetBeforeResponseHeadersAllReceived() throws Exception
+        "${server}/request.incomplete.response.headers.and.reset/server" })
+    public void shouldGive503ResponseWhenRequestStreamIsResetBeforeResponseHeadersComplete() throws Exception
     {
         k3po.finish();
     }
@@ -178,8 +178,28 @@ public class ConnectionManagementIT
     @Specification({
         "${route}/client/controller",
         "${client}/request.and.503.response/client",
-        "${server}/request.incomplete.response.headers.and.end/server" })
-    public void shouldReleaseConnectionWhenEndReceivedAfterIncompleteResponseHeaders() throws Exception
+        "${server}/request.no.response.and.end/server" })
+    public void shouldGive503ResponseWhenResponseStreamEndsBeforeResponseReceived() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/client/controller",
+        "${client}/request.and.503.response/client",
+        "${server}/request.no.response.and.reset/server" })
+    public void shouldGive503ResponseWhenRequestStreamIsResetBeforeResponseReceived() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/client/controller",
+        "${client}/request.reset/client",
+        "${server}/request.reset/server" })
+    public void shouldResetRequestWhenLowLevelIsReset() throws Exception
     {
         k3po.finish();
     }
@@ -208,8 +228,8 @@ public class ConnectionManagementIT
     @Specification({
         "${route}/client/controller",
         "${client}/request.and.503.response/client",
-        "${server}/request.no.response.and.end/server" })
-    public void shouldGive503ResponseWhenResponseStreamEndsBeforeResponseReceived() throws Exception
+        "${server}/request.response.headers.incomplete.data.and.end/server" })
+    public void shouldGive503ResponseWhenResponseStreamEndsBeforeResponseDataComplete() throws Exception
     {
         k3po.finish();
     }
@@ -218,8 +238,8 @@ public class ConnectionManagementIT
     @Specification({
         "${route}/client/controller",
         "${client}/request.and.503.response/client",
-        "${server}/request.no.response.and.end/server" })
-    public void shouldGive503ResponseWhenRequestStreamIsResetBeforeResponseReceived() throws Exception
+        "${server}/request.response.headers.incomplete.data.and.reset/server" })
+    public void shouldGive503ResponseWhenRequestStreamIsResetBeforeResponseDataIsComplete() throws Exception
     {
         k3po.finish();
     }
