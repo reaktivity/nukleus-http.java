@@ -37,7 +37,7 @@ public class FlowControlLimitsIT
             .addScriptRoot("client", "org/reaktivity/specification/http/rfc7230/")
             .addScriptRoot("server", "org/reaktivity/specification/nukleus/http/streams/rfc7230/");
 
-    private final TestRule timeout = new DisableOnDebug(new Timeout(5, SECONDS));
+    private final TestRule timeout = new DisableOnDebug(new Timeout(10, SECONDS));
 
     private final TestRule properties = new SystemPropertiesRule()
         .setProperty(MAXIMUM_HEADERS_SIZE_PROPERTY_NAME, "64")

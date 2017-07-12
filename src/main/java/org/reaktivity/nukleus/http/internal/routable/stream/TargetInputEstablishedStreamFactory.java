@@ -372,7 +372,7 @@ public final class TargetInputEstablishedStreamFactory
                 break;
             case FINAL:
                 connection.persistent = false;
-                doCleanup(true);
+                doCleanup(!connection.endSent);
             }
         }
 

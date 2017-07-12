@@ -114,6 +114,7 @@ final class ConnectionPool
             if (doEndIfNotPersistent)
             {
                 connect.doEnd(connection.outputStreamId);
+                connection.endSent = true;
             }
         }
         if (nextRequest != null)
@@ -155,6 +156,7 @@ final class ConnectionPool
         final long outputStreamId;
         int window;
         boolean persistent = true;
+        boolean endSent;
 
         private long connectReplyStreamId;
         private Source connectReply;

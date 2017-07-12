@@ -34,7 +34,7 @@ public class ArchitectureIT
             .addScriptRoot("client", "org/reaktivity/specification/http/rfc7230/architecture")
             .addScriptRoot("server", "org/reaktivity/specification/nukleus/http/streams/rfc7230/architecture");
 
-    private final TestRule timeout = new DisableOnDebug(new Timeout(5, SECONDS));
+    private final TestRule timeout = new DisableOnDebug(new Timeout(10, SECONDS));
 
     private final NukleusRule nukleus = new NukleusRule("http")
         .directory("target/nukleus-itests")
