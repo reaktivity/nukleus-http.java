@@ -457,8 +457,7 @@ public final class TargetInputEstablishedStreamFactory
                     connection.persistent = false;
                     if (contentRemaining > 0)
                     {
-                        // TODO: write an abort frame rather than end
-                        target.doEnd(targetId);
+                        target.doAbort(targetId);
                     }
                     doCleanup(true);
                 }
