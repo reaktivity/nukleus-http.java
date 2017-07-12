@@ -183,15 +183,15 @@ public final class Target implements Nukleus
     }
 
     public void doEnd(
-            long targetId)
-        {
-            EndFW end = endRW.wrap(writeBuffer, 0, writeBuffer.capacity())
-                    .streamId(targetId)
-                    .extension(e -> e.reset())
-                    .build();
+        long targetId)
+    {
+        EndFW end = endRW.wrap(writeBuffer, 0, writeBuffer.capacity())
+                .streamId(targetId)
+                .extension(e -> e.reset())
+                .build();
 
-            streamsBuffer.write(end.typeId(), end.buffer(), end.offset(), end.sizeof());
-        }
+        streamsBuffer.write(end.typeId(), end.buffer(), end.offset(), end.sizeof());
+    }
 
     public void doHttpBegin(
         long targetId,
