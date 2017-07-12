@@ -170,6 +170,18 @@ public final class Target implements Nukleus
         streamsBuffer.write(data.typeId(), data.buffer(), data.offset(), data.sizeof());
     }
 
+    public void doAbort(
+        long targetId)
+    {
+        // TODO: use ABORT frame once available
+        EndFW end = endRW.wrap(writeBuffer, 0, writeBuffer.capacity())
+                .streamId(targetId)
+                .extension(e -> e.reset())
+                .build();
+
+        streamsBuffer.write(end.typeId(), end.buffer(), end.offset(), end.sizeof());
+    }
+
     public void doEnd(
         long targetId)
     {

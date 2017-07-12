@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.LongFunction;
 import java.util.function.LongSupplier;
 import java.util.function.Predicate;
@@ -77,6 +78,9 @@ public final class SourceOutputStreamFactory
     private final Source source;
     private final LongFunction<List<Route>> supplyRoutes;
     private final LongSupplier supplyTargetId;
+    private final Function<String, Target> supplyTarget;
+    private final LongFunction<Correlation<?>> correlateEstablished;
+
     private final LongObjectBiConsumer<Correlation<?>> correlateNew;
 
     private final Map<String, Map<Long, ConnectionPool>> connectionPools;
@@ -84,12 +88,12 @@ public final class SourceOutputStreamFactory
 
     private final Slab slab;
 
-
-
     public SourceOutputStreamFactory(
         Source source,
         LongFunction<List<Route>> supplyRoutes,
         LongSupplier supplyTargetId,
+        Function<String, Target> supplyTarget,
+        LongFunction<Correlation<?>> correlateEstablished,
         LongObjectBiConsumer<Correlation<?>> correlateNew,
         Slab slab,
         int maximumConnectionsPerRoute)
@@ -97,6 +101,8 @@ public final class SourceOutputStreamFactory
         this.source = source;
         this.supplyRoutes = supplyRoutes;
         this.supplyTargetId = supplyTargetId;
+        this.supplyTarget = supplyTarget;
+        this.correlateEstablished = correlateEstablished;
         this.correlateNew = correlateNew;
         this.slab = slab;
         this.connectionPools = new HashMap<>();
@@ -368,7 +374,8 @@ public final class SourceOutputStreamFactory
             Map<Long, ConnectionPool> connectionsByRef = connectionPools.
                     computeIfAbsent(target.name(), (n) -> new Long2ObjectHashMap<ConnectionPool>());
             return connectionsByRef.computeIfAbsent(targetRef, (r) ->
-                new ConnectionPool(maximumConnectionsPerRoute, supplyTargetId, target, targetRef));
+                new ConnectionPool(maximumConnectionsPerRoute, supplyTargetId, supplyTarget,
+                        correlateEstablished, target, targetRef));
         }
 
         private void processData(
@@ -386,7 +393,7 @@ public final class SourceOutputStreamFactory
             else
             {
                 final OctetsFW payload = dataRO.payload();
-                target.doData(connection.targetId, payload);
+                target.doData(connection.outputStreamId, payload);
                 connection.window -= payload.sizeof();
             }
         }
@@ -402,7 +409,7 @@ public final class SourceOutputStreamFactory
 
         private void doEnd()
         {
-            target.removeThrottle(connection.targetId);
+            target.removeThrottle(connection.outputStreamId);
 
             source.removeStream(sourceId);
             this.streamState = this::streamAfterEnd;
@@ -497,7 +504,7 @@ public final class SourceOutputStreamFactory
         {
             int writableBytes = Math.min(slotPosition - slotOffset, connection.window);
             MutableDirectBuffer slot = slab.buffer(slotIndex);
-            target.doData(connection.targetId, slot, slotOffset, writableBytes);
+            target.doData(connection.outputStreamId, slot, slotOffset, writableBytes);
             connection.window -= writableBytes;
             slotOffset += writableBytes;
             int bytesDeferred = slotPosition - slotOffset;
@@ -534,6 +541,8 @@ public final class SourceOutputStreamFactory
         {
             resetRO.wrap(buffer, index, index + length);
             slab.release(slotIndex);
+            connection.persistent = false;
+            connectionPool.release(connection, false);
             source.doReset(sourceId);
         }
 
@@ -570,12 +579,12 @@ public final class SourceOutputStreamFactory
         {
             this.connection = connection;
             connection.persistent = persistent;
-            final long targetCorrelationId = connection.targetId;
+            final long targetCorrelationId = connection.outputStreamId;
             ClientConnectReplyState state = new ClientConnectReplyState(connectionPool, connection);
             final Correlation<ClientConnectReplyState> correlation =
                     new Correlation<>(correlationId, source.routableName(), INPUT_ESTABLISHED, state);
             correlateNew.accept(targetCorrelationId, correlation);
-            target.setThrottle(connection.targetId, this::handleThrottle);
+            target.setThrottle(connection.outputStreamId, this::handleThrottle);
             if (connection.window > 0)
             {
                 useWindowToWriteRequestHeaders();

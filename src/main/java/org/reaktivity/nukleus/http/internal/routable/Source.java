@@ -92,7 +92,7 @@ public final class Source implements Nukleus
                 new TargetOutputEstablishedStreamFactory(this, supplyTarget, correlateEstablished,
                         slab)::newStream);
         this.streamFactories.put(RouteKind.OUTPUT,
-                new SourceOutputStreamFactory(this, supplyRoutes, supplyTargetId,
+                new SourceOutputStreamFactory(this, supplyRoutes, supplyTargetId, supplyTarget, correlateEstablished,
                         correlateNew, slab, maximumConnectionsPerRoute)::newStream);
         this.streamFactories.put(RouteKind.INPUT_ESTABLISHED, new TargetInputEstablishedStreamFactory(this, supplyTarget,
                 supplyTargetId, correlateEstablished, lookupEstablished, slab)::newStream);

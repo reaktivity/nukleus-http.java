@@ -154,6 +154,7 @@ public class ConnectionManagementIT
         k3po.finish();
     }
 
+
     // Proxy tests only have "cooked" versions
 
     /**
