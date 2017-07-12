@@ -126,7 +126,6 @@ public class ConnectionManagementPoolSize1IT
         "${route}/client/controller",
         "${client}/request.reset/client",
         "${server}/request.reset/server"})
-    // TODO: test failing
     public void shouldResetRequestAndFreeConnectionWhenLowLevelIsReset() throws Exception
     {
         k3po.finish();
@@ -145,11 +144,13 @@ public class ConnectionManagementPoolSize1IT
     @Test
     @Specification({
         "${route}/client/controller",
-        "${client}/request.and.response.twice/client",
+        "${client}/request.and.response.twice.awaiting.barrier/client",
         "${server}/request.response.and.reset/server"})
-    // TODO: test failing due to race between client connect reset and second high level BEGIN on
     public void shouldEndOutputAndFreeConnectionWhenResetReceivedAfterCompleteResponse() throws Exception
     {
+        k3po.start();
+        k3po.awaitBarrier("CONNECTION_RESET");
+        k3po.notifyBarrier("ISSUE_SECOND_REQUEST");
         k3po.finish();
     }
 
