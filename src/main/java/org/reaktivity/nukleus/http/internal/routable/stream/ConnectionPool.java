@@ -16,11 +16,14 @@
 package org.reaktivity.nukleus.http.internal.routable.stream;
 
 import java.util.ArrayDeque;
-import java.util.Queue;
+import java.util.Deque;
 import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.LongFunction;
 import java.util.function.LongSupplier;
 
 import org.agrona.MutableDirectBuffer;
+import org.reaktivity.nukleus.http.internal.routable.Correlation;
 import org.reaktivity.nukleus.http.internal.routable.Source;
 import org.reaktivity.nukleus.http.internal.routable.Target;
 import org.reaktivity.nukleus.http.internal.types.stream.ResetFW;
@@ -32,20 +35,25 @@ final class ConnectionPool
 {
     private final int maximumConnections;
     private final LongSupplier supplyTargetId;
-    private final Queue<Connection> availableConnections;
-    private final Target target;
-    private final long targetRef;
+    private final Function<String, Target> suppyTarget;
+    private final LongFunction<Correlation<?>> correlateEstablished;
+    private final Deque<Connection> availableConnections;
+    private final Target connect;
+    private final long connectRef;
 
     private int connectionsInUse;
     private ConnectionRequest nextRequest;
 
-    ConnectionPool(int maximumConnections, LongSupplier supplyTargetId, Target target, long targetRef)
+    ConnectionPool(int maximumConnections, LongSupplier supplyTargetId, Function<String, Target> supplyTarget,
+            LongFunction<Correlation<?>> correlateEstablished, Target target, long targetRef)
     {
         this.maximumConnections = maximumConnections;
         this.availableConnections = new ArrayDeque<Connection>(maximumConnections);
         this.supplyTargetId = supplyTargetId;
-        this.target = target;
-        this.targetRef = targetRef;
+        this.suppyTarget = supplyTarget;
+        this.correlateEstablished = correlateEstablished;
+        this.connect = target;
+        this.connectRef = targetRef;
     }
 
     public void acquire(ConnectionRequest request)
@@ -69,26 +77,44 @@ final class ConnectionPool
     {
         Connection connection = new Connection(supplyTargetId.getAsLong());
         long targetCorrelationId = connection.outputStreamId;
-        target.doBegin(connection.outputStreamId, targetRef, targetCorrelationId);
-        target.setThrottle(connection.outputStreamId, connection::throttleReleaseOnReset);
+        connect.doBegin(connection.outputStreamId, connectRef, targetCorrelationId);
+        connect.setThrottle(connection.outputStreamId, connection::throttleReleaseOnReset);
         connectionsInUse++;
         return connection;
     }
 
     public void release(Connection connection, boolean doEndIfNotPersistent)
     {
+        @SuppressWarnings("unchecked")
+        final Correlation<?> correlation = correlateEstablished.apply(connection.connectCorrelationId);
+        if (correlation != null)
+        {
+            // We did not yet send response headers (high level begin) to the client accept reply stream.
+            // This implies we got an incomplete response. We report this as service unavailable (503).
+            Target acceptReply = suppyTarget.apply(correlation.source());
+            long targetId = supplyTargetId.getAsLong();
+            long sourceCorrelationId = correlation.id();
+            acceptReply.doHttpBegin(targetId, 0L, sourceCorrelationId,
+                    hs -> hs.item(h -> h.representation((byte) 0).name(":status").value("503")));
+            acceptReply.doHttpEnd(targetId);
+
+        }
         if (connection.persistent)
         {
-            target.setThrottle(connection.outputStreamId, connection::throttleReleaseOnReset);
+            connect.setThrottle(connection.outputStreamId, connection::throttleReleaseOnReset);
             availableConnections.add(connection);
         }
         else
         {
+            connectionsInUse--;
+
+            // In case the connection was previously released when it was still persistent
+            availableConnections.removeFirstOccurrence(connection);
+
             if (doEndIfNotPersistent)
             {
-                target.doEnd(connection.outputStreamId);
+                connect.doEnd(connection.outputStreamId);
             }
-            connectionsInUse--;
         }
         if (nextRequest != null)
         {
@@ -130,18 +156,20 @@ final class ConnectionPool
         int window;
         boolean persistent = true;
 
-        private long inputStreamId;
-        private Source input;
+        private long connectReplyStreamId;
+        private Source connectReply;
+        private long connectCorrelationId = -1;
 
         Connection(long targetStreamId)
         {
             this.outputStreamId = targetStreamId;
         }
 
-        void setInput(Source source, long sourceId)
+        void setInput(Source source, long sourceId, long connectCorrelationId)
         {
-            input = source;
-            inputStreamId = sourceId;
+            this.connectReply = source;
+            this.connectReplyStreamId = sourceId;
+            this.connectCorrelationId = connectCorrelationId;
         }
 
         private void throttleReleaseOnReset(int msgTypeId, MutableDirectBuffer buffer, int index, int length)
@@ -151,9 +179,9 @@ final class ConnectionPool
             case ResetFW.TYPE_ID:
                 persistent = false;
                 release(this, false);
-                if (input != null)
+                if (connectReply != null)
                 {
-                    input.doReset(inputStreamId);
+                    connectReply.doReset(connectReplyStreamId);
                 }
                 break;
             default:

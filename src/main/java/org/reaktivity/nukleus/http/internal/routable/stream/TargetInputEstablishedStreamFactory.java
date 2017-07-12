@@ -289,7 +289,6 @@ public final class TargetInputEstablishedStreamFactory
         {
             this.decoderState = this::decodeSkipData;
             this.streamState = this::handleStreamAfterReset;
-            this.responseState = ResponseState.FINAL;
 
             if (resetSource)
             {
@@ -299,7 +298,7 @@ public final class TargetInputEstablishedStreamFactory
             }
 
             connection.persistent = false;
-            doCleanup(false);
+            doCleanup(!resetSource);
         }
 
         private void handleBegin(
@@ -312,9 +311,9 @@ public final class TargetInputEstablishedStreamFactory
             @SuppressWarnings("unchecked")
             final Correlation<ClientConnectReplyState> correlation =
                     (Correlation<ClientConnectReplyState>)lookupEstablished.apply(clientConnectCorrelationId);
-            correlation.state().connection.setInput(source, sourceId);
             connection = correlation.state().connection;
             connectionPool = correlation.state().connectionPool;
+            connection.setInput(source, sourceId, clientConnectCorrelationId);
             if (sourceRef == 0L && correlation != null)
             {
                 httpResponseBegin();
@@ -357,14 +356,20 @@ public final class TargetInputEstablishedStreamFactory
             final long streamId = end.streamId();
             assert streamId == sourceId;
 
+            if (responseState == ResponseState.BEFORE_HEADERS && target == null
+                    && lookupEstablished.apply(clientConnectCorrelationId) == null)
+            {
+                responseState = ResponseState.FINAL;
+            }
+
             switch (responseState)
             {
+            case BEFORE_HEADERS:
             case HEADERS:
             case DATA:
                 // Incomplete response
                 handleInvalidResponse(false);
                 break;
-            case BEFORE_HEADERS:
             case FINAL:
                 connection.persistent = false;
                 doCleanup(true);
@@ -450,6 +455,11 @@ public final class TargetInputEstablishedStreamFactory
                 if (endDeferred)
                 {
                     connection.persistent = false;
+                    if (contentRemaining > 0)
+                    {
+                        // TODO: write an abort frame rather than end
+                        target.doEnd(targetId);
+                    }
                     doCleanup(true);
                 }
             }
@@ -490,6 +500,7 @@ public final class TargetInputEstablishedStreamFactory
         {
             decoderState = (b, o, l) -> o;
             streamState = this::handleStreamAfterEnd;
+            responseState = ResponseState.FINAL;
 
             source.removeStream(sourceId);
             if (target != null)
@@ -512,7 +523,6 @@ public final class TargetInputEstablishedStreamFactory
             final int endOfHeadersAt = limitOfBytes(payload, offset, limit, CRLFCRLF_BYTES);
             if (endOfHeadersAt == -1)
             {
-                // Incomplete request, signal we can't consume the data
                 result = offset;
                 int length = limit - offset;
                 if (length >= maximumHeadersSize)

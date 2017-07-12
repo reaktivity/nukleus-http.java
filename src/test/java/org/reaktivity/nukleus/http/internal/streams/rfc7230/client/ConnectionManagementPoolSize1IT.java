@@ -85,38 +85,101 @@ public class ConnectionManagementPoolSize1IT
     @Specification({
         "${route}/client/controller",
         "${client}/request.and.503.response/client",
-        "${client}/request.and.503.response/client",
-        "${server}/request.incomplete.response.headers.and.end/server",
         "${server}/request.incomplete.response.headers.and.end/server" })
-    public void shouldReleaseConnectionWhenEndReceivedAfterIncompleteResponseHeaders() throws Exception
+    public void shouldGive503ResponseAndFreeConnectionWhenResponseStreamEndsBeforeResponseHeadersComplete() throws Exception
     {
-        k3po.start();
         k3po.finish();
     }
 
     @Test
     @Specification({
         "${route}/client/controller",
-        "${client}/../architecture/request.and.response/client",
-        "${server}/request.response.and.end/server",
-        "${client}/../architecture/request.and.response/client",
-        "${server}/request.response.and.end/server" })
-    public void shouldReleaseConnectionWhenEndReceivedAfterCompleteResponse() throws Exception
+        "${client}/request.and.503.response/client",
+        "${server}/request.incomplete.response.headers.and.reset/server" })
+    public void shouldGive503ResponseAndFreeConnectionWhenRequestStreamIsResetBeforeResponseHeadersComplete() throws Exception
     {
-        k3po.start();
         k3po.finish();
     }
 
     @Test
     @Specification({
         "${route}/client/controller",
-        "${client}/../architecture/request.and.response/client",
-        "${server}/request.response.and.reset/server",
-        "${client}/../architecture/request.and.response/client",
-        "${server}/request.response.and.reset/server" })
-    public void shouldReleaseConnectionWhenResetReceivedAfterCompleteResponse() throws Exception
+        "${client}/request.and.503.response/client",
+        "${server}/request.no.response.and.end/server" })
+    public void shouldGive503ResponseAndFreeConnectionWhenResponseStreamEndsBeforeResponseReceived() throws Exception
     {
-        k3po.start();
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/client/controller",
+        "${client}/request.and.503.response/client",
+        "${server}/request.no.response.and.reset/server" })
+    public void shouldGive503ResponseAndFreeConnectionWhenRequestStreamIsResetBeforeResponseReceived() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/client/controller",
+        "${client}/request.reset/client",
+        "${server}/request.reset/server"})
+    // TODO: test failing
+    public void shouldResetRequestAndFreeConnectionWhenLowLevelIsReset() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/client/controller",
+        "${client}/request.and.response.twice/client",
+        "${server}/request.response.and.end/server"})
+    public void shouldEndOutputAndFreeConnectionWhenEndReceivedAfterCompleteResponse() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/client/controller",
+        "${client}/request.and.response.twice/client",
+        "${server}/request.response.and.reset/server"})
+    // TODO: test failing due to race between client connect reset and second high level BEGIN on
+    public void shouldEndOutputAndFreeConnectionWhenResetReceivedAfterCompleteResponse() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/client/controller",
+        "${client}/request.and.response.with.incomplete.data.and.end/client",
+        "${server}/request.response.headers.incomplete.data.and.end/server"})
+    public void shouldSendAbortAndFreeConnectionWhenResponseStreamEndsBeforeResponseDataComplete() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/client/controller",
+        "${client}/request.and.response.with.incomplete.data.and.reset/client",
+        "${server}/request.response.headers.incomplete.data.and.reset/server" })
+    public void shouldSendAbortAndFreeConnectionWhenRequestStreamIsResetBeforeResponseDataIsComplete() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/client/controller",
+        "${client}/response.with.content.length.is.reset/client",
+        "${server}/response.with.content.length.is.reset/server" })
+    public void shouldResetRequestAndFreeConnectionWhenRequestWithContentLengthIsReset() throws Exception
+    {
         k3po.finish();
     }
 

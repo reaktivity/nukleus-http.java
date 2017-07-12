@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.LongFunction;
 import java.util.function.LongSupplier;
 import java.util.function.Predicate;
@@ -77,6 +78,9 @@ public final class SourceOutputStreamFactory
     private final Source source;
     private final LongFunction<List<Route>> supplyRoutes;
     private final LongSupplier supplyTargetId;
+    private final Function<String, Target> supplyTarget;
+    private final LongFunction<Correlation<?>> correlateEstablished;
+
     private final LongObjectBiConsumer<Correlation<?>> correlateNew;
 
     private final Map<String, Map<Long, ConnectionPool>> connectionPools;
@@ -84,12 +88,12 @@ public final class SourceOutputStreamFactory
 
     private final Slab slab;
 
-
-
     public SourceOutputStreamFactory(
         Source source,
         LongFunction<List<Route>> supplyRoutes,
         LongSupplier supplyTargetId,
+        Function<String, Target> supplyTarget,
+        LongFunction<Correlation<?>> correlateEstablished,
         LongObjectBiConsumer<Correlation<?>> correlateNew,
         Slab slab,
         int maximumConnectionsPerRoute)
@@ -97,6 +101,8 @@ public final class SourceOutputStreamFactory
         this.source = source;
         this.supplyRoutes = supplyRoutes;
         this.supplyTargetId = supplyTargetId;
+        this.supplyTarget = supplyTarget;
+        this.correlateEstablished = correlateEstablished;
         this.correlateNew = correlateNew;
         this.slab = slab;
         this.connectionPools = new HashMap<>();
@@ -368,7 +374,8 @@ public final class SourceOutputStreamFactory
             Map<Long, ConnectionPool> connectionsByRef = connectionPools.
                     computeIfAbsent(target.name(), (n) -> new Long2ObjectHashMap<ConnectionPool>());
             return connectionsByRef.computeIfAbsent(targetRef, (r) ->
-                new ConnectionPool(maximumConnectionsPerRoute, supplyTargetId, target, targetRef));
+                new ConnectionPool(maximumConnectionsPerRoute, supplyTargetId, supplyTarget,
+                        correlateEstablished, target, targetRef));
         }
 
         private void processData(
