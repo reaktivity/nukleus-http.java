@@ -19,6 +19,7 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.rules.RuleChain.outerRule;
 import static org.reaktivity.nukleus.http.internal.Context.MAXIMUM_CONNECTIONS_PROPERTY_NAME;
 
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.DisableOnDebug;
@@ -36,7 +37,7 @@ public class ConnectionManagementPoolSize1IT
             .addScriptRoot("client", "org/reaktivity/specification/nukleus/http/streams/rfc7230/connection.management")
             .addScriptRoot("server", "org/reaktivity/specification/http/rfc7230/connection.management");
 
-    private final TestRule timeout = new DisableOnDebug(new Timeout(5, SECONDS));
+    private final TestRule timeout = new DisableOnDebug(new Timeout(10, SECONDS));
 
     private final TestRule properties = new SystemPropertiesRule()
             .setProperty(MAXIMUM_CONNECTIONS_PROPERTY_NAME, "1");
@@ -80,4 +81,110 @@ public class ConnectionManagementPoolSize1IT
         k3po.notifyBarrier("WRITE_DATA_REQUEST_TWO");
         k3po.finish();
     }
+
+    @Test
+    @Specification({
+        "${route}/client/controller",
+        "${client}/request.and.503.response/client",
+        "${server}/request.incomplete.response.headers.and.end/server" })
+    public void shouldGive503ResponseAndFreeConnectionWhenResponseStreamEndsBeforeResponseHeadersComplete() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Ignore("BEGIN vs RESET read order not yet guaranteed to match write order")
+    @Test
+    @Specification({
+        "${route}/client/controller",
+        "${client}/request.and.503.response/client",
+        "${server}/request.incomplete.response.headers.and.reset/server" })
+    public void shouldGive503ResponseAndFreeConnectionWhenRequestStreamIsResetBeforeResponseHeadersComplete() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/client/controller",
+        "${client}/request.and.503.response/client",
+        "${server}/request.no.response.and.end/server" })
+    public void shouldGive503ResponseAndFreeConnectionWhenResponseStreamEndsBeforeResponseReceived() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Ignore("BEGIN vs RESET read order not yet guaranteed to match write order")
+    @Test
+    @Specification({
+        "${route}/client/controller",
+        "${client}/request.and.503.response/client",
+        "${server}/request.no.response.and.reset/server" })
+    public void shouldGive503ResponseAndFreeConnectionWhenRequestStreamIsResetBeforeResponseReceived() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/client/controller",
+        "${client}/request.reset/client",
+        "${server}/request.reset/server"})
+    public void shouldResetRequestAndFreeConnectionWhenLowLevelIsReset() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/client/controller",
+        "${client}/request.and.response.twice/client",
+        "${server}/request.response.and.end/server"})
+    public void shouldEndOutputAndFreeConnectionWhenEndReceivedAfterCompleteResponse() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/client/controller",
+        "${client}/request.and.response.twice.awaiting.barrier/client",
+        "${server}/request.response.and.reset/server"})
+    public void shouldEndOutputAndFreeConnectionWhenResetReceivedAfterCompleteResponse() throws Exception
+    {
+        k3po.start();
+        k3po.awaitBarrier("CONNECTION_RESET");
+        k3po.notifyBarrier("ISSUE_SECOND_REQUEST");
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/client/controller",
+        "${client}/request.and.response.with.incomplete.data.and.end/client",
+        "${server}/request.response.headers.incomplete.data.and.end/server"})
+    public void shouldSendAbortAndFreeConnectionWhenResponseStreamEndsBeforeResponseDataComplete() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/client/controller",
+        "${client}/request.and.response.with.incomplete.data.and.reset/client",
+        "${server}/request.response.headers.incomplete.data.and.reset/server" })
+    public void shouldSendAbortAndFreeConnectionWhenRequestStreamIsResetBeforeResponseDataIsComplete() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/client/controller",
+        "${client}/response.with.content.length.is.reset/client",
+        "${server}/response.with.content.length.is.reset/server" })
+    public void shouldResetRequestAndFreeConnectionWhenRequestWithContentLengthIsReset() throws Exception
+    {
+        k3po.finish();
+    }
+
 }

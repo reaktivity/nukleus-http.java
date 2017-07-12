@@ -19,29 +19,22 @@ import org.reaktivity.nukleus.http.internal.routable.stream.ConnectionPool.Conne
 
 final class ClientConnectReplyState
 {
-    private final ConnectionPool connectionPool;
+    final ConnectionPool connectionPool;
     final Connection connection;
-    int pendingResponses;
 
     ClientConnectReplyState(ConnectionPool connectionPool,
                             Connection connection)
     {
        this.connectionPool = connectionPool;
        this.connection = connection;
-       this.pendingResponses = 1;
     }
 
     @Override
     public String toString()
     {
         return String.format(
-                "%s[streamId=%016x, target=%s, window=%d, started=%b, pendingResponses=%d]",
-                getClass().getSimpleName(), connection.targetId, connection.window, pendingResponses);
-    }
-
-    public void releaseConnection(boolean upgraded)
-    {
-        connectionPool.release(connection, upgraded);
+                "%s[streamId=%016x, window=%d]",
+                getClass().getSimpleName(), connection.outputStreamId, connection.window);
     }
 
 }

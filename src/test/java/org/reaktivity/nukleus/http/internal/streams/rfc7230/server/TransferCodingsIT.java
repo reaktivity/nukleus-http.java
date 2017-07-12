@@ -35,7 +35,7 @@ public class TransferCodingsIT
             .addScriptRoot("client", "org/reaktivity/specification/http/rfc7230/transfer.codings")
             .addScriptRoot("server", "org/reaktivity/specification/nukleus/http/streams/rfc7230/transfer.codings");
 
-    private final TestRule timeout = new DisableOnDebug(new Timeout(6, SECONDS));
+    private final TestRule timeout = new DisableOnDebug(new Timeout(10, SECONDS));
 
     private final NukleusRule nukleus = new NukleusRule("http")
         .directory("target/nukleus-itests")
