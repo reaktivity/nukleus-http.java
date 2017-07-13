@@ -25,7 +25,7 @@ import org.junit.rules.TestRule;
 import org.junit.rules.Timeout;
 import org.kaazing.k3po.junit.annotation.Specification;
 import org.kaazing.k3po.junit.rules.K3poRule;
-import org.reaktivity.reaktor.test.NukleusRule;
+import org.reaktivity.reaktor.test.ReaktorRule;
 
 public class ArchitectureIT
 {
@@ -36,14 +36,15 @@ public class ArchitectureIT
 
     private final TestRule timeout = new DisableOnDebug(new Timeout(10, SECONDS));
 
-    private final NukleusRule nukleus = new NukleusRule("http")
+    private final ReaktorRule reaktor = new ReaktorRule()
+        .nukleus("http"::equals)
         .directory("target/nukleus-itests")
         .commandBufferCapacity(1024)
         .responseBufferCapacity(1024)
         .counterValuesBufferCapacity(1024);
 
     @Rule
-    public final TestRule chain = outerRule(nukleus).around(k3po).around(timeout);
+    public final TestRule chain = outerRule(reaktor).around(k3po).around(timeout);
 
     @Test
     @Specification({

@@ -28,7 +28,7 @@ import org.junit.rules.Timeout;
 import org.kaazing.k3po.junit.annotation.Specification;
 import org.kaazing.k3po.junit.rules.K3poRule;
 import org.reaktivity.nukleus.http.internal.test.SystemPropertiesRule;
-import org.reaktivity.reaktor.test.NukleusRule;
+import org.reaktivity.reaktor.test.ReaktorRule;
 
 public class FlowControlLimitsIT
 {
@@ -44,14 +44,15 @@ public class FlowControlLimitsIT
         .setProperty(MEMORY_FOR_DECODE_PROPERTY_NAME, "64");
 
 
-    private final NukleusRule nukleus = new NukleusRule("http")
+    private final ReaktorRule reaktor = new ReaktorRule()
+        .nukleus("http"::equals)
         .directory("target/nukleus-itests")
         .commandBufferCapacity(1024)
         .responseBufferCapacity(1024)
         .counterValuesBufferCapacity(1024);
 
     @Rule
-    public final TestRule chain = outerRule(properties).around(nukleus).around(k3po).around(timeout);
+    public final TestRule chain = outerRule(properties).around(reaktor).around(k3po).around(timeout);
 
     @Test
     @Specification({
