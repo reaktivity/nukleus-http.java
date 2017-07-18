@@ -31,6 +31,7 @@ import org.agrona.concurrent.MessageHandler;
 import org.reaktivity.nukleus.http.internal.routable.Correlation;
 import org.reaktivity.nukleus.http.internal.routable.Source;
 import org.reaktivity.nukleus.http.internal.routable.Target;
+import org.reaktivity.nukleus.http.internal.stream.ServerAcceptState;
 import org.reaktivity.nukleus.http.internal.types.OctetsFW;
 import org.reaktivity.nukleus.http.internal.types.stream.BeginFW;
 import org.reaktivity.nukleus.http.internal.types.stream.DataFW;
@@ -289,7 +290,7 @@ public final class TargetOutputEstablishedStreamFactory
                         slotOffset = 0;
                         this.streamState = this::streamBeforeHeadersWritten;
                         this.throttleState = this::throttleBeforeHeadersWritten;
-                        targetStream.replyTarget.setThrottle(targetStream.streamId, this::handleThrottle);
+                        targetStream.acceptReply.setThrottle(targetStream.streamId, this::handleThrottle);
                         if (targetStream.window > 0)
                         {
                             useTargetWindowToWriteResponseHeaders();

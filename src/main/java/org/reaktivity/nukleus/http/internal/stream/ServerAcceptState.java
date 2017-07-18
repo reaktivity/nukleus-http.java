@@ -13,12 +13,11 @@
  * License for the specific language governing permissions and limitations
  * under the License.
  */
-package org.reaktivity.nukleus.http.internal.routable.stream;
+package org.reaktivity.nukleus.http.internal.stream;
 
-import java.util.function.Function;
+import java.util.function.Consumer;
 
-import org.agrona.concurrent.MessageHandler;
-import org.reaktivity.nukleus.http.internal.routable.Target;
+import org.reaktivity.nukleus.function.MessageConsumer;
 
 /**
  * This class represents state shared between the server accept (source input) and server accept reply
@@ -27,19 +26,22 @@ import org.reaktivity.nukleus.http.internal.routable.Target;
 final class ServerAcceptState
 {
     final long streamId;
-    final Target replyTarget;
-    private final MessageHandler initialThrottle;
+    final MessageConsumer acceptReply;
+    private final MessageConsumer initialThrottle;
+    private final Consumer<MessageConsumer> setThrottle;
     int window;
     int pendingRequests;
     boolean endRequested;
     boolean persistent = true;
 
-    ServerAcceptState(long streamId, Target replyTarget, MessageHandler initialThrottle)
+    ServerAcceptState(long streamId, MessageConsumer acceptReply, MessageWriter writer,
+            MessageConsumer initialThrottle, Consumer<MessageConsumer> setThrottle)
     {
         this.streamId = streamId;
-        this.replyTarget = replyTarget;
+        this.acceptReply = acceptReply;
         this.initialThrottle = initialThrottle;
-        replyTarget.setThrottle(streamId, initialThrottle);
+        this.setThrottle = setThrottle;
+        setThrottle.accept(initialThrottle);
     }
 
     @Override
@@ -47,20 +49,20 @@ final class ServerAcceptState
     {
         return String.format(
                 "%s[streamId=%016x, target=%s, window=%d, started=%b, pendingRequests=%d, endRequested=%b]",
-                getClass().getSimpleName(), streamId, replyTarget, window, pendingRequests, endRequested);
+                getClass().getSimpleName(), streamId, acceptReply, window, pendingRequests, endRequested);
     }
 
     public void restoreInitialThrottle()
     {
-        replyTarget.setThrottle(streamId, initialThrottle);
+        setThrottle.accept(initialThrottle);
     }
 
-    public void doEnd(Function<String, Target> supplyTarget)
+    public void doEnd(MessageWriter writer)
     {
         if (pendingRequests == 0)
         {
-            replyTarget.doEnd(streamId);
-            replyTarget.removeThrottle(streamId);
+            writer.doEnd(acceptReply, streamId);
+            // TODO: unset throttle on acceptReply
         }
         else
         {
