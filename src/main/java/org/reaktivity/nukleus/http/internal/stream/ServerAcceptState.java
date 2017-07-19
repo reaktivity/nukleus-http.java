@@ -18,6 +18,7 @@ package org.reaktivity.nukleus.http.internal.stream;
 import java.util.function.Consumer;
 
 import org.reaktivity.nukleus.function.MessageConsumer;
+import org.reaktivity.nukleus.route.RouteHandler;
 
 /**
  * This class represents state shared between the server accept (source input) and server accept reply
@@ -25,22 +26,24 @@ import org.reaktivity.nukleus.function.MessageConsumer;
  */
 final class ServerAcceptState
 {
-    final long streamId;
+    final String acceptReplyName;
+    final long replyStreamId;
     final MessageConsumer acceptReply;
     private final MessageConsumer initialThrottle;
-    private final Consumer<MessageConsumer> setThrottle;
+    final Consumer<MessageConsumer> setThrottle;
     int window;
     int pendingRequests;
     boolean endRequested;
     boolean persistent = true;
 
-    ServerAcceptState(long streamId, MessageConsumer acceptReply, MessageWriter writer,
-            MessageConsumer initialThrottle, Consumer<MessageConsumer> setThrottle)
+    ServerAcceptState(String acceptReplyName, long replyStreamId, MessageConsumer acceptReply, MessageWriter writer,
+            MessageConsumer initialThrottle, RouteHandler router)
     {
-        this.streamId = streamId;
+        this.replyStreamId = replyStreamId;
         this.acceptReply = acceptReply;
         this.initialThrottle = initialThrottle;
-        this.setThrottle = setThrottle;
+        this.acceptReplyName = acceptReplyName;
+        this.setThrottle = (t) -> router.setThrottle(acceptReplyName, replyStreamId, t);
         setThrottle.accept(initialThrottle);
     }
 
@@ -48,8 +51,8 @@ final class ServerAcceptState
     public String toString()
     {
         return String.format(
-                "%s[streamId=%016x, target=%s, window=%d, started=%b, pendingRequests=%d, endRequested=%b]",
-                getClass().getSimpleName(), streamId, acceptReply, window, pendingRequests, endRequested);
+                "%s[streamId=%016x, target=%s, window=%d, persistent=%b, pendingRequests=%d, endRequested=%b]",
+                getClass().getSimpleName(), replyStreamId, acceptReplyName, window, persistent, pendingRequests, endRequested);
     }
 
     public void restoreInitialThrottle()
@@ -61,7 +64,7 @@ final class ServerAcceptState
     {
         if (pendingRequests == 0)
         {
-            writer.doEnd(acceptReply, streamId);
+            writer.doEnd(acceptReply, replyStreamId);
             // TODO: unset throttle on acceptReply
         }
         else

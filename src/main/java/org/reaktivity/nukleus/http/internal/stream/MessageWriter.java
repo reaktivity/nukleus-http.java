@@ -27,6 +27,7 @@ import org.reaktivity.nukleus.http.internal.HttpNukleus;
 import org.reaktivity.nukleus.http.internal.types.Flyweight;
 import org.reaktivity.nukleus.http.internal.types.HttpHeaderFW;
 import org.reaktivity.nukleus.http.internal.types.ListFW;
+import org.reaktivity.nukleus.http.internal.types.OctetsFW;
 import org.reaktivity.nukleus.http.internal.types.stream.BeginFW;
 import org.reaktivity.nukleus.http.internal.types.stream.DataFW;
 import org.reaktivity.nukleus.http.internal.types.stream.EndFW;
@@ -81,6 +82,20 @@ final class MessageWriter
         DataFW data = dataRW.wrap(writeBuffer, 0, writeBuffer.capacity())
                 .streamId(streamId)
                 .payload(p -> p.set(payload, offset, length))
+                .extension(e -> e.reset())
+                .build();
+
+        stream.accept(data.typeId(), data.buffer(), data.offset(), data.sizeof());
+    }
+
+    public void doData(
+        MessageConsumer stream,
+        long streamId,
+        OctetsFW payload)
+    {
+        DataFW data = dataRW.wrap(writeBuffer, 0, writeBuffer.capacity())
+                .streamId(streamId)
+                .payload(p -> p.set(payload))
                 .extension(e -> e.reset())
                 .build();
 

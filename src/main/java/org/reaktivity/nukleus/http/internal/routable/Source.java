@@ -30,10 +30,8 @@ import org.agrona.concurrent.ringbuffer.RingBuffer;
 import org.reaktivity.nukleus.Nukleus;
 import org.reaktivity.nukleus.http.internal.layouts.StreamsLayout;
 import org.reaktivity.nukleus.http.internal.routable.stream.Slab;
-import org.reaktivity.nukleus.http.internal.routable.stream.SourceInputStreamFactory;
 import org.reaktivity.nukleus.http.internal.routable.stream.SourceOutputStreamFactory;
 import org.reaktivity.nukleus.http.internal.routable.stream.TargetInputEstablishedStreamFactory;
-import org.reaktivity.nukleus.http.internal.routable.stream.TargetOutputEstablishedStreamFactory;
 import org.reaktivity.nukleus.http.internal.router.RouteKind;
 import org.reaktivity.nukleus.http.internal.types.stream.BeginFW;
 import org.reaktivity.nukleus.http.internal.types.stream.FrameFW;
@@ -86,11 +84,6 @@ public final class Source implements Nukleus
 
         this.streamFactories = new EnumMap<>(RouteKind.class);
         Slab slab = new Slab(memoryForDecodeEncode, maximumHeadersSize);
-        this.streamFactories.put(RouteKind.INPUT, new SourceInputStreamFactory(this, supplyRoutes, supplyTargetId,
-                supplyTarget, correlateNew, slab)::newStream);
-        this.streamFactories.put(RouteKind.OUTPUT_ESTABLISHED,
-                new TargetOutputEstablishedStreamFactory(this, supplyTarget, correlateEstablished,
-                        slab)::newStream);
         this.streamFactories.put(RouteKind.OUTPUT,
                 new SourceOutputStreamFactory(this, supplyRoutes, supplyTargetId, supplyTarget, correlateEstablished,
                         correlateNew, slab, maximumConnectionsPerRoute)::newStream);
