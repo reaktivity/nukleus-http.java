@@ -23,7 +23,7 @@ import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.reaktivity.nukleus.function.MessageConsumer;
-import org.reaktivity.nukleus.http.internal.HttpNukleus;
+import org.reaktivity.nukleus.http.internal.HttpNukleusFactorySpi;
 import org.reaktivity.nukleus.http.internal.types.Flyweight;
 import org.reaktivity.nukleus.http.internal.types.HttpHeaderFW;
 import org.reaktivity.nukleus.http.internal.types.ListFW;
@@ -37,7 +37,7 @@ import org.reaktivity.nukleus.http.internal.types.stream.WindowFW;
 
 final class MessageWriter
 {
-    private static final DirectBuffer SOURCE_NAME_BUFFER = new UnsafeBuffer(HttpNukleus.NAME.getBytes(UTF_8));
+    private static final DirectBuffer SOURCE_NAME_BUFFER = new UnsafeBuffer(HttpNukleusFactorySpi.NAME.getBytes(UTF_8));
 
     private final BeginFW.Builder beginRW = new BeginFW.Builder();
     private final DataFW.Builder dataRW = new DataFW.Builder();

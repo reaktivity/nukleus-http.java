@@ -1,8 +1,22 @@
+/**
+ * Copyright 2016-2017 The Reaktivity Project
+ *
+ * The Reaktivity Project licenses this file to you under the Apache License,
+ * version 2.0 (the "License"); you may not use this file except in compliance
+ * with the License. You may obtain a copy of the License at:
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ */
 package org.reaktivity.nukleus.http.internal.stream;
 
 import static java.lang.Integer.parseInt;
-import static org.reaktivity.nukleus.http.internal.routable.stream.Slab.NO_SLOT;
-import static org.reaktivity.nukleus.http.internal.router.RouteKind.OUTPUT_ESTABLISHED;
+import static org.reaktivity.nukleus.buffer.BufferPool.NO_SLOT;
 import static org.reaktivity.nukleus.http.internal.util.BufferUtil.limitOfBytes;
 
 import java.net.URI;
@@ -12,18 +26,14 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
-import java.util.function.LongSupplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
-import org.agrona.collections.Long2ObjectHashMap;
 import org.agrona.concurrent.UnsafeBuffer;
-import org.reaktivity.nukleus.buffer.BufferPool;
 import org.reaktivity.nukleus.function.MessageConsumer;
 import org.reaktivity.nukleus.function.MessagePredicate;
-import org.reaktivity.nukleus.http.internal.routable.Correlation;
 import org.reaktivity.nukleus.http.internal.stream.ServerStreamFactory.DecoderState;
 import org.reaktivity.nukleus.http.internal.stream.ServerStreamFactory.HttpStatus;
 import org.reaktivity.nukleus.http.internal.stream.ServerStreamFactory.StandardMethods;
@@ -36,7 +46,6 @@ import org.reaktivity.nukleus.http.internal.types.stream.EndFW;
 import org.reaktivity.nukleus.http.internal.types.stream.FrameFW;
 import org.reaktivity.nukleus.http.internal.types.stream.ResetFW;
 import org.reaktivity.nukleus.http.internal.types.stream.WindowFW;
-import org.reaktivity.nukleus.route.RouteHandler;
 
 final class ServerAcceptStream implements MessageConsumer
 {
@@ -54,11 +63,8 @@ final class ServerAcceptStream implements MessageConsumer
     private final MutableDirectBuffer temporarySlot;
     private final int maximumHeadersSize;
 
-    private final MessageWriter writer;
-    private final BufferPool slab;
-    private final RouteHandler router;
-    private final LongSupplier supplyStreamId;
-    private final Long2ObjectHashMap<Correlation<?>> correlations;
+
+    private ServerStreamFactory factory;
     private final MessageConsumer acceptThrottle;
     private final long acceptId;
     private final long acceptRef;
@@ -92,15 +98,10 @@ final class ServerAcceptStream implements MessageConsumer
                 getClass().getSimpleName(), acceptName, acceptId, window, targetId);
     }
 
-    ServerAcceptStream(MessageWriter writer, BufferPool slab, RouteHandler router, LongSupplier supplyStreamId,
-                       Long2ObjectHashMap<Correlation<?>> correlations, MessageConsumer acceptThrottle,
+    ServerAcceptStream(ServerStreamFactory factory, MessageConsumer acceptThrottle,
                        long acceptId, long acceptRef, String acceptName, long acceptCorrelationId)
     {
-        this.writer = writer;
-        this.slab = slab;
-        this.router = router;
-        this.supplyStreamId = supplyStreamId;
-        this.correlations = correlations;
+        this.factory = factory;
         this.streamState = this::streamBeforeBegin;
         this.throttleState = this::throttleIgnoreWindow;
         this.acceptThrottle = acceptThrottle;
@@ -108,8 +109,8 @@ final class ServerAcceptStream implements MessageConsumer
         this.acceptRef = acceptRef;
         this.acceptCorrelationId = acceptCorrelationId;
         this.acceptName = acceptName;
-        this.temporarySlot = new UnsafeBuffer(ByteBuffer.allocateDirect(slab.slotCapacity()));
-        this.maximumHeadersSize = slab.slotCapacity();
+        this.temporarySlot = new UnsafeBuffer(ByteBuffer.allocateDirect(factory.slab.slotCapacity()));
+        this.maximumHeadersSize = factory.slab.slotCapacity();
     }
 
     @Override
@@ -211,7 +212,7 @@ final class ServerAcceptStream implements MessageConsumer
             dataRO.wrap(buffer, index, index + length);
             final long streamId = dataRO.streamId();
 
-            writer.doWindow(acceptThrottle, streamId, dataRO.length(), dataRO.length());
+            factory.writer.doWindow(acceptThrottle, streamId, dataRO.length(), dataRO.length());
         }
         else if (msgTypeId == EndFW.TYPE_ID)
         {
@@ -234,7 +235,7 @@ final class ServerAcceptStream implements MessageConsumer
     private void processUnexpected(
         long streamId)
     {
-        writer.doReset(acceptThrottle, streamId);
+        factory.writer.doReset(acceptThrottle, streamId);
 
         this.streamState = this::streamAfterReset;
     }
@@ -243,11 +244,7 @@ final class ServerAcceptStream implements MessageConsumer
     {
         this.decoderState = this::decodeSkipData;
         this.streamState = this::streamAfterReset;
-        if (slotIndex != NO_SLOT)
-        {
-            slab.release(slotIndex);
-            slotIndex = NO_SLOT;
-        }
+        releaseSlotIfNecessary();
         if (targetBeginIssued)
         {
             // Drain data from source before resetting to allow its writes to complete
@@ -255,13 +252,22 @@ final class ServerAcceptStream implements MessageConsumer
             doSourceWindow(maximumHeadersSize);
 
             // We can't write back an HTTP error response because we already forwarded the request to the target
-            writer.doReset(acceptThrottle, acceptId);
-            writer.doHttpEnd(target, targetId);
+            factory.writer.doReset(acceptThrottle, acceptId);
+            factory.writer.doHttpEnd(target, targetId);
             doEnd();
         }
         else
         {
             writeErrorResponse(status, message);
+        }
+    }
+
+    private void releaseSlotIfNecessary()
+    {
+        if (slotIndex != NO_SLOT)
+        {
+            factory.slab.release(slotIndex);
+            slotIndex = NO_SLOT;
         }
     }
 
@@ -280,7 +286,7 @@ final class ServerAcceptStream implements MessageConsumer
         int writableBytes = Math.min(correlation.state().window, payload.capacity());
         if (writableBytes > 0)
         {
-            writer.doData(target, targetId, payload, 0, writableBytes);
+            factory.writer.doData(target, targetId, payload, 0, writableBytes);
         }
         if (writableBytes < payload.capacity())
         {
@@ -297,14 +303,14 @@ final class ServerAcceptStream implements MessageConsumer
                         windowRO.wrap(buffer, index, index + length);
                         int update = ServerAcceptStream.this.windowRO.update();
                         int writableBytes = Math.min(update, payload.capacity() - offset);
-                        ServerAcceptStream.this.writer.doData(target, targetId, payload, offset, writableBytes);
+                        ServerAcceptStream.this.factory.writer.doData(target, targetId, payload, offset, writableBytes);
                         offset += writableBytes;
                         if (offset == payload.capacity())
                         {
                             // Drain data from source before resetting to allow its writes to complete
                             throttleState = ServerAcceptStream.this::throttlePropagateWindow;
                             doSourceWindow(ServerAcceptStream.this.maximumHeadersSize);
-                            ServerAcceptStream.this.writer.doReset(acceptThrottle, acceptId);
+                            ServerAcceptStream.this.factory.writer.doReset(acceptThrottle, acceptId);
                         }
                         break;
                     case ResetFW.TYPE_ID:
@@ -322,7 +328,7 @@ final class ServerAcceptStream implements MessageConsumer
             // Drain data from source before resetting to allow its writes to complete
             throttleState = ServerAcceptStream.this::throttlePropagateWindow;
             doSourceWindow(maximumHeadersSize);
-            writer.doReset(acceptThrottle, acceptId);
+            factory.writer.doReset(acceptThrottle, acceptId);
         }
     }
 
@@ -337,13 +343,12 @@ final class ServerAcceptStream implements MessageConsumer
         this.decoderState = this::decodeBeforeHttpBegin;
 
         // Proactively issue BEGIN on server accept reply since we only support bidirectional transport
-        long replyStreamId = supplyStreamId.getAsLong();
-        final MessageConsumer acceptReply = router.supplyTarget(acceptName);
-        ServerAcceptState state = new ServerAcceptState(acceptName, replyStreamId, acceptReply, writer,
-                 this::loopBackThrottle, router);
-        writer.doBegin(acceptReply, replyStreamId, 0L, acceptCorrelationId);
-        this.correlation = new Correlation<>(acceptCorrelationId, acceptName,
-                OUTPUT_ESTABLISHED, state);
+        long replyStreamId = factory.supplyStreamId.getAsLong();
+        final MessageConsumer acceptReply = factory.router.supplyTarget(acceptName);
+        ServerAcceptState state = new ServerAcceptState(acceptName, replyStreamId, acceptReply, factory.writer,
+                 this::loopBackThrottle, factory.router);
+        factory.writer.doBegin(acceptReply, replyStreamId, 0L, acceptCorrelationId);
+        this.correlation = new Correlation<>(acceptCorrelationId, acceptName, state);
 
         doSourceWindow(maximumHeadersSize);
     }
@@ -373,10 +378,10 @@ final class ServerAcceptStream implements MessageConsumer
             {
                 assert slotIndex == NO_SLOT;
                 slotOffset = slotPosition = 0;
-                slotIndex = slab.acquire(acceptId);
+                slotIndex = factory.slab.acquire(acceptId);
                 if (slotIndex == NO_SLOT)
                 {
-                    // Out of slab memory
+                    // Out of factory.slab memory
                     processInvalidRequest(503, "Service Unavailable");
                 }
                 else
@@ -416,11 +421,11 @@ final class ServerAcceptStream implements MessageConsumer
         decoderState = (b, o, l) -> o;
         streamState = this::streamAfterEnd;
 
-        slab.release(slotIndex);
+        releaseSlotIfNecessary();
 
         if (correlation != null)
         {
-            correlation.state().doEnd(writer);
+            correlation.state().doEnd(factory.writer);
         }
     }
 
@@ -446,19 +451,19 @@ final class ServerAcceptStream implements MessageConsumer
     private void deferAndProcessData(DirectBuffer buffer, int offset, int limit)
     {
         final int dataLength = limit - offset;
-        if (slotPosition + dataLength > slab.slotCapacity())
+        if (slotPosition + dataLength > factory.slab.slotCapacity())
         {
             alignSlotData();
         }
-        MutableDirectBuffer slot = slab.buffer(slotIndex);
+        MutableDirectBuffer slot = factory.slab.buffer(slotIndex);
         slot.putBytes(slotPosition, buffer, offset, dataLength);
         slotPosition += dataLength;
         processDeferredData();
         if (window == 0)
         {
-            // Increase source window to ensure we can receive the largest possible amount of data we can slab
+            // Increase source window to ensure we can receive the largest possible amount of data we can factory.slab
             int cachedBytes = slotPosition - slotOffset;
-            ensureSourceWindow(slab.slotCapacity() - cachedBytes);
+            ensureSourceWindow(factory.slab.slotCapacity() - cachedBytes);
             if (window == 0)
             {
                 throw new IllegalStateException("Decoder failed to detect headers or chunk too long");
@@ -468,13 +473,12 @@ final class ServerAcceptStream implements MessageConsumer
 
     private void processDeferredData()
     {
-        MutableDirectBuffer slot = slab.buffer(slotIndex);
+        MutableDirectBuffer slot = factory.slab.buffer(slotIndex);
         int offset = decode(slot, slotOffset, slotPosition);
         slotOffset = offset;
         if (slotOffset == slotPosition)
         {
-            slab.release(slotIndex);
-            slotIndex = NO_SLOT;
+            releaseSlotIfNecessary();
             streamState = this::streamAfterBeginOrData;
             if (endDeferred)
             {
@@ -498,7 +502,7 @@ final class ServerAcceptStream implements MessageConsumer
     private void alignSlotData()
     {
         int dataLength = slotPosition - slotOffset;
-        MutableDirectBuffer slot = slab.buffer(slotIndex);
+        MutableDirectBuffer slot = factory.slab.buffer(slotIndex);
         temporarySlot.putBytes(0, slot, slotOffset, dataLength);
         slot.putBytes(0, temporarySlot, 0, dataLength);
         slotOffset = 0;
@@ -634,15 +638,15 @@ final class ServerAcceptStream implements MessageConsumer
 
                     final String newTarget = route.target().asString();
                     final long targetRef = route.targetRef();
-                    final long newTargetId = supplyStreamId.getAsLong();
+                    final long newTargetId = factory.supplyStreamId.getAsLong();
 
-                    final long targetCorrelationId = newTargetId;
+                    long newTargetCorrelationId = factory.supplyCorrelationId.getAsLong();
+                    factory.correlations.put(newTargetCorrelationId, correlation);
                     correlation.state().pendingRequests++;
-                    correlations.put(targetCorrelationId, correlation);
 
                     availableTargetWindow = 0;
                     switchTarget(newTarget, newTargetId);
-                    writer.doHttpBegin(target, newTargetId, targetRef, newTargetId,
+                    factory.writer.doHttpBegin(target, newTargetId, targetRef, newTargetCorrelationId,
                             hs -> headers.forEach((k, v) -> hs.item(i -> i.name(k).value(v))));
                     targetBeginIssued = true;
 
@@ -792,7 +796,7 @@ final class ServerAcceptStream implements MessageConsumer
 
         if (writableBytes > 0)
         {
-            writer.doHttpData(target, targetId, payload, offset, writableBytes);
+            factory.writer.doHttpData(target, targetId, payload, offset, writableBytes);
             availableTargetWindow -= writableBytes;
             contentRemaining -= writableBytes;
         }
@@ -884,7 +888,7 @@ final class ServerAcceptStream implements MessageConsumer
 
         if (writableBytes > 0)
         {
-            writer.doHttpData(target, targetId, payload, offset, writableBytes);
+            factory.writer.doHttpData(target, targetId, payload, offset, writableBytes);
             availableTargetWindow -= writableBytes;
             chunkSizeRemaining -= writableBytes;
         }
@@ -906,7 +910,7 @@ final class ServerAcceptStream implements MessageConsumer
         int writableBytes = Math.min(length, availableTargetWindow);
         if (writableBytes > 0)
         {
-            writer.doHttpData(target, targetId, payload, offset, writableBytes);
+            factory.writer.doHttpData(target, targetId, payload, offset, writableBytes);
             availableTargetWindow -= writableBytes;
         }
         return offset + writableBytes;
@@ -927,13 +931,13 @@ final class ServerAcceptStream implements MessageConsumer
             final int limit)
     {
         // TODO: consider chunks, trailers
-        writer.doHttpEnd(target, targetId);
+        factory.writer.doHttpEnd(target, targetId);
         return limit;
     };
 
     private void httpRequestComplete()
     {
-        writer.doHttpEnd(target, targetId);
+        factory.writer.doHttpEnd(target, targetId);
         // TODO: target.removeThrottle(targetId);
         decoderState = this::decodeBeforeHttpBegin;
         throttleState = this::throttleIgnoreWindow;
@@ -968,7 +972,7 @@ final class ServerAcceptStream implements MessageConsumer
             return route.sourceRef() == sourceRef && headersMatch;
         };
 
-        return router.resolve(filter, (msgTypeId, buffer, index, length) ->
+        return factory.router.resolve(filter, (msgTypeId, buffer, index, length) ->
             routeRO.wrap(buffer, index, index + length));
     }
 
@@ -1096,7 +1100,7 @@ final class ServerAcceptStream implements MessageConsumer
         {
             processDeferredData();
         }
-        ensureSourceWindow(Math.min(availableTargetWindow, slab.slotCapacity()));
+        ensureSourceWindow(Math.min(availableTargetWindow, factory.slab.slotCapacity()));
     }
 
     private void processWindowForHttpDataAfterUpgrade(DirectBuffer buffer, int index, int length)
@@ -1142,7 +1146,7 @@ final class ServerAcceptStream implements MessageConsumer
     private void doSourceWindow(int update)
     {
         window += update;
-        writer.doWindow(acceptThrottle, acceptId, update, update);
+        factory.writer.doWindow(acceptThrottle, acceptId, update, update);
     }
 
     private void processReset(
@@ -1151,19 +1155,19 @@ final class ServerAcceptStream implements MessageConsumer
         int length)
     {
         resetRO.wrap(buffer, index, index + length);
-        slab.release(slotIndex);
-        writer.doReset(acceptThrottle, acceptId);
+        releaseSlotIfNecessary();
+        factory.writer.doReset(acceptThrottle, acceptId);
     }
 
     private void switchTarget(String newTargetName, long newTargetId)
     {
         // TODO: do we need to worry about removing the throttle on target (old target)?
-        MessageConsumer newTarget = router.supplyTarget(newTargetName);
+        MessageConsumer newTarget = factory.router.supplyTarget(newTargetName);
         target = newTarget;
         targetId = newTargetId;
         targetName = newTargetName;
         targetBeginIssued = false;
-        router.setThrottle(targetName, newTargetId, this::handleThrottle);
+        factory.router.setThrottle(targetName, newTargetId, this::handleThrottle);
         throttleState = this::throttleIgnoreWindow;
     }
 }

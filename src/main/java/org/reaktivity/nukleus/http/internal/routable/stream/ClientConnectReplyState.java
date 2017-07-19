@@ -15,10 +15,9 @@
  */
 package org.reaktivity.nukleus.http.internal.routable.stream;
 
-import org.reaktivity.nukleus.http.internal.routable.stream.ConnectionPool.Connection;
-
 final class ClientConnectReplyState
 {
+    /*
     final ConnectionPool connectionPool;
     final Connection connection;
 
@@ -36,6 +35,7 @@ final class ClientConnectReplyState
                 "%s[streamId=%016x, window=%d]",
                 getClass().getSimpleName(), connection.outputStreamId, connection.window);
     }
+    */
 
 }
 

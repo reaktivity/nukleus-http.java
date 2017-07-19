@@ -27,7 +27,6 @@ import org.reaktivity.nukleus.Configuration;
 import org.reaktivity.nukleus.buffer.BufferPool;
 import org.reaktivity.nukleus.function.MessageConsumer;
 import org.reaktivity.nukleus.function.MessagePredicate;
-import org.reaktivity.nukleus.http.internal.routable.Correlation;
 import org.reaktivity.nukleus.http.internal.types.control.RouteFW;
 import org.reaktivity.nukleus.http.internal.types.stream.BeginFW;
 import org.reaktivity.nukleus.route.RouteHandler;
@@ -48,6 +47,7 @@ public final class ServerStreamFactory implements StreamFactory
 
     final RouteHandler router;
     final LongSupplier supplyStreamId;
+    final LongSupplier supplyCorrelationId;
     final BufferPool slab;
 
     Long2ObjectHashMap<Correlation<?>> correlations;
@@ -65,6 +65,7 @@ public final class ServerStreamFactory implements StreamFactory
         this.writer = new MessageWriter(requireNonNull(writeBuffer));
         this.slab = requireNonNull(bufferPool);
         this.supplyStreamId = requireNonNull(supplyStreamId);
+        this.supplyCorrelationId = supplyCorrelationId;
         this.correlations = requireNonNull(correlations);
     }
 
@@ -116,7 +117,7 @@ public final class ServerStreamFactory implements StreamFactory
             final long acceptId = begin.streamId();
             final long acceptCorrelationId = begin.correlationId();
 
-            newStream = new ServerAcceptStream(writer, slab, router, supplyStreamId, correlations,
+            newStream = new ServerAcceptStream(this,
                     acceptThrottle, acceptId, acceptRef, acceptName, acceptCorrelationId);
         }
 
@@ -128,7 +129,7 @@ public final class ServerStreamFactory implements StreamFactory
         final String connectReplyName = begin.source().asString();
         final long connectReplyId = begin.streamId();
 
-        return new ServerConnectReplyStream(writer, slab, correlations, connectReplyThrottle, connectReplyId,
+        return new ServerConnectReplyStream(this, connectReplyThrottle, connectReplyId,
                 connectReplyName);
     }
 

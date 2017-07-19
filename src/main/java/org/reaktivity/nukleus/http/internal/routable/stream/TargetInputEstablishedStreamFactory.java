@@ -15,31 +15,8 @@
  */
 package org.reaktivity.nukleus.http.internal.routable.stream;
 
-import static java.lang.Integer.parseInt;
-import static org.reaktivity.nukleus.http.internal.routable.stream.Slab.NO_SLOT;
-import static org.reaktivity.nukleus.http.internal.util.BufferUtil.limitOfBytes;
-
-import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.function.Consumer;
-import java.util.function.Function;
-import java.util.function.LongFunction;
-import java.util.function.LongSupplier;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
-import org.agrona.DirectBuffer;
-import org.agrona.MutableDirectBuffer;
-import org.agrona.concurrent.MessageHandler;
-import org.agrona.concurrent.UnsafeBuffer;
-import org.reaktivity.nukleus.http.internal.routable.Correlation;
-import org.reaktivity.nukleus.http.internal.routable.Source;
-import org.reaktivity.nukleus.http.internal.routable.Target;
-import org.reaktivity.nukleus.http.internal.routable.stream.ConnectionPool.Connection;
-import org.reaktivity.nukleus.http.internal.types.OctetsFW;
 import org.reaktivity.nukleus.http.internal.types.stream.BeginFW;
 import org.reaktivity.nukleus.http.internal.types.stream.DataFW;
 import org.reaktivity.nukleus.http.internal.types.stream.EndFW;
@@ -1013,4 +990,5 @@ public final class TargetInputEstablishedStreamFactory
     {
         int decode(DirectBuffer buffer, int offset, int limit);
     }
+
 }

@@ -15,19 +15,6 @@
  */
 package org.reaktivity.nukleus.http.internal.routable.stream;
 
-import java.util.ArrayDeque;
-import java.util.Deque;
-import java.util.function.Consumer;
-import java.util.function.Function;
-import java.util.function.LongFunction;
-import java.util.function.LongSupplier;
-
-import org.agrona.MutableDirectBuffer;
-import org.reaktivity.nukleus.http.internal.routable.Correlation;
-import org.reaktivity.nukleus.http.internal.routable.Source;
-import org.reaktivity.nukleus.http.internal.routable.Target;
-import org.reaktivity.nukleus.http.internal.types.stream.ResetFW;
-
 /**
  * A set of connections (target streams) to be used to talk to a given target on a given route (targetRef)
  */
@@ -192,6 +179,5 @@ final class ConnectionPool
             }
         }
     }
-
 }
 

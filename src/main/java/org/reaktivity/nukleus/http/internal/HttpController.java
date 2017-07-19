@@ -20,12 +20,16 @@ import static java.nio.ByteOrder.nativeOrder;
 
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
+import java.util.function.ToIntFunction;
 
 import org.agrona.concurrent.AtomicBuffer;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.reaktivity.nukleus.Controller;
 import org.reaktivity.nukleus.ControllerSpi;
+import org.reaktivity.nukleus.function.MessageConsumer;
+import org.reaktivity.nukleus.function.MessagePredicate;
 import org.reaktivity.nukleus.http.internal.types.OctetsFW;
 import org.reaktivity.nukleus.http.internal.types.control.HttpRouteExFW;
 import org.reaktivity.nukleus.http.internal.types.control.Role;
@@ -75,6 +79,20 @@ public final class HttpController implements Controller
         return "http";
     }
 
+    public <T> T supplySource(
+        String source,
+        BiFunction<MessagePredicate, ToIntFunction<MessageConsumer>, T> factory)
+    {
+        return controllerSpi.doSupplySource(source, factory);
+    }
+
+    public <T> T supplyTarget(
+        String target,
+        BiFunction<ToIntFunction<MessageConsumer>, MessagePredicate, T> factory)
+    {
+        return controllerSpi.doSupplyTarget(target, factory);
+    }
+
     public CompletableFuture<Long> routeServer(
         String source,
         long sourceRef,
@@ -95,7 +113,7 @@ public final class HttpController implements Controller
         return route(Role.CLIENT, source, sourceRef, target, targetRef, headers);
     }
 
-    public CompletableFuture<Long> unrouteServer(
+    public CompletableFuture<Void> unrouteServer(
         String source,
         long sourceRef,
         String target,
@@ -105,7 +123,7 @@ public final class HttpController implements Controller
         return unroute(Role.SERVER, source, sourceRef, target, targetRef, headers);
     }
 
-    public CompletableFuture<Long> unrouteClient(
+    public CompletableFuture<Void> unrouteClient(
         String source,
         long sourceRef,
         String target,
@@ -161,7 +179,7 @@ public final class HttpController implements Controller
         return controllerSpi.doRoute(routeRO.typeId(), routeRO.buffer(), routeRO.offset(), routeRO.sizeof());
     }
 
-    private CompletableFuture<Long> unroute(
+    private CompletableFuture<Void> unroute(
         Role role,
         String source,
         long sourceRef,
@@ -181,6 +199,6 @@ public final class HttpController implements Controller
                                  .extension(extension(headers))
                                  .build();
 
-        return controllerSpi.doRoute(unrouteRO.typeId(), unrouteRO.buffer(), unrouteRO.offset(), unrouteRO.sizeof());
+        return controllerSpi.doUnroute(unrouteRO.typeId(), unrouteRO.buffer(), unrouteRO.offset(), unrouteRO.sizeof());
     }
 }

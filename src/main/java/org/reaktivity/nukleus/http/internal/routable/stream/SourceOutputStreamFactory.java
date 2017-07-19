@@ -15,44 +15,10 @@
  */
 package org.reaktivity.nukleus.http.internal.routable.stream;
 
-import static org.reaktivity.nukleus.http.internal.routable.Route.headersMatch;
-import static org.reaktivity.nukleus.http.internal.routable.stream.Slab.NO_SLOT;
-import static org.reaktivity.nukleus.http.internal.router.RouteKind.INPUT_ESTABLISHED;
-import static org.reaktivity.nukleus.http.internal.util.HttpUtil.appendHeader;
-
-import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.Optional;
-import java.util.function.Consumer;
-import java.util.function.Function;
-import java.util.function.LongFunction;
-import java.util.function.LongSupplier;
-import java.util.function.Predicate;
 
-import org.agrona.DirectBuffer;
-import org.agrona.MutableDirectBuffer;
-import org.agrona.collections.Long2ObjectHashMap;
-import org.agrona.concurrent.MessageHandler;
-import org.reaktivity.nukleus.http.internal.routable.Correlation;
-import org.reaktivity.nukleus.http.internal.routable.Route;
-import org.reaktivity.nukleus.http.internal.routable.Source;
-import org.reaktivity.nukleus.http.internal.routable.Target;
-import org.reaktivity.nukleus.http.internal.routable.stream.ConnectionPool.Connection;
-import org.reaktivity.nukleus.http.internal.routable.stream.ConnectionPool.ConnectionRequest;
-import org.reaktivity.nukleus.http.internal.types.OctetsFW;
-import org.reaktivity.nukleus.http.internal.types.stream.BeginFW;
-import org.reaktivity.nukleus.http.internal.types.stream.DataFW;
-import org.reaktivity.nukleus.http.internal.types.stream.EndFW;
 import org.reaktivity.nukleus.http.internal.types.stream.FrameFW;
-import org.reaktivity.nukleus.http.internal.types.stream.HttpBeginExFW;
-import org.reaktivity.nukleus.http.internal.types.stream.ResetFW;
-import org.reaktivity.nukleus.http.internal.types.stream.WindowFW;
-import org.reaktivity.nukleus.http.internal.util.function.LongObjectBiConsumer;
 
 public final class SourceOutputStreamFactory
 {

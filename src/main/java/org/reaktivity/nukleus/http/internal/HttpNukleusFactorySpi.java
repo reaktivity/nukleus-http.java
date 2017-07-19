@@ -25,10 +25,12 @@ import org.reaktivity.nukleus.http.internal.stream.ServerStreamFactoryBuilder;
 
 public final class HttpNukleusFactorySpi implements NukleusFactorySpi
 {
+    public static final String NAME = "http";
+
     @Override
     public String name()
     {
-        return HttpNukleus.NAME;
+        return NAME;
     }
 
     @Override
@@ -36,6 +38,9 @@ public final class HttpNukleusFactorySpi implements NukleusFactorySpi
         Configuration config,
         NukleusBuilder builder)
     {
-        return builder.streamFactory(SERVER, new ServerStreamFactoryBuilder(config))
-                .build();    }
+        HttpConfiguration httpConfig = new HttpConfiguration(config);
+
+        return builder.streamFactory(SERVER, new ServerStreamFactoryBuilder(httpConfig))
+                      .build();
+    }
 }
