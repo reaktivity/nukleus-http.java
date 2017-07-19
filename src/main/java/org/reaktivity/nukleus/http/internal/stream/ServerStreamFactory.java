@@ -27,8 +27,15 @@ import org.reaktivity.nukleus.Configuration;
 import org.reaktivity.nukleus.buffer.BufferPool;
 import org.reaktivity.nukleus.function.MessageConsumer;
 import org.reaktivity.nukleus.function.MessagePredicate;
+import org.reaktivity.nukleus.http.internal.types.control.HttpRouteExFW;
 import org.reaktivity.nukleus.http.internal.types.control.RouteFW;
 import org.reaktivity.nukleus.http.internal.types.stream.BeginFW;
+import org.reaktivity.nukleus.http.internal.types.stream.DataFW;
+import org.reaktivity.nukleus.http.internal.types.stream.EndFW;
+import org.reaktivity.nukleus.http.internal.types.stream.FrameFW;
+import org.reaktivity.nukleus.http.internal.types.stream.HttpBeginExFW;
+import org.reaktivity.nukleus.http.internal.types.stream.ResetFW;
+import org.reaktivity.nukleus.http.internal.types.stream.WindowFW;
 import org.reaktivity.nukleus.route.RouteHandler;
 import org.reaktivity.nukleus.stream.StreamFactory;
 
@@ -42,8 +49,15 @@ public final class ServerStreamFactory implements StreamFactory
 
     final MessageWriter writer;
 
-    private final RouteFW routeRO = new RouteFW();
-    private final BeginFW beginRO = new BeginFW();
+    final FrameFW frameRO = new FrameFW();
+    final RouteFW routeRO = new RouteFW();
+    final HttpRouteExFW routeExRO = new HttpRouteExFW();
+    final BeginFW beginRO = new BeginFW();
+    final DataFW dataRO = new DataFW();
+    final EndFW endRO = new EndFW();
+    final WindowFW windowRO = new WindowFW();
+    final ResetFW resetRO = new ResetFW();
+    final HttpBeginExFW beginExRO = new HttpBeginExFW();
 
     final RouteHandler router;
     final LongSupplier supplyStreamId;

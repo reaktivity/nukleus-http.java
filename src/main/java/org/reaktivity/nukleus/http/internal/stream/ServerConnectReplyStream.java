@@ -42,17 +42,6 @@ public final class ServerConnectReplyStream implements MessageConsumer
     public static final byte[] RESPONSE_HEADERS_TOO_LONG_RESPONSE =
             "HTTP/1.1 507 Insufficient Storage\r\n\r\n".getBytes(US_ASCII);
 
-    private final FrameFW frameRO = new FrameFW();
-
-    private final BeginFW beginRO = new BeginFW();
-    private final DataFW dataRO = new DataFW();
-    private final EndFW endRO = new EndFW();
-
-    private final WindowFW windowRO = new WindowFW();
-    private final ResetFW resetRO = new ResetFW();
-
-    private final HttpBeginExFW beginExRO = new HttpBeginExFW();
-
     private final ServerStreamFactory factory;
     private final MessageConsumer connectReplyThrottle;
     private final long connectReplyId;
@@ -174,8 +163,8 @@ public final class ServerConnectReplyStream implements MessageConsumer
     {
         if (msgTypeId == DataFW.TYPE_ID)
         {
-            dataRO.wrap(buffer, index, index + length);
-            final long streamId = dataRO.streamId();
+            DataFW data = factory.dataRO.wrap(buffer, index, index + length);
+            final long streamId = data.streamId();
             factory.writer.doWindow(connectReplyThrottle, streamId, length, length);
         }
         else if (msgTypeId == EndFW.TYPE_ID)
@@ -189,11 +178,11 @@ public final class ServerConnectReplyStream implements MessageConsumer
         int index,
         int length)
     {
-        beginRO.wrap(buffer, index, index + length);
+        BeginFW begin =factory.beginRO.wrap(buffer, index, index + length);
 
-        final long sourceRef = beginRO.sourceRef();
-        final long targetCorrelationId = beginRO.correlationId();
-        final OctetsFW extension = beginRO.extension();
+        final long sourceRef = begin.sourceRef();
+        final long targetCorrelationId = begin.correlationId();
+        final OctetsFW extension = begin.extension();
 
         @SuppressWarnings("unchecked")
         final Correlation<ServerAcceptState> correlation =
@@ -206,7 +195,7 @@ public final class ServerConnectReplyStream implements MessageConsumer
             Map<String, String> headers = EMPTY_HEADERS;
             if (extension.sizeof() > 0)
             {
-                final HttpBeginExFW beginEx = extension.get(beginExRO::wrap);
+                final HttpBeginExFW beginEx = extension.get(factory.beginExRO::wrap);
                 Map<String, String> headers0 = new LinkedHashMap<>();
                 beginEx.headers().forEach(h -> headers0.put(h.name().asString(), h.value().asString()));
                 headers = headers0;
@@ -282,17 +271,17 @@ public final class ServerConnectReplyStream implements MessageConsumer
         int length)
     {
 
-        dataRO.wrap(buffer, index, index + length);
+        DataFW data = factory.dataRO.wrap(buffer, index, index + length);
 
-        if (acceptState.window < dataRO.length())
+        if (acceptState.window < data.length())
         {
             processUnexpected(buffer, index, length);
         }
         else
         {
-            final OctetsFW payload = dataRO.payload();
+            final OctetsFW payload = data.payload();
             factory.writer.doData(acceptState.acceptReply, acceptState.replyStreamId, payload);
-            acceptState.window -= dataRO.length();
+            acceptState.window -=  data.length();
         }
     }
 
@@ -301,7 +290,7 @@ public final class ServerConnectReplyStream implements MessageConsumer
         int index,
         int length)
     {
-        endRO.wrap(buffer, index, index + length);
+        factory.endRO.wrap(buffer, index, index + length);
         doEnd();
     }
 
@@ -325,9 +314,9 @@ public final class ServerConnectReplyStream implements MessageConsumer
         int index,
         int length)
     {
-        frameRO.wrap(buffer, index, index + length);
+        FrameFW frame = factory.frameRO.wrap(buffer, index, index + length);
 
-        final long streamId = frameRO.streamId();
+        final long streamId = frame.streamId();
 
         factory.writer.doReset(connectReplyThrottle, streamId);
 
@@ -360,8 +349,8 @@ public final class ServerConnectReplyStream implements MessageConsumer
         switch (msgTypeId)
         {
         case WindowFW.TYPE_ID:
-            windowRO.wrap(buffer, index, index + length);
-            int update = windowRO.update();
+            WindowFW window = factory.windowRO.wrap(buffer, index, index + length);
+            int update = window.update();
             acceptState.window += update;
             useTargetWindowToWriteResponseHeaders();
             break;
@@ -383,8 +372,8 @@ public final class ServerConnectReplyStream implements MessageConsumer
         switch (msgTypeId)
         {
         case WindowFW.TYPE_ID:
-            windowRO.wrap(buffer, index, index + length);
-            int update = windowRO.update();
+            WindowFW window = factory.windowRO.wrap(buffer, index, index + length);
+            int update = window.update();
             acceptState.window += update;
             break;
         case ResetFW.TYPE_ID:
@@ -450,8 +439,8 @@ public final class ServerConnectReplyStream implements MessageConsumer
         int index,
         int length)
     {
-        windowRO.wrap(buffer, index, index + length);
-        final int update = windowRO.update();
+        WindowFW window = factory.windowRO.wrap(buffer, index, index + length);
+        final int update = window.update();
         acceptState.window += update;
         doSourceWindow(update);
     }
@@ -466,7 +455,7 @@ public final class ServerConnectReplyStream implements MessageConsumer
         int index,
         int length)
     {
-        resetRO.wrap(buffer, index, index + length);
+        factory.resetRO.wrap(buffer, index, index + length);
         factory.slab.release(slotIndex);
 
         factory.writer.doReset(connectReplyThrottle, connectReplyId);

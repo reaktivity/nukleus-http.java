@@ -49,15 +49,6 @@ import org.reaktivity.nukleus.http.internal.types.stream.WindowFW;
 
 final class ServerAcceptStream implements MessageConsumer
 {
-
-    private final FrameFW frameRO = new FrameFW();
-    private final RouteFW routeRO = new RouteFW();
-    private final HttpRouteExFW routeExRO = new HttpRouteExFW();
-    private final BeginFW beginRO = new BeginFW();
-    private final DataFW dataRO = new DataFW();
-    private final EndFW endRO = new EndFW();
-    private final WindowFW windowRO = new WindowFW();
-    private final ResetFW resetRO = new ResetFW();
     private final HttpStatus httpStatus = new HttpStatus();
 
     private final MutableDirectBuffer temporarySlot;
@@ -209,14 +200,14 @@ final class ServerAcceptStream implements MessageConsumer
     {
         if (msgTypeId == DataFW.TYPE_ID)
         {
-            dataRO.wrap(buffer, index, index + length);
-            final long streamId = dataRO.streamId();
+            DataFW data = factory.dataRO.wrap(buffer, index, index + length);
+            final long streamId = data.streamId();
 
-            factory.writer.doWindow(acceptThrottle, streamId, dataRO.length(), dataRO.length());
+            factory.writer.doWindow(acceptThrottle, streamId, data.length(), data.length());
         }
         else if (msgTypeId == EndFW.TYPE_ID)
         {
-            this.endRO.wrap(buffer, index, index + length);
+            factory.endRO.wrap(buffer, index, index + length);
             this.streamState = this::streamAfterEnd;
         }
     }
@@ -226,8 +217,8 @@ final class ServerAcceptStream implements MessageConsumer
         int index,
         int length)
     {
-        frameRO.wrap(buffer, index, index + length);
-        long streamId = frameRO.streamId();
+        FrameFW frame = factory.frameRO.wrap(buffer, index, index + length);
+        long streamId = frame.streamId();
 
         processUnexpected(streamId);
     }
@@ -300,8 +291,8 @@ final class ServerAcceptStream implements MessageConsumer
                     switch (msgTypeId)
                     {
                     case WindowFW.TYPE_ID:
-                        windowRO.wrap(buffer, index, index + length);
-                        int update = ServerAcceptStream.this.windowRO.update();
+                        WindowFW window = factory.windowRO.wrap(buffer, index, index + length);
+                        int update = window.update();
                         int writableBytes = Math.min(update, payload.capacity() - offset);
                         ServerAcceptStream.this.factory.writer.doData(target, targetId, payload, offset, writableBytes);
                         offset += writableBytes;
@@ -337,8 +328,6 @@ final class ServerAcceptStream implements MessageConsumer
         int index,
         int length)
     {
-        beginRO.wrap(buffer, index, index + length);
-
         this.streamState = this::streamAfterBeginOrData;
         this.decoderState = this::decodeBeforeHttpBegin;
 
@@ -358,9 +347,9 @@ final class ServerAcceptStream implements MessageConsumer
         int index,
         int length)
     {
-        dataRO.wrap(buffer, index, index + length);
+        DataFW data = factory.dataRO.wrap(buffer, index, index + length);
 
-        window -= dataRO.length();
+        window -= data.length();
 
         if (window < 0)
         {
@@ -368,7 +357,7 @@ final class ServerAcceptStream implements MessageConsumer
         }
         else
         {
-            final OctetsFW payload = dataRO.payload();
+            final OctetsFW payload = data.payload();
             final int limit = payload.limit();
             int offset = payload.offset();
 
@@ -410,8 +399,8 @@ final class ServerAcceptStream implements MessageConsumer
         int index,
         int length)
     {
-        endRO.wrap(buffer, index, index + length);
-        final long streamId = endRO.streamId();
+        EndFW end = factory.endRO.wrap(buffer, index, index + length);
+        final long streamId = end.streamId();
         assert streamId == acceptId;
         doEnd();
     }
@@ -434,8 +423,8 @@ final class ServerAcceptStream implements MessageConsumer
         int index,
         int length)
     {
-        dataRO.wrap(buffer, index, index + length);
-        window -= dataRO.length();
+        DataFW data = factory.dataRO.wrap(buffer, index, index + length);
+        window -= data.length();
 
         if (window < 0)
         {
@@ -443,7 +432,7 @@ final class ServerAcceptStream implements MessageConsumer
         }
         else
         {
-            final OctetsFW payload = dataRO.payload();
+            final OctetsFW payload = data.payload();
             deferAndProcessData(payload.buffer(), payload.offset(), payload.limit());
         }
     }
@@ -492,8 +481,8 @@ final class ServerAcceptStream implements MessageConsumer
         int index,
         int length)
     {
-        endRO.wrap(buffer, index, index + length);
-        final long streamId = endRO.streamId();
+        EndFW end = factory.endRO.wrap(buffer, index, index + length);
+        final long streamId = end.streamId();
         assert streamId == acceptId;
 
         endDeferred = true;
@@ -960,12 +949,12 @@ final class ServerAcceptStream implements MessageConsumer
     {
         final MessagePredicate filter = (t, b, o, l) ->
         {
-            final RouteFW route = routeRO.wrap(b, o, l);
-            final OctetsFW extension = routeRO.extension();
+            final RouteFW route = factory.routeRO.wrap(b, o, l);
+            final OctetsFW extension = route.extension();
             boolean headersMatch = true;
             if (extension.sizeof() > 0)
             {
-                final HttpRouteExFW routeEx = extension.get(routeExRO::wrap);
+                final HttpRouteExFW routeEx = extension.get(factory.routeExRO::wrap);
                 headersMatch = routeEx.headers().anyMatch(
                         h -> !Objects.equals(h.value(), headers.get(h.name())));
             }
@@ -973,7 +962,7 @@ final class ServerAcceptStream implements MessageConsumer
         };
 
         return factory.router.resolve(filter, (msgTypeId, buffer, index, length) ->
-            routeRO.wrap(buffer, index, index + length));
+            factory.routeRO.wrap(buffer, index, index + length));
     }
 
     private void handleThrottle(
@@ -983,8 +972,8 @@ final class ServerAcceptStream implements MessageConsumer
         int length)
     {
         // Ignore frames from a previous target input stream that has now ended
-        frameRO.wrap(buffer, index, index + length);
-        long streamId = frameRO.streamId();
+        FrameFW frame = factory.frameRO.wrap(buffer, index, index + length);
+        long streamId = frame.streamId();
         if (streamId == targetId)
         {
             throttleState.accept(msgTypeId, buffer, index, length);
@@ -1077,8 +1066,8 @@ final class ServerAcceptStream implements MessageConsumer
         switch (msgTypeId)
         {
         case WindowFW.TYPE_ID:
-            windowRO.wrap(buffer, index, index + length);
-            int update = windowRO.update();
+            WindowFW window = factory.windowRO.wrap(buffer, index, index + length);
+            int update = window.update();
             correlation.state().window += update;
             break;
         case ResetFW.TYPE_ID:
@@ -1092,8 +1081,8 @@ final class ServerAcceptStream implements MessageConsumer
 
     private void processWindowForHttpData(DirectBuffer buffer, int index, int length)
     {
-        windowRO.wrap(buffer, index, index + length);
-        int update = windowRO.update();
+        WindowFW window = factory.windowRO.wrap(buffer, index, index + length);
+        int update = window.update();
 
         availableTargetWindow += update;
         if (slotIndex != NO_SLOT)
@@ -1105,8 +1094,8 @@ final class ServerAcceptStream implements MessageConsumer
 
     private void processWindowForHttpDataAfterUpgrade(DirectBuffer buffer, int index, int length)
     {
-        windowRO.wrap(buffer, index, index + length);
-        int update = windowRO.update();
+        WindowFW window = factory.windowRO.wrap(buffer, index, index + length);
+        int update = window.update();
         availableTargetWindow += update;
         if (slotIndex != NO_SLOT)
         {
@@ -1115,7 +1104,7 @@ final class ServerAcceptStream implements MessageConsumer
         if (slotIndex == NO_SLOT)
         {
             ensureSourceWindow(availableTargetWindow);
-            if (window == availableTargetWindow)
+            if (this.window == availableTargetWindow)
             {
                 // Windows are now aligned
                 throttleState = this::throttlePropagateWindow;
@@ -1128,8 +1117,8 @@ final class ServerAcceptStream implements MessageConsumer
         int index,
         int length)
     {
-        windowRO.wrap(buffer, index, index + length);
-        int update = windowRO.update();
+        WindowFW window = factory.windowRO.wrap(buffer, index, index + length);
+        int update = window.update();
         availableTargetWindow += update;
         doSourceWindow(update);
     }
@@ -1154,7 +1143,7 @@ final class ServerAcceptStream implements MessageConsumer
         int index,
         int length)
     {
-        resetRO.wrap(buffer, index, index + length);
+        factory.resetRO.wrap(buffer, index, index + length);
         releaseSlotIfNecessary();
         factory.writer.doReset(acceptThrottle, acceptId);
     }
