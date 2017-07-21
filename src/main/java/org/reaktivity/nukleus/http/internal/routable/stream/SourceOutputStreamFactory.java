@@ -409,7 +409,7 @@ public final class SourceOutputStreamFactory
 
         private void doEnd()
         {
-            target.removeThrottle(connection.outputStreamId);
+            target.setThrottle(connection.outputStreamId, connection::handleThrottleDefault);
 
             source.removeStream(sourceId);
             this.streamState = this::streamAfterEnd;
