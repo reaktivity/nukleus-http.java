@@ -26,7 +26,7 @@ import org.junit.rules.Timeout;
 import org.kaazing.k3po.junit.annotation.ScriptProperty;
 import org.kaazing.k3po.junit.annotation.Specification;
 import org.kaazing.k3po.junit.rules.K3poRule;
-import org.reaktivity.reaktor.test.NukleusRule;
+import org.reaktivity.reaktor.test.ReaktorRule;
 
 public class FlowControlIT
 {
@@ -37,14 +37,15 @@ public class FlowControlIT
 
     private final TestRule timeout = new DisableOnDebug(new Timeout(10, SECONDS));
 
-    private final NukleusRule nukleus = new NukleusRule("http")
+    private final ReaktorRule reaktor = new ReaktorRule()
+        .nukleus("http"::equals)
         .directory("target/nukleus-itests")
         .commandBufferCapacity(1024)
         .responseBufferCapacity(1024)
         .counterValuesBufferCapacity(1024);
 
     @Rule
-    public final TestRule chain = outerRule(nukleus).around(k3po).around(timeout);
+    public final TestRule chain = outerRule(reaktor).around(k3po).around(timeout);
 
     @Test
     @Specification({
@@ -132,4 +133,18 @@ public class FlowControlIT
         k3po.finish();
     }
 
+    @Test
+    @Specification({
+        "${route}/client/controller",
+        "${client}/connection.management/multiple.requests.serialized/client",
+        "${server}/connection.management/multiple.requests.same.connection/server" })
+    @ScriptProperty("serverInitialWindow 16")
+    public void shouldProcessFragmentedRequests() throws Exception
+    {
+        k3po.start();
+        k3po.notifyBarrier("WRITE_RESPONSE_ONE");
+        k3po.notifyBarrier("WRITE_RESPONSE_TWO");
+        k3po.notifyBarrier("WRITE_RESPONSE_THREE");
+        k3po.finish();
+    }
 }
