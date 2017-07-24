@@ -24,12 +24,15 @@ import java.util.function.LongSupplier;
 
 import org.agrona.MutableDirectBuffer;
 import org.reaktivity.nukleus.http.internal.types.stream.ResetFW;
+import org.reaktivity.nukleus.http.internal.types.stream.WindowFW;
 
 /**
  * A set of connections (target streams) to be used to talk to a given target on a given route (targetRef)
  */
 final class ConnectionPool
 {
+    private final WindowFW windowRO = new WindowFW();
+
     private final int maximumConnections;
     private final LongSupplier supplyTargetId;
     private final Function<String, Target> suppyTarget;
@@ -75,7 +78,7 @@ final class ConnectionPool
         Connection connection = new Connection(supplyTargetId.getAsLong());
         long targetCorrelationId = connection.outputStreamId;
         connect.doBegin(connection.outputStreamId, connectRef, targetCorrelationId);
-        connect.setThrottle(connection.outputStreamId, connection::throttleReleaseOnReset);
+        connect.setThrottle(connection.outputStreamId, connection::handleThrottleDefault);
         connectionsInUse++;
         return connection;
     }
@@ -98,7 +101,7 @@ final class ConnectionPool
         }
         if (connection.persistent)
         {
-            connect.setThrottle(connection.outputStreamId, connection::throttleReleaseOnReset);
+            connect.setThrottle(connection.outputStreamId, connection::handleThrottleDefault);
             availableConnections.add(connection);
         }
         else
@@ -111,6 +114,7 @@ final class ConnectionPool
             if (doEndIfNotPersistent)
             {
                 connect.doEnd(connection.outputStreamId);
+                connect.removeThrottle(connection.outputStreamId);
                 connection.endSent = true;
             }
         }
@@ -171,7 +175,11 @@ final class ConnectionPool
             this.connectCorrelationId = connectCorrelationId;
         }
 
-        private void throttleReleaseOnReset(int msgTypeId, MutableDirectBuffer buffer, int index, int length)
+        void handleThrottleDefault(
+            int msgTypeId,
+            MutableDirectBuffer buffer,
+            int index,
+            int length)
         {
             switch (msgTypeId)
             {
@@ -182,6 +190,10 @@ final class ConnectionPool
                 {
                     connectReply.doReset(connectReplyStreamId);
                 }
+                break;
+            case WindowFW.TYPE_ID:
+                final WindowFW window = windowRO.wrap(buffer, index, index + length);
+                this.window += window.update();
                 break;
             default:
                 // ignore

@@ -133,4 +133,18 @@ public class FlowControlIT
         k3po.finish();
     }
 
+    @Test
+    @Specification({
+        "${route}/client/controller",
+        "${client}/connection.management/multiple.requests.serialized/client",
+        "${server}/connection.management/multiple.requests.same.connection/server" })
+    @ScriptProperty("serverInitialWindow 16")
+    public void shouldProcessFragmentedRequests() throws Exception
+    {
+        k3po.start();
+        k3po.notifyBarrier("WRITE_RESPONSE_ONE");
+        k3po.notifyBarrier("WRITE_RESPONSE_TWO");
+        k3po.notifyBarrier("WRITE_RESPONSE_THREE");
+        k3po.finish();
+    }
 }

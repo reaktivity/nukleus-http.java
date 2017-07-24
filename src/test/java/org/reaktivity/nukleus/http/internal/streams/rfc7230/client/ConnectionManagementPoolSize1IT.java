@@ -80,12 +80,24 @@ public class ConnectionManagementPoolSize1IT
         k3po.finish();
     }
 
+    @Ignore("Abort frame not yet supported")
+    @Test
+    @Specification({
+        "${route}/client/controller",
+        "${client}/request.and.503.response/client",
+        "${server}/request.incomplete.response.headers.and.abort/server" })
+    public void shouldGive503ResponseAndFreeConnectionWhenConnectReplyStreamIsAbortedBeforeResponseHeadersComplete()
+            throws Exception
+    {
+        k3po.finish();
+    }
+
     @Test
     @Specification({
         "${route}/client/controller",
         "${client}/request.and.503.response/client",
         "${server}/request.incomplete.response.headers.and.end/server" })
-    public void shouldGive503ResponseAndFreeConnectionWhenResponseStreamEndsBeforeResponseHeadersComplete() throws Exception
+    public void shouldGive503ResponseAndFreeConnectionWhenConnectReplyStreamEndsBeforeResponseHeadersComplete() throws Exception
     {
         k3po.finish();
     }
@@ -96,7 +108,7 @@ public class ConnectionManagementPoolSize1IT
         "${route}/client/controller",
         "${client}/request.and.503.response/client",
         "${server}/request.incomplete.response.headers.and.reset/server" })
-    public void shouldGive503ResponseAndFreeConnectionWhenRequestStreamIsResetBeforeResponseHeadersComplete() throws Exception
+    public void shouldGive503ResponseAndFreeConnectionWhenConnectStreamIsResetBeforeResponseHeadersComplete() throws Exception
     {
         k3po.finish();
     }
@@ -106,7 +118,7 @@ public class ConnectionManagementPoolSize1IT
         "${route}/client/controller",
         "${client}/request.and.503.response/client",
         "${server}/request.no.response.and.end/server" })
-    public void shouldGive503ResponseAndFreeConnectionWhenResponseStreamEndsBeforeResponseReceived() throws Exception
+    public void shouldGive503ResponseAndFreeConnectionWhenConnectReplyStreamEndsBeforeResponseReceived() throws Exception
     {
         k3po.finish();
     }
@@ -117,7 +129,7 @@ public class ConnectionManagementPoolSize1IT
         "${route}/client/controller",
         "${client}/request.and.503.response/client",
         "${server}/request.no.response.and.reset/server" })
-    public void shouldGive503ResponseAndFreeConnectionWhenRequestStreamIsResetBeforeResponseReceived() throws Exception
+    public void shouldGive503ResponseAndFreeConnectionWhenConnectStreamIsResetBeforeResponseReceived() throws Exception
     {
         k3po.finish();
     }
@@ -155,22 +167,35 @@ public class ConnectionManagementPoolSize1IT
         k3po.finish();
     }
 
+    @Ignore("Abort frame not yet supported")
     @Test
     @Specification({
         "${route}/client/controller",
-        "${client}/request.and.response.with.incomplete.data.and.end/client",
+        "${client}/request.and.response.with.incomplete.data.and.abort/client",
         "${server}/request.response.headers.incomplete.data.and.end/server"})
-    public void shouldSendAbortAndFreeConnectionWhenResponseStreamEndsBeforeResponseDataComplete() throws Exception
+    public void shouldSendAbortAndFreeConnectionWhenConnectReplyStreamEndsBeforeResponseDataComplete() throws Exception
     {
         k3po.finish();
     }
 
+    @Ignore("Abort frame not yet supported")
     @Test
     @Specification({
         "${route}/client/controller",
-        "${client}/request.and.response.with.incomplete.data.and.reset/client",
+        "${client}/request.and.response.with.incomplete.data.and.abort/client",
+        "${server}/request.response.headers.incomplete.data.and.abort/server"})
+    public void shouldSendAbortAndFreeConnectionWhenConnectReplyStreamIsAbortedBeforeResponseDataComplete() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Ignore("Abort frame not yet supported")
+    @Test
+    @Specification({
+        "${route}/client/controller",
+        "${client}/request.and.response.with.incomplete.data.and.abort/client",
         "${server}/request.response.headers.incomplete.data.and.reset/server" })
-    public void shouldSendAbortAndFreeConnectionWhenRequestStreamIsResetBeforeResponseDataIsComplete() throws Exception
+    public void shouldSendAbortAndFreeConnectionWhenConnectStreamIsResetBeforeResponseDataIsComplete() throws Exception
     {
         k3po.finish();
     }
