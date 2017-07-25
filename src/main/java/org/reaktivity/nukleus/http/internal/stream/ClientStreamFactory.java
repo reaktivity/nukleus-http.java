@@ -17,19 +17,25 @@ package org.reaktivity.nukleus.http.internal.stream;
 
 import static java.util.Objects.requireNonNull;
 
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.LongSupplier;
 
 import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
 import org.agrona.collections.Long2ObjectHashMap;
-import org.agrona.concurrent.MessageHandler;
+import org.agrona.concurrent.UnsafeBuffer;
 import org.reaktivity.nukleus.buffer.BufferPool;
 import org.reaktivity.nukleus.function.MessageConsumer;
 import org.reaktivity.nukleus.function.MessagePredicate;
 import org.reaktivity.nukleus.http.internal.HttpConfiguration;
+import org.reaktivity.nukleus.http.internal.types.OctetsFW;
+import org.reaktivity.nukleus.http.internal.types.control.HttpRouteExFW;
 import org.reaktivity.nukleus.http.internal.types.control.RouteFW;
 import org.reaktivity.nukleus.http.internal.types.stream.BeginFW;
 import org.reaktivity.nukleus.http.internal.types.stream.DataFW;
@@ -39,10 +45,14 @@ import org.reaktivity.nukleus.http.internal.types.stream.HttpBeginExFW;
 import org.reaktivity.nukleus.http.internal.types.stream.ResetFW;
 import org.reaktivity.nukleus.http.internal.types.stream.WindowFW;
 import org.reaktivity.nukleus.route.RouteHandler;
+import org.reaktivity.nukleus.stream.StreamFactory;
 
-public final class ClientStreamFactory
+public final class ClientStreamFactory implements StreamFactory
 {
     static final Map<String, String> EMPTY_HEADERS = Collections.emptyMap();
+    static final byte[] CRLFCRLF_BYTES = "\r\n\r\n".getBytes(StandardCharsets.US_ASCII);
+    static final byte[] CRLF_BYTES = "\r\n".getBytes(StandardCharsets.US_ASCII);
+    static final byte[] SEMICOLON_BYTES = ";".getBytes(StandardCharsets.US_ASCII);
 
     // Pseudo-headers
     static final int METHOD = 0;
@@ -52,6 +62,7 @@ public final class ClientStreamFactory
 
     final FrameFW frameRO = new FrameFW();
     final RouteFW routeRO = new RouteFW();
+    private HttpRouteExFW routeExRO = new HttpRouteExFW();
 
     final BeginFW beginRO = new BeginFW();
     final HttpBeginExFW beginExRO = new HttpBeginExFW();
@@ -68,17 +79,19 @@ public final class ClientStreamFactory
     final BufferPool slab;
     final MessageWriter writer;
 
+    final int maximumHeadersSize;
+
     Long2ObjectHashMap<Correlation<?>> correlations;
 
     final Map<String, Map<Long, ConnectionPool>> connectionPools;
     final int maximumConnectionsPerRoute;
 
+    final UnsafeBuffer temporarySlot;
 
     public ClientStreamFactory(
         HttpConfiguration configuration,
         RouteHandler router,
         MutableDirectBuffer writeBuffer,
-        LongSupplier supplyTargetId,
         BufferPool bufferPool,
         LongSupplier supplyStreamId,
         LongSupplier supplyCorrelationId,
@@ -92,9 +105,12 @@ public final class ClientStreamFactory
         this.correlations = requireNonNull(correlations);
         this.connectionPools = new HashMap<>();
         this.maximumConnectionsPerRoute = configuration.maximumConnectionsPerRoute();
+        this.maximumHeadersSize = slab.slotCapacity();
+        this.temporarySlot = new UnsafeBuffer(ByteBuffer.allocateDirect(slab.slotCapacity()));
     }
 
-    public MessageHandler newStream(
+    @Override
+    public MessageConsumer newStream(
             int msgTypeId,
             DirectBuffer buffer,
             int index,
@@ -123,14 +139,19 @@ public final class ClientStreamFactory
         final long acceptRef = begin.sourceRef();
         final String acceptName = begin.source().asString();
 
-        final MessagePredicate filter = (t, b, o, l) ->
-        {
-            final RouteFW route = routeRO.wrap(b, o, l);
-            return acceptRef == route.sourceRef() &&
-                    acceptName.equals(route.source().asString());
-        };
+        final OctetsFW extension = beginRO.extension();
 
-        final RouteFW route = router.resolve(filter, this::wrapRoute);
+        // TODO: avoid object creation
+        Map<String, String> headers = EMPTY_HEADERS;
+        if (extension.sizeof() > 0)
+        {
+            final HttpBeginExFW beginEx = extension.get(beginExRO::wrap);
+            Map<String, String> headers0 = new LinkedHashMap<>();
+            beginEx.headers().forEach(h -> headers0.put(h.name().asString(), h.value().asString()));
+            headers = headers0;
+        }
+
+        final RouteFW route = resolveTarget(acceptRef, headers);
 
         MessageConsumer newStream = null;
 
@@ -138,9 +159,12 @@ public final class ClientStreamFactory
         {
             final long acceptId = begin.streamId();
             final long acceptCorrelationId = begin.correlationId();
+            final String connectName = route.target().asString();
+            final long connectRef = route.targetRef();
 
             newStream = new ClientAcceptStream(this,
-                    acceptThrottle, acceptId, acceptRef, acceptName, acceptCorrelationId);
+                    acceptThrottle, acceptId, acceptRef, acceptName, acceptCorrelationId,
+                    connectName, connectRef, headers);
         }
 
         return newStream;
@@ -155,9 +179,26 @@ public final class ClientStreamFactory
                 connectReplyName);
     }
 
-    private RouteFW wrapRoute(int msgTypeId, DirectBuffer buffer, int index, int length)
+    private RouteFW resolveTarget(
+        long sourceRef,
+        Map<String, String> headers)
     {
-        return routeRO.wrap(buffer, index, index + length);
+        final MessagePredicate filter = (t, b, o, l) ->
+        {
+            final RouteFW route = routeRO.wrap(b, o, l);
+            final OctetsFW extension = route.extension();
+            boolean headersMatch = true;
+            if (extension.sizeof() > 0)
+            {
+                final HttpRouteExFW routeEx = extension.get(routeExRO::wrap);
+                headersMatch = routeEx.headers().anyMatch(
+                        h -> !Objects.equals(h.value(), headers.get(h.name())));
+            }
+            return route.sourceRef() == sourceRef && headersMatch;
+        };
+
+        return router.resolve(filter, (msgTypeId, buffer, index, length) ->
+            routeRO.wrap(buffer, index, index + length));
     }
 
 }

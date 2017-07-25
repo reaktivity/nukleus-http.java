@@ -1,15 +1,15 @@
 package org.reaktivity.nukleus.http.internal.stream;
 
+import static org.reaktivity.nukleus.http.internal.util.HttpUtil.appendHeader;
+
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Consumer;
 
 import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
 import org.agrona.collections.Long2ObjectHashMap;
-import org.agrona.concurrent.MessageHandler;
 import org.reaktivity.nukleus.buffer.BufferPool;
 import org.reaktivity.nukleus.function.MessageConsumer;
 import org.reaktivity.nukleus.http.internal.stream.ConnectionPool.Connection;
@@ -18,23 +18,24 @@ import org.reaktivity.nukleus.http.internal.types.OctetsFW;
 import org.reaktivity.nukleus.http.internal.types.stream.BeginFW;
 import org.reaktivity.nukleus.http.internal.types.stream.DataFW;
 import org.reaktivity.nukleus.http.internal.types.stream.EndFW;
-import org.reaktivity.nukleus.http.internal.types.stream.HttpBeginExFW;
 import org.reaktivity.nukleus.http.internal.types.stream.ResetFW;
 import org.reaktivity.nukleus.http.internal.types.stream.WindowFW;
-import org.reaktivity.reaktor.internal.acceptable.Target;
 
 final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection>, MessageConsumer
 {
-    private final ClientStreamFactory clientStreamFactory;
+    private final ClientStreamFactory factory;
 
     private MessageConsumer streamState;
     private MessageConsumer throttleState;
 
-    private long sourceId;
-    private long sourceRef;
-    private long correlationId;
-    private Target target;
-    private long targetRef;
+    private final long acceptId;
+    private final String acceptName;
+    private final long acceptCorrelationId;
+    private final MessageConsumer acceptThrottle;
+    private final String connectName;
+    private final long connectRef;
+    private Map<String, String> headers;
+    private MessageConsumer target;
     private Connection connection;
     private ConnectionRequest nextConnectionRequest;
     private ConnectionPool connectionPool;
@@ -45,10 +46,19 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
     private boolean endDeferred;
     private boolean persistent = true;
 
+
     ClientAcceptStream(ClientStreamFactory factory, MessageConsumer acceptThrottle,
-            long acceptId, long acceptRef, String acceptName, long acceptCorrelationId)
+            long acceptId, long acceptRef, String acceptName, long acceptCorrelationId,
+            String connectName, long connectRef, Map<String, String> headers)
     {
-        this.clientStreamFactory = factory;
+        this.factory = factory;
+        this.acceptThrottle = acceptThrottle;
+        this.acceptId = this.factory.beginRO.streamId();
+        this.acceptName = acceptName;
+        this.acceptCorrelationId = acceptCorrelationId;
+        this.connectName = connectName;
+        this.connectRef = connectRef;
+        this.headers = headers;
         this.streamState = this::streamBeforeBegin;
         this.throttleState = this::throttleBeforeBegin;
     }
@@ -91,7 +101,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
             endDeferred = true;
             break;
         default:
-            this.clientStreamFactory.slab.release(slotIndex);
+            this.factory.slab.release(slotIndex);
             processUnexpected(buffer, index, length);
             break;
         }
@@ -128,24 +138,19 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
 
     private void streamAfterReplyOrReset(
         int msgTypeId,
-        MutableDirectBuffer buffer,
+        DirectBuffer buffer,
         int index,
         int length)
     {
         if (msgTypeId == DataFW.TYPE_ID)
         {
-            this.clientStreamFactory.dataRO.wrap(buffer, index, index + length);
-            final long streamId = this.clientStreamFactory.dataRO.streamId();
-
-            source.doWindow(streamId, length);
+            DataFW data = this.factory.dataRO.wrap(buffer, index, index + length);
+            final long streamId = data.streamId();
+            factory.writer.doWindow(acceptThrottle, streamId, data.length(), data.length());
         }
         else if (msgTypeId == EndFW.TYPE_ID)
         {
-            this.clientStreamFactory.endRO.wrap(buffer, index, index + length);
-            final long streamId = this.clientStreamFactory.endRO.streamId();
-
-            source.removeStream(streamId);
-
+            factory.endRO.wrap(buffer, index, index + length);
             this.streamState = this::streamAfterEnd;
         }
     }
@@ -155,60 +160,34 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         int index,
         int length)
     {
-        this.clientStreamFactory.beginRO.wrap(buffer, index, index + length);
-        this.sourceId = this.clientStreamFactory.beginRO.streamId();
-        this.sourceRef = this.clientStreamFactory.beginRO.sourceRef();
-        this.correlationId = this.clientStreamFactory.beginRO.correlationId();
-        final OctetsFW extension = this.clientStreamFactory.beginRO.extension();
-
-        // TODO: avoid object creation
-        Map<String, String> headers = ClientStreamFactory.EMPTY_HEADERS;
-        if (extension.sizeof() > 0)
+        slotIndex = this.factory.slab.acquire(acceptId);
+        if (slotIndex == BufferPool.NO_SLOT)
         {
-            final HttpBeginExFW beginEx = extension.get(this.clientStreamFactory.beginExRO::wrap);
-            Map<String, String> headers0 = new LinkedHashMap<>();
-            beginEx.headers().forEach(h -> headers0.put(h.name().asString(), h.value().asString()));
-            headers = headers0;
-        }
-        final Optional<Route> optional = resolveTarget(sourceRef, headers);
-
-        if (optional.isPresent())
-        {
-            slotIndex = this.clientStreamFactory.slab.acquire(sourceId);
-            if (slotIndex == NO_SLOT)
-            {
-                source.doReset(sourceId);
-                this.streamState = this::streamAfterReplyOrReset;
-            }
-            else
-            {
-                byte[] bytes = encodeHeaders(headers, buffer, index, length);
-                slotPosition = 0;
-                MutableDirectBuffer slot = this.clientStreamFactory.slab.buffer(slotIndex);
-                if (bytes.length > slot.capacity())
-                {
-                    // TODO: diagnostics (reset reason?)
-                    source.doReset(sourceId);
-                    source.removeStream(sourceId);
-                }
-                else
-                {
-                    slot.putBytes(0, bytes);
-                    slotPosition = bytes.length;
-                    slotOffset = 0;
-                    this.streamState = this::streamBeforeHeadersWritten;
-                    this.throttleState = this::throttleBeforeHeadersWritten;
-                    final Route route = optional.get();
-                    target = route.target();
-                    this.targetRef = route.targetRef();
-                    connectionPool = getConnectionPool(target, targetRef);
-                    connectionPool.acquire(this);
-                }
-            }
+            factory.writer.doReset(acceptThrottle, acceptId);
+            this.streamState = this::streamAfterReplyOrReset;
         }
         else
         {
-            processUnexpected(buffer, index, length);
+            byte[] bytes = encodeHeaders(headers, buffer, index, length);
+            headers = null; // allow gc
+            slotPosition = 0;
+            MutableDirectBuffer slot = this.factory.slab.buffer(slotIndex);
+            if (bytes.length > slot.capacity())
+            {
+                // TODO: diagnostics (reset reason?)
+                factory.writer.doReset(acceptThrottle, acceptId);
+            }
+            else
+            {
+                slot.putBytes(0, bytes);
+                slotPosition = bytes.length;
+                slotOffset = 0;
+                this.streamState = this::streamBeforeHeadersWritten;
+                this.throttleState = this::throttleBeforeHeadersWritten;
+                target = factory.router.supplyTarget(connectName);
+                connectionPool = getConnectionPool(connectName, connectRef);
+                connectionPool.acquire(this);
+            }
         }
     }
 
@@ -269,27 +248,28 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
             }
         });
 
-        if (pseudoHeaders[ClientStreamFactory.METHOD] == null || pseudoHeaders[ClientStreamFactory.SCHEME] == null || pseudoHeaders[ClientStreamFactory.PATH] == null
-                || pseudoHeaders[ClientStreamFactory.AUTHORITY] == null)
+        if (pseudoHeaders[ClientStreamFactory.METHOD] == null ||
+            pseudoHeaders[ClientStreamFactory.SCHEME] == null ||
+            pseudoHeaders[ClientStreamFactory.PATH] == null ||
+            pseudoHeaders[ClientStreamFactory.AUTHORITY] == null)
         {
             processUnexpected(buffer, index, length);
         }
 
-        String payloadChars =
-                new StringBuilder().append(pseudoHeaders[ClientStreamFactory.METHOD]).append(" ").append(pseudoHeaders[ClientStreamFactory.PATH])
-                                   .append(" HTTP/1.1").append("\r\n")
-                                   .append("Host").append(": ").append(pseudoHeaders[ClientStreamFactory.AUTHORITY]).append("\r\n")
-                                   .append(headersChars).append("\r\n").toString();
+        String payloadChars = new StringBuilder()
+                   .append(pseudoHeaders[ClientStreamFactory.METHOD]).append(" ").append(pseudoHeaders[ClientStreamFactory.PATH])
+                   .append(" HTTP/1.1").append("\r\n")
+                   .append("Host").append(": ").append(pseudoHeaders[ClientStreamFactory.AUTHORITY]).append("\r\n")
+                   .append(headersChars).append("\r\n").toString();
         return payloadChars.getBytes(StandardCharsets.US_ASCII);
     }
 
-    private ConnectionPool getConnectionPool(final Target target, long targetRef)
+    private ConnectionPool getConnectionPool(final String targetName, long targetRef)
     {
-        Map<Long, ConnectionPool> connectionsByRef = this.clientStreamFactory.connectionPools.
-                computeIfAbsent(target.name(), (n) -> new Long2ObjectHashMap<ConnectionPool>());
+        Map<Long, ConnectionPool> connectionsByRef = this.factory.connectionPools.
+                computeIfAbsent(targetName, (n) -> new Long2ObjectHashMap<ConnectionPool>());
         return connectionsByRef.computeIfAbsent(targetRef, (r) ->
-            new ConnectionPool(this.clientStreamFactory.maximumConnectionsPerRoute, supplyTargetId, supplyTarget,
-                    correlateEstablished, target, targetRef));
+            new ConnectionPool(factory, targetName, targetRef));
     }
 
     private void processData(
@@ -297,17 +277,17 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         int index,
         int length)
     {
-        this.clientStreamFactory.dataRO.wrap(buffer, index, index + length);
+        DataFW data = factory.dataRO.wrap(buffer, index, index + length);
 
-        sourceWindow -= this.clientStreamFactory.dataRO.length();
+        sourceWindow -= data.length();
         if (sourceWindow < 0)
         {
             processUnexpected(buffer, index, length);
         }
         else
         {
-            final OctetsFW payload = this.clientStreamFactory.dataRO.payload();
-            target.doData(connection.outputStreamId, payload);
+            final OctetsFW payload = this.factory.dataRO.payload();
+            factory.writer.doData(target, connection.outputStreamId, payload);
             connection.window -= payload.sizeof();
         }
     }
@@ -317,15 +297,12 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         int index,
         int length)
     {
-        this.clientStreamFactory.endRO.wrap(buffer, index, index + length);
+        this.factory.endRO.wrap(buffer, index, index + length);
         doEnd();
     }
 
     private void doEnd()
     {
-        target.removeThrottle(connection.outputStreamId);
-
-        source.removeStream(sourceId);
         this.streamState = this::streamAfterEnd;
     }
 
@@ -334,22 +311,22 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         int index,
         int length)
     {
-        this.clientStreamFactory.frameRO.wrap(buffer, index, index + length);
+        this.factory.frameRO.wrap(buffer, index, index + length);
 
-        final long streamId = this.clientStreamFactory.frameRO.streamId();
+        final long streamId = this.factory.frameRO.streamId();
 
-        source.doReset(streamId);
+        factory.writer.doReset(acceptThrottle, streamId);
 
         this.streamState = this::streamAfterReplyOrReset;
     }
 
     private void handleThrottle(
         int msgTypeId,
-        MutableDirectBuffer buffer,
+        DirectBuffer buffer,
         int index,
         int length)
     {
-        throttleState.onMessage(msgTypeId, buffer, index, length);
+        throttleState.accept(msgTypeId, buffer, index, length);
     }
 
     private void throttleBeforeBegin(
@@ -378,8 +355,8 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         switch (msgTypeId)
         {
         case WindowFW.TYPE_ID:
-            this.clientStreamFactory.windowRO.wrap(buffer, index, index + length);
-            connection.window += this.clientStreamFactory.windowRO.update();
+            this.factory.windowRO.wrap(buffer, index, index + length);
+            connection.window += this.factory.windowRO.update();
             useWindowToWriteRequestHeaders();
             break;
         case ResetFW.TYPE_ID:
@@ -400,8 +377,8 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         switch (msgTypeId)
         {
         case WindowFW.TYPE_ID:
-            this.clientStreamFactory.windowRO.wrap(buffer, index, index + length);
-            int update = this.clientStreamFactory.windowRO.update();
+            this.factory.windowRO.wrap(buffer, index, index + length);
+            int update = this.factory.windowRO.update();
             connection.window += update;
             doSourceWindow(update);
             break;
@@ -417,14 +394,14 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
     private void useWindowToWriteRequestHeaders()
     {
         int writableBytes = Math.min(slotPosition - slotOffset, connection.window);
-        MutableDirectBuffer slot = this.clientStreamFactory.slab.buffer(slotIndex);
-        target.doData(connection.outputStreamId, slot, slotOffset, writableBytes);
+        MutableDirectBuffer slot = this.factory.slab.buffer(slotIndex);
+        factory.writer.doData(target, connection.outputStreamId, slot, slotOffset, writableBytes);
         connection.window -= writableBytes;
         slotOffset += writableBytes;
         int bytesDeferred = slotPosition - slotOffset;
         if (bytesDeferred == 0)
         {
-            this.clientStreamFactory.slab.release(slotIndex);
+            this.factory.slab.release(slotIndex);
             slotIndex = BufferPool.NO_SLOT;
             if (endDeferred)
             {
@@ -445,7 +422,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
     private void doSourceWindow(int update)
     {
         sourceWindow += update;
-        source.doWindow(sourceId, update);
+        factory.writer.doWindow(acceptThrottle, acceptId, update, update);
     }
 
     private void processReset(
@@ -453,21 +430,11 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         int index,
         int length)
     {
-        this.clientStreamFactory.resetRO.wrap(buffer, index, index + length);
-        this.clientStreamFactory.slab.release(slotIndex);
+        this.factory.resetRO.wrap(buffer, index, index + length);
+        this.factory.slab.release(slotIndex);
         connection.persistent = false;
         connectionPool.release(connection, false);
-        source.doReset(sourceId);
-    }
-
-    private Optional<Route> resolveTarget(
-        long sourceRef,
-        Map<String, String> headers)
-    {
-        final List<Route> routes = supplyRoutes.apply(sourceRef);
-        final Predicate<Route> predicate = headersMatch(headers);
-
-        return routes.stream().filter(predicate).findFirst();
+        factory.writer.doReset(acceptThrottle, acceptId);
     }
 
     @Override
@@ -496,9 +463,9 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         final long targetCorrelationId = connection.outputStreamId;
         ClientConnectReplyState state = new ClientConnectReplyState(connectionPool, connection);
         final Correlation<ClientConnectReplyState> correlation =
-                new Correlation<>(correlationId, source.routableName(), INPUT_ESTABLISHED, state);
-        correlateNew.accept(targetCorrelationId, correlation);
-        target.setThrottle(connection.outputStreamId, this::handleThrottle);
+                new Correlation<>(acceptCorrelationId, acceptName, state);
+        factory.correlations.put(targetCorrelationId, correlation);
+        factory.router.setThrottle(connectName, connection.outputStreamId, this::handleThrottle);
         if (connection.window > 0)
         {
             useWindowToWriteRequestHeaders();

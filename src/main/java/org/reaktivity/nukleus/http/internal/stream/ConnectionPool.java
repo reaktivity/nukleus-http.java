@@ -18,11 +18,9 @@ package org.reaktivity.nukleus.http.internal.stream;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.function.Consumer;
-import java.util.function.Function;
-import java.util.function.LongFunction;
-import java.util.function.LongSupplier;
 
-import org.agrona.MutableDirectBuffer;
+import org.agrona.DirectBuffer;
+import org.reaktivity.nukleus.function.MessageConsumer;
 import org.reaktivity.nukleus.http.internal.types.stream.ResetFW;
 import org.reaktivity.nukleus.http.internal.types.stream.WindowFW;
 
@@ -31,35 +29,27 @@ import org.reaktivity.nukleus.http.internal.types.stream.WindowFW;
  */
 final class ConnectionPool
 {
-    private final WindowFW windowRO = new WindowFW();
-
-    private final int maximumConnections;
-    private final LongSupplier supplyTargetId;
-    private final Function<String, Target> suppyTarget;
-    private final LongFunction<Correlation<?>> correlateEstablished;
     private final Deque<Connection> availableConnections;
-    private final Target connect;
+    private final String connectName;
     private final long connectRef;
+    private final ClientStreamFactory factory;
 
     private int connectionsInUse;
     private ConnectionRequest nextRequest;
 
-    ConnectionPool(int maximumConnections, LongSupplier supplyTargetId, Function<String, Target> supplyTarget,
-            LongFunction<Correlation<?>> correlateEstablished, Target target, long targetRef)
+    ConnectionPool(ClientStreamFactory factory,
+                   String connectName, long connectRef)
     {
-        this.maximumConnections = maximumConnections;
-        this.availableConnections = new ArrayDeque<Connection>(maximumConnections);
-        this.supplyTargetId = supplyTargetId;
-        this.suppyTarget = supplyTarget;
-        this.correlateEstablished = correlateEstablished;
-        this.connect = target;
-        this.connectRef = targetRef;
+        this.factory = factory;
+        this.connectName = connectName;
+        this.connectRef = connectRef;
+        this.availableConnections = new ArrayDeque<Connection>(factory.maximumConnectionsPerRoute);
     }
 
     public void acquire(ConnectionRequest request)
     {
         Connection connection = availableConnections.poll();
-        if (connection == null && connectionsInUse < maximumConnections)
+        if (connection == null && connectionsInUse < factory.maximumConnectionsPerRoute)
         {
             connection = newConnection();
         }
@@ -75,33 +65,32 @@ final class ConnectionPool
 
     private Connection newConnection()
     {
-        Connection connection = new Connection(supplyTargetId.getAsLong());
+        Connection connection = new Connection(factory.supplyStreamId.getAsLong());
         long targetCorrelationId = connection.outputStreamId;
-        connect.doBegin(connection.outputStreamId, connectRef, targetCorrelationId);
-        connect.setThrottle(connection.outputStreamId, connection::handleThrottleDefault);
+        MessageConsumer output = factory.router.supplyTarget(connectName);
+        factory.writer.doBegin(output, connection.outputStreamId, connectRef, targetCorrelationId);
+        factory.router.setThrottle(connectName, connection.outputStreamId, connection::handleThrottleDefault);
         connectionsInUse++;
         return connection;
     }
 
     public void release(Connection connection, boolean doEndIfNotPersistent)
     {
-        @SuppressWarnings("unchecked")
-        final Correlation<?> correlation = correlateEstablished.apply(connection.connectCorrelationId);
+        final Correlation<?> correlation = factory.correlations.remove(connection.connectCorrelationId);
         if (correlation != null)
         {
             // We did not yet send response headers (high level begin) to the client accept reply stream.
             // This implies we got an incomplete response. We report this as service unavailable (503).
-            Target acceptReply = suppyTarget.apply(correlation.source());
-            long targetId = supplyTargetId.getAsLong();
+            MessageConsumer acceptReply = factory.router.supplyTarget(correlation.source());
+            long targetId = factory.supplyStreamId.getAsLong();
             long sourceCorrelationId = correlation.id();
-            acceptReply.doHttpBegin(targetId, 0L, sourceCorrelationId,
+            factory.writer.doHttpBegin(acceptReply, targetId, 0L, sourceCorrelationId,
                     hs -> hs.item(h -> h.representation((byte) 0).name(":status").value("503")));
-            acceptReply.doHttpEnd(targetId);
-
+            factory.writer.doHttpEnd(acceptReply, targetId);
         }
         if (connection.persistent)
         {
-            connect.setThrottle(connection.outputStreamId, connection::handleThrottleDefault);
+            factory.router.setThrottle(connectName, connection.outputStreamId, connection::handleThrottleDefault);
             availableConnections.add(connection);
         }
         else
@@ -113,8 +102,8 @@ final class ConnectionPool
 
             if (doEndIfNotPersistent)
             {
-                connect.doEnd(connection.outputStreamId);
-                connect.removeThrottle(connection.outputStreamId);
+                MessageConsumer connect = factory.router.supplyTarget(connectName);
+                factory.writer.doEnd(connect, connection.outputStreamId);
                 connection.endSent = true;
             }
         }
@@ -160,7 +149,7 @@ final class ConnectionPool
         boolean endSent;
 
         private long connectReplyStreamId;
-        private Source connectReply;
+        private MessageConsumer connectReplyThrottle;
         private long connectCorrelationId = -1;
 
         Connection(long targetStreamId)
@@ -168,16 +157,16 @@ final class ConnectionPool
             this.outputStreamId = targetStreamId;
         }
 
-        void setInput(Source source, long sourceId, long connectCorrelationId)
+        void setInput(MessageConsumer connectReplyThrottle, long sourceId, long connectCorrelationId)
         {
-            this.connectReply = source;
+            this.connectReplyThrottle = connectReplyThrottle;
             this.connectReplyStreamId = sourceId;
             this.connectCorrelationId = connectCorrelationId;
         }
 
         void handleThrottleDefault(
             int msgTypeId,
-            MutableDirectBuffer buffer,
+            DirectBuffer buffer,
             int index,
             int length)
         {
@@ -186,13 +175,13 @@ final class ConnectionPool
             case ResetFW.TYPE_ID:
                 persistent = false;
                 release(this, false);
-                if (connectReply != null)
+                if (connectReplyThrottle != null)
                 {
-                    connectReply.doReset(connectReplyStreamId);
+                    factory.writer.doReset(connectReplyThrottle, connectReplyStreamId);
                 }
                 break;
             case WindowFW.TYPE_ID:
-                final WindowFW window = windowRO.wrap(buffer, index, index + length);
+                final WindowFW window = factory.windowRO.wrap(buffer, index, index + length);
                 this.window += window.update();
                 break;
             default:

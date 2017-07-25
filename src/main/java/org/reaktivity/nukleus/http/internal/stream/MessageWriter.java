@@ -28,6 +28,7 @@ import org.reaktivity.nukleus.http.internal.types.Flyweight;
 import org.reaktivity.nukleus.http.internal.types.HttpHeaderFW;
 import org.reaktivity.nukleus.http.internal.types.ListFW;
 import org.reaktivity.nukleus.http.internal.types.OctetsFW;
+import org.reaktivity.nukleus.http.internal.types.stream.AbortFW;
 import org.reaktivity.nukleus.http.internal.types.stream.BeginFW;
 import org.reaktivity.nukleus.http.internal.types.stream.DataFW;
 import org.reaktivity.nukleus.http.internal.types.stream.EndFW;
@@ -42,6 +43,8 @@ final class MessageWriter
     private final BeginFW.Builder beginRW = new BeginFW.Builder();
     private final DataFW.Builder dataRW = new DataFW.Builder();
     private final EndFW.Builder endRW = new EndFW.Builder();
+
+    private AbortFW.Builder abortRW = new AbortFW.Builder();
 
     private final HttpBeginExFW.Builder httpBeginExRW = new HttpBeginExFW.Builder();
 
@@ -112,6 +115,15 @@ final class MessageWriter
                 .build();
 
         stream.accept(end.typeId(), end.buffer(), end.offset(), end.sizeof());
+    }
+
+    void doAbort(MessageConsumer stream, long targetId)
+    {
+        AbortFW abort = abortRW.wrap(writeBuffer, 0, writeBuffer.capacity())
+                .streamId(targetId)
+                .extension(e -> e.reset())
+                .build();
+        stream.accept(abort.typeId(), abort.buffer(), abort.offset(), abort.sizeof());
     }
 
     void doHttpBegin(

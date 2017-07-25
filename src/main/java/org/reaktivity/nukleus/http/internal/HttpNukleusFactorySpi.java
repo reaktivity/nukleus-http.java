@@ -15,12 +15,14 @@
  */
 package org.reaktivity.nukleus.http.internal;
 
+import static org.reaktivity.nukleus.route.RouteKind.CLIENT;
 import static org.reaktivity.nukleus.route.RouteKind.SERVER;
 
 import org.reaktivity.nukleus.Configuration;
 import org.reaktivity.nukleus.Nukleus;
 import org.reaktivity.nukleus.NukleusBuilder;
 import org.reaktivity.nukleus.NukleusFactorySpi;
+import org.reaktivity.nukleus.http.internal.stream.ClientStreamFactoryBuilder;
 import org.reaktivity.nukleus.http.internal.stream.ServerStreamFactoryBuilder;
 
 public final class HttpNukleusFactorySpi implements NukleusFactorySpi
@@ -40,7 +42,8 @@ public final class HttpNukleusFactorySpi implements NukleusFactorySpi
     {
         HttpConfiguration httpConfig = new HttpConfiguration(config);
 
-        return builder.streamFactory(SERVER, new ServerStreamFactoryBuilder(httpConfig))
+        return builder.streamFactory(CLIENT, new ClientStreamFactoryBuilder(httpConfig))
+                      .streamFactory(SERVER, new ServerStreamFactoryBuilder(httpConfig))
                       .build();
     }
 }
