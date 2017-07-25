@@ -13,7 +13,7 @@ import org.reaktivity.nukleus.http.internal.types.stream.EndFW;
 import org.reaktivity.nukleus.http.internal.types.stream.ResetFW;
 import org.reaktivity.nukleus.http.internal.types.stream.WindowFW;
 
-final class ClientConnectReplyStream
+final class ClientConnectReplyStream implements MessageConsumer
 {
     private final ClientStreamFactory factory;
     private MessageConsumer streamState;
@@ -60,7 +60,11 @@ final class ClientConnectReplyStream
                 getClass().getSimpleName(), source.routableName(), sourceId, sourceWindowBytes, targetId);
     }
 
-    ClientConnectReplyStream(ClientStreamFactory factory)
+    ClientConnectReplyStream(
+            ClientStreamFactory factory,
+            MessageConsumer connectReplyThrottle,
+            long connectReplyId,
+            String connectReplyName)
     {
         this.factory = factory;
         this.streamState = this::handleStreamBeforeBegin;
@@ -68,13 +72,10 @@ final class ClientConnectReplyStream
         this.windowHandler = this::handleWindow;
     }
 
-    private void handleStream(
-        int msgTypeId,
-        DirectBuffer buffer,
-        int index,
-        int length)
+    @Override
+    public void accept(int msgTypeId, DirectBuffer buffer, int index, int length)
     {
-        streamState.onMessage(msgTypeId, buffer, index, length);
+        streamState.accept(msgTypeId, buffer, index, length);
     }
 
     private void handleStreamBeforeBegin(

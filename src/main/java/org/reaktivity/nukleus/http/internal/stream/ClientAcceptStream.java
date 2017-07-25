@@ -10,6 +10,8 @@ import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
 import org.agrona.collections.Long2ObjectHashMap;
 import org.agrona.concurrent.MessageHandler;
+import org.reaktivity.nukleus.buffer.BufferPool;
+import org.reaktivity.nukleus.function.MessageConsumer;
 import org.reaktivity.nukleus.http.internal.stream.ConnectionPool.Connection;
 import org.reaktivity.nukleus.http.internal.stream.ConnectionPool.ConnectionRequest;
 import org.reaktivity.nukleus.http.internal.types.OctetsFW;
@@ -21,12 +23,12 @@ import org.reaktivity.nukleus.http.internal.types.stream.ResetFW;
 import org.reaktivity.nukleus.http.internal.types.stream.WindowFW;
 import org.reaktivity.reaktor.internal.acceptable.Target;
 
-final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection>
+final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection>, MessageConsumer
 {
     private final ClientStreamFactory clientStreamFactory;
 
-    private MessageHandler streamState;
-    private MessageHandler throttleState;
+    private MessageConsumer streamState;
+    private MessageConsumer throttleState;
 
     private long sourceId;
     private long sourceRef;
@@ -43,20 +45,22 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
     private boolean endDeferred;
     private boolean persistent = true;
 
-    ClientAcceptStream(ClientStreamFactory clientStreamFactory)
+    ClientAcceptStream(ClientStreamFactory factory, MessageConsumer acceptThrottle,
+            long acceptId, long acceptRef, String acceptName, long acceptCorrelationId)
     {
-        this.clientStreamFactory = clientStreamFactory;
+        this.clientStreamFactory = factory;
         this.streamState = this::streamBeforeBegin;
         this.throttleState = this::throttleBeforeBegin;
     }
 
-    void handleStream(
+    @Override
+    public void accept(
         int msgTypeId,
-        MutableDirectBuffer buffer,
+        DirectBuffer buffer,
         int index,
         int length)
     {
-        streamState.onMessage(msgTypeId, buffer, index, length);
+        streamState.accept(msgTypeId, buffer, index, length);
     }
 
     private void streamBeforeBegin(
@@ -421,7 +425,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         if (bytesDeferred == 0)
         {
             this.clientStreamFactory.slab.release(slotIndex);
-            slotIndex = NO_SLOT;
+            slotIndex = BufferPool.NO_SLOT;
             if (endDeferred)
             {
                 doEnd();
