@@ -15,7 +15,6 @@
  */
 package org.reaktivity.nukleus.http.internal.streams.rfc7230.server;
 
-import static java.lang.String.format;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.rules.RuleChain.outerRule;
 
@@ -46,7 +45,7 @@ public class MessageFormatIT
         .commandBufferCapacity(1024)
         .responseBufferCapacity(1024)
         .counterValuesBufferCapacity(1024)
-        .configure(format(ReaktorConfiguration.NUKLEUS_BUFFER_SLOT_CAPACITY_PROPERTY_FORMAT, "http"), "8192");
+        .configure(ReaktorConfiguration.BUFFER_SLOT_CAPACITY_PROPERTY, "8192");
 
     @Rule
     public final TestRule chain = outerRule(reaktor).around(k3po).around(timeout);

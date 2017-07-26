@@ -15,7 +15,6 @@
  */
 package org.reaktivity.nukleus.http.internal.streams.rfc7230.client;
 
-import static java.lang.String.format;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.rules.RuleChain.outerRule;
 
@@ -46,9 +45,9 @@ public class FlowControlLimitsIT
         .counterValuesBufferCapacity(1024)
         .clean()
         // Maximum headers size is limited to the size of each slot in the buffer pool:
-        .configure(format(ReaktorConfiguration.NUKLEUS_BUFFER_SLOT_CAPACITY_PROPERTY_FORMAT, "http"), "64")
+        .configure(ReaktorConfiguration.BUFFER_SLOT_CAPACITY_PROPERTY, "64")
         // Overall buffer pool size:
-        .configure(format(ReaktorConfiguration.NUKLEUS_BUFFER_POOL_CAPACITY_PROPERTY_FORMAT, "http"), "64");
+        .configure(ReaktorConfiguration.BUFFER_POOL_CAPACITY_PROPERTY, "64");
 
     @Rule
     public final TestRule chain = outerRule(reaktor).around(k3po).around(timeout);
