@@ -15,34 +15,25 @@
  */
 package org.reaktivity.nukleus.http.internal;
 
-import org.agrona.concurrent.status.AtomicCounter;
-import org.agrona.concurrent.status.CountersManager;
+import org.reaktivity.nukleus.Configuration;
 
-public final class Counters implements AutoCloseable
+public class HttpConfiguration extends Configuration
 {
-    private final AtomicCounter routesSourced;
-    private final AtomicCounter streamsSourced;
+    // Maximum number of parallel connections to a given target name and ref (i.e. route) when
+    // the HTTP nukleus is acting as a client
+    public static final String MAXIMUM_CONNECTIONS_PROPERTY_NAME = "nukleus.http.maximum.connections";
 
-    Counters(CountersManager countersManager)
+    private static final int MAXIMUM_CONNECTIONS_DEFAULT = 10; // most browsers use 6, IE 11 uses 13
+
+    public HttpConfiguration(
+        Configuration config)
     {
-        routesSourced = countersManager.newCounter("routesSourced");
-        streamsSourced = countersManager.newCounter("streamsSourced");
+        super(config);
     }
 
-    @Override
-    public void close() throws Exception
+    public int maximumConnectionsPerRoute()
     {
-        routesSourced.close();
-        streamsSourced.close();
+        return getInteger(MAXIMUM_CONNECTIONS_PROPERTY_NAME, MAXIMUM_CONNECTIONS_DEFAULT);
     }
 
-    public AtomicCounter routesSourced()
-    {
-        return routesSourced;
-    }
-
-    public AtomicCounter streamsSourced()
-    {
-        return streamsSourced;
-    }
 }

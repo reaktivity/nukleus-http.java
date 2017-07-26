@@ -17,7 +17,6 @@ package org.reaktivity.nukleus.http.internal.streams.rfc7230.client;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.rules.RuleChain.outerRule;
-import static org.reaktivity.nukleus.http.internal.Context.MAXIMUM_CONNECTIONS_PROPERTY_NAME;
 
 import org.junit.Ignore;
 import org.junit.Rule;
@@ -27,7 +26,7 @@ import org.junit.rules.TestRule;
 import org.junit.rules.Timeout;
 import org.kaazing.k3po.junit.annotation.Specification;
 import org.kaazing.k3po.junit.rules.K3poRule;
-import org.reaktivity.nukleus.http.internal.test.SystemPropertiesRule;
+import org.reaktivity.nukleus.http.internal.HttpConfiguration;
 import org.reaktivity.reaktor.test.ReaktorRule;
 
 public class ConnectionManagementPoolSize1IT
@@ -39,18 +38,16 @@ public class ConnectionManagementPoolSize1IT
 
     private final TestRule timeout = new DisableOnDebug(new Timeout(10, SECONDS));
 
-    private final TestRule properties = new SystemPropertiesRule()
-            .setProperty(MAXIMUM_CONNECTIONS_PROPERTY_NAME, "1");
-
     private final ReaktorRule reaktor = new ReaktorRule()
         .nukleus("http"::equals)
         .directory("target/nukleus-itests")
         .commandBufferCapacity(1024)
         .responseBufferCapacity(1024)
-        .counterValuesBufferCapacity(1024);
+        .counterValuesBufferCapacity(1024)
+        .configure(HttpConfiguration.MAXIMUM_CONNECTIONS_PROPERTY_NAME, "1");
 
     @Rule
-    public final TestRule chain = outerRule(properties).around(reaktor).around(k3po).around(timeout);
+    public final TestRule chain = outerRule(reaktor).around(k3po).around(timeout);
 
     @Test
     @Specification({
