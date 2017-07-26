@@ -117,7 +117,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
             endDeferred = true;
             break;
         default:
-            this.factory.slab.release(slotIndex);
+            this.factory.bufferPool.release(slotIndex);
             processUnexpected(buffer, index, length);
             break;
         }
@@ -176,7 +176,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         int index,
         int length)
     {
-        slotIndex = this.factory.slab.acquire(acceptId);
+        slotIndex = this.factory.bufferPool.acquire(acceptId);
         if (slotIndex == BufferPool.NO_SLOT)
         {
             factory.writer.doReset(acceptThrottle, acceptId);
@@ -187,7 +187,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
             byte[] bytes = encodeHeaders(headers, buffer, index, length);
             headers = null; // allow gc
             slotPosition = 0;
-            MutableDirectBuffer slot = this.factory.slab.buffer(slotIndex);
+            MutableDirectBuffer slot = this.factory.bufferPool.buffer(slotIndex);
             if (bytes.length > slot.capacity())
             {
                 // TODO: diagnostics (reset reason?)
@@ -411,14 +411,14 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
     private void useWindowToWriteRequestHeaders()
     {
         int writableBytes = Math.min(slotPosition - slotOffset, connection.window);
-        MutableDirectBuffer slot = this.factory.slab.buffer(slotIndex);
+        MutableDirectBuffer slot = this.factory.bufferPool.buffer(slotIndex);
         factory.writer.doData(target, connection.connectStreamId, slot, slotOffset, writableBytes);
         connection.window -= writableBytes;
         slotOffset += writableBytes;
         int bytesDeferred = slotPosition - slotOffset;
         if (bytesDeferred == 0)
         {
-            this.factory.slab.release(slotIndex);
+            this.factory.bufferPool.release(slotIndex);
             slotIndex = BufferPool.NO_SLOT;
             if (endDeferred)
             {
@@ -458,7 +458,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
     {
         if (slotIndex != NO_SLOT)
         {
-            factory.slab.release(slotIndex);
+            factory.bufferPool.release(slotIndex);
             slotIndex = NO_SLOT;
         }
     }

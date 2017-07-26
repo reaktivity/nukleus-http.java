@@ -100,8 +100,8 @@ final class ServerAcceptStream implements MessageConsumer
         this.acceptRef = acceptRef;
         this.acceptCorrelationId = acceptCorrelationId;
         this.acceptName = acceptName;
-        this.temporarySlot = new UnsafeBuffer(ByteBuffer.allocateDirect(factory.slab.slotCapacity()));
-        this.maximumHeadersSize = factory.slab.slotCapacity();
+        this.temporarySlot = new UnsafeBuffer(ByteBuffer.allocateDirect(factory.bufferPool.slotCapacity()));
+        this.maximumHeadersSize = factory.bufferPool.slotCapacity();
     }
 
     @Override
@@ -257,7 +257,7 @@ final class ServerAcceptStream implements MessageConsumer
     {
         if (slotIndex != NO_SLOT)
         {
-            factory.slab.release(slotIndex);
+            factory.bufferPool.release(slotIndex);
             slotIndex = NO_SLOT;
         }
     }
@@ -367,7 +367,7 @@ final class ServerAcceptStream implements MessageConsumer
             {
                 assert slotIndex == NO_SLOT;
                 slotOffset = slotPosition = 0;
-                slotIndex = factory.slab.acquire(acceptId);
+                slotIndex = factory.bufferPool.acquire(acceptId);
                 if (slotIndex == NO_SLOT)
                 {
                     // Out of factory.slab memory
@@ -440,11 +440,11 @@ final class ServerAcceptStream implements MessageConsumer
     private void deferAndProcessData(DirectBuffer buffer, int offset, int limit)
     {
         final int dataLength = limit - offset;
-        if (slotPosition + dataLength > factory.slab.slotCapacity())
+        if (slotPosition + dataLength > factory.bufferPool.slotCapacity())
         {
             alignSlotData();
         }
-        MutableDirectBuffer slot = factory.slab.buffer(slotIndex);
+        MutableDirectBuffer slot = factory.bufferPool.buffer(slotIndex);
         slot.putBytes(slotPosition, buffer, offset, dataLength);
         slotPosition += dataLength;
         processDeferredData();
@@ -452,7 +452,7 @@ final class ServerAcceptStream implements MessageConsumer
         {
             // Increase source window to ensure we can receive the largest possible amount of data we can factory.slab
             int cachedBytes = slotPosition - slotOffset;
-            ensureSourceWindow(factory.slab.slotCapacity() - cachedBytes);
+            ensureSourceWindow(factory.bufferPool.slotCapacity() - cachedBytes);
             if (window == 0)
             {
                 throw new IllegalStateException("Decoder failed to detect headers or chunk too long");
@@ -462,7 +462,7 @@ final class ServerAcceptStream implements MessageConsumer
 
     private void processDeferredData()
     {
-        MutableDirectBuffer slot = factory.slab.buffer(slotIndex);
+        MutableDirectBuffer slot = factory.bufferPool.buffer(slotIndex);
         int offset = decode(slot, slotOffset, slotPosition);
         slotOffset = offset;
         if (slotOffset == slotPosition)
@@ -491,7 +491,7 @@ final class ServerAcceptStream implements MessageConsumer
     private void alignSlotData()
     {
         int dataLength = slotPosition - slotOffset;
-        MutableDirectBuffer slot = factory.slab.buffer(slotIndex);
+        MutableDirectBuffer slot = factory.bufferPool.buffer(slotIndex);
         temporarySlot.putBytes(0, slot, slotOffset, dataLength);
         slot.putBytes(0, temporarySlot, 0, dataLength);
         slotOffset = 0;
@@ -1089,7 +1089,7 @@ final class ServerAcceptStream implements MessageConsumer
         {
             processDeferredData();
         }
-        ensureSourceWindow(Math.min(availableTargetWindow, factory.slab.slotCapacity()));
+        ensureSourceWindow(Math.min(availableTargetWindow, factory.bufferPool.slotCapacity()));
     }
 
     private void processWindowForHttpDataAfterUpgrade(DirectBuffer buffer, int index, int length)

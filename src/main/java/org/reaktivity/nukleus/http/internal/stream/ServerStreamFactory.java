@@ -62,7 +62,7 @@ public final class ServerStreamFactory implements StreamFactory
     final RouteHandler router;
     final LongSupplier supplyStreamId;
     final LongSupplier supplyCorrelationId;
-    final BufferPool slab;
+    final BufferPool bufferPool;
 
     Long2ObjectHashMap<Correlation<?>> correlations;
 
@@ -77,7 +77,7 @@ public final class ServerStreamFactory implements StreamFactory
     {
         this.router = requireNonNull(router);
         this.writer = new MessageWriter(requireNonNull(writeBuffer));
-        this.slab = requireNonNull(bufferPool);
+        this.bufferPool = requireNonNull(bufferPool);
         this.supplyStreamId = requireNonNull(supplyStreamId);
         this.supplyCorrelationId = supplyCorrelationId;
         this.correlations = requireNonNull(correlations);

@@ -76,7 +76,7 @@ public final class ClientStreamFactory implements StreamFactory
     final RouteHandler router;
     final LongSupplier supplyStreamId;
     final LongSupplier supplyCorrelationId;
-    final BufferPool slab;
+    final BufferPool bufferPool;
     final MessageWriter writer;
 
     final int maximumHeadersSize;
@@ -99,14 +99,14 @@ public final class ClientStreamFactory implements StreamFactory
     {
         this.router = requireNonNull(router);
         this.writer = new MessageWriter(requireNonNull(writeBuffer));
-        this.slab = requireNonNull(bufferPool);
+        this.bufferPool = requireNonNull(bufferPool);
         this.supplyStreamId = requireNonNull(supplyStreamId);
         this.supplyCorrelationId = supplyCorrelationId;
         this.correlations = requireNonNull(correlations);
         this.connectionPools = new HashMap<>();
         this.maximumConnectionsPerRoute = configuration.maximumConnectionsPerRoute();
-        this.maximumHeadersSize = slab.slotCapacity();
-        this.temporarySlot = new UnsafeBuffer(ByteBuffer.allocateDirect(slab.slotCapacity()));
+        this.maximumHeadersSize = bufferPool.slotCapacity();
+        this.temporarySlot = new UnsafeBuffer(ByteBuffer.allocateDirect(bufferPool.slotCapacity()));
     }
 
     @Override

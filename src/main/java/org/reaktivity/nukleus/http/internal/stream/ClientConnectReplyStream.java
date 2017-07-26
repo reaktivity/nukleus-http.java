@@ -348,7 +348,7 @@ final class ClientConnectReplyStream implements MessageConsumer
     {
         assert slotIndex == NO_SLOT;
         slotOffset = slotPosition = 0;
-        slotIndex = factory.slab.acquire(sourceId);
+        slotIndex = factory.bufferPool.acquire(sourceId);
         if (slotIndex == NO_SLOT)
         {
             // Out of slab memory
@@ -387,24 +387,24 @@ final class ClientConnectReplyStream implements MessageConsumer
     {
         final int payloadSize = payload.sizeof();
 
-        if (slotPosition + payloadSize > factory.slab.slotCapacity())
+        if (slotPosition + payloadSize > factory.bufferPool.slotCapacity())
         {
             alignSlotData();
         }
 
-        MutableDirectBuffer slot = factory.slab.buffer(slotIndex);
+        MutableDirectBuffer slot = factory.bufferPool.buffer(slotIndex);
         slot.putBytes(slotPosition, payload.buffer(), payload.offset(), payloadSize);
         slotPosition += payloadSize;
     }
 
     private void decodeBufferedData()
     {
-        MutableDirectBuffer slot = factory.slab.buffer(slotIndex);
+        MutableDirectBuffer slot = factory.bufferPool.buffer(slotIndex);
         int offset = decode(slot, slotOffset, slotPosition);
         slotOffset = offset;
         if (slotOffset == slotPosition)
         {
-            factory.slab.release(slotIndex);
+            factory.bufferPool.release(slotIndex);
             slotIndex = NO_SLOT;
             streamState = this::handleStreamWhenNotBuffering;
             if (endDeferred)
@@ -443,7 +443,7 @@ final class ClientConnectReplyStream implements MessageConsumer
     private void alignSlotData()
     {
         int dataLength = slotPosition - slotOffset;
-        MutableDirectBuffer slot = factory.slab.buffer(slotIndex);
+        MutableDirectBuffer slot = factory.bufferPool.buffer(slotIndex);
         factory.temporarySlot.putBytes(0, slot, slotOffset, dataLength);
         slot.putBytes(0, factory.temporarySlot, 0, dataLength);
         slotOffset = 0;
@@ -960,7 +960,7 @@ final class ClientConnectReplyStream implements MessageConsumer
     {
         if (slotIndex != NO_SLOT)
         {
-            factory.slab.release(slotIndex);
+            factory.bufferPool.release(slotIndex);
             slotIndex = NO_SLOT;
         }
     }

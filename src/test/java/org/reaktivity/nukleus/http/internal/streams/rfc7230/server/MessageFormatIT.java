@@ -45,7 +45,7 @@ public class MessageFormatIT
         .commandBufferCapacity(1024)
         .responseBufferCapacity(1024)
         .counterValuesBufferCapacity(1024)
-        .configure(ReaktorConfiguration.BUFFER_SLOT_CAPACITY_PROPERTY, "8192");
+        .configure(ReaktorConfiguration.BUFFER_SLOT_CAPACITY_PROPERTY, 8192);
 
     @Rule
     public final TestRule chain = outerRule(reaktor).around(k3po).around(timeout);

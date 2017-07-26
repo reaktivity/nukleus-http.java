@@ -120,7 +120,7 @@ public final class ServerConnectReplyStream implements MessageConsumer
             endDeferred = true;
             break;
         default:
-            factory.slab.release(slotIndex);
+            factory.bufferPool.release(slotIndex);
             processUnexpected(buffer, index, length);
             break;
         }
@@ -227,7 +227,7 @@ public final class ServerConnectReplyStream implements MessageConsumer
                     new StringBuilder().append("HTTP/1.1 ").append(status[0]).append(" ").append(status[1]).append("\r\n")
                                        .append(headersChars).append("\r\n").toString();
 
-            slotIndex = factory.slab.acquire(connectReplyId);
+            slotIndex = factory.bufferPool.acquire(connectReplyId);
             if (slotIndex == NO_SLOT)
             {
                 factory.writer.doReset(connectReplyThrottle, connectReplyId);
@@ -236,7 +236,7 @@ public final class ServerConnectReplyStream implements MessageConsumer
             else
             {
                 slotPosition = 0;
-                MutableDirectBuffer slot = factory.slab.buffer(slotIndex);
+                MutableDirectBuffer slot = factory.bufferPool.buffer(slotIndex);
                 if (payloadChars.length() > slot.capacity())
                 {
                     slot.putBytes(0,  RESPONSE_HEADERS_TOO_LONG_RESPONSE);
@@ -409,14 +409,14 @@ public final class ServerConnectReplyStream implements MessageConsumer
     {
         int bytesDeferred = slotPosition - slotOffset;
         int writableBytes = Math.min(bytesDeferred, acceptState.window);
-        MutableDirectBuffer slot = factory.slab.buffer(slotIndex);
+        MutableDirectBuffer slot = factory.bufferPool.buffer(slotIndex);
         factory.writer.doData(acceptState.acceptReply, acceptState.replyStreamId, slot, slotOffset, writableBytes);
         acceptState.window -= writableBytes;
         slotOffset += writableBytes;
         bytesDeferred -= writableBytes;
         if (bytesDeferred == 0)
         {
-            factory.slab.release(slotIndex);
+            factory.bufferPool.release(slotIndex);
             slotIndex = NO_SLOT;
             if (endDeferred)
             {
@@ -465,7 +465,7 @@ public final class ServerConnectReplyStream implements MessageConsumer
     {
         if (slotIndex != NO_SLOT)
         {
-            factory.slab.release(slotIndex);
+            factory.bufferPool.release(slotIndex);
             slotIndex = NO_SLOT;
         }
     }
