@@ -37,8 +37,7 @@ final class ConnectionPool
     private int connectionsInUse;
     private ConnectionRequest nextRequest;
 
-    ConnectionPool(ClientStreamFactory factory,
-                   String connectName, long connectRef)
+    ConnectionPool(ClientStreamFactory factory, String connectName, long connectRef)
     {
         this.factory = factory;
         this.connectName = connectName;
