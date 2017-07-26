@@ -15,20 +15,24 @@
  */
 package org.reaktivity.nukleus.http.internal;
 
+import static org.reaktivity.nukleus.route.RouteKind.CLIENT;
+import static org.reaktivity.nukleus.route.RouteKind.SERVER;
+
 import org.reaktivity.nukleus.Configuration;
 import org.reaktivity.nukleus.Nukleus;
 import org.reaktivity.nukleus.NukleusBuilder;
 import org.reaktivity.nukleus.NukleusFactorySpi;
-import org.reaktivity.nukleus.http.internal.conductor.Conductor;
-import org.reaktivity.nukleus.http.internal.router.Router;
-import org.reaktivity.nukleus.http.internal.watcher.Watcher;
+import org.reaktivity.nukleus.http.internal.stream.ClientStreamFactoryBuilder;
+import org.reaktivity.nukleus.http.internal.stream.ServerStreamFactoryBuilder;
 
 public final class HttpNukleusFactorySpi implements NukleusFactorySpi
 {
+    public static final String NAME = "http";
+
     @Override
     public String name()
     {
-        return HttpNukleus.NAME;
+        return NAME;
     }
 
     @Override
@@ -36,17 +40,10 @@ public final class HttpNukleusFactorySpi implements NukleusFactorySpi
         Configuration config,
         NukleusBuilder builder)
     {
-        Context context = new Context();
-        context.conclude(config);
+        HttpConfiguration httpConfig = new HttpConfiguration(config);
 
-        Conductor conductor = new Conductor(context);
-        Watcher watcher = new Watcher(context);
-        Router router = new Router(context);
-
-        conductor.setRouter(router);
-        watcher.setRouter(router);
-        router.setConductor(conductor);
-
-        return new HttpNukleus(conductor, watcher, router, context);
+        return builder.streamFactory(CLIENT, new ClientStreamFactoryBuilder(httpConfig))
+                      .streamFactory(SERVER, new ServerStreamFactoryBuilder(httpConfig))
+                      .build();
     }
 }

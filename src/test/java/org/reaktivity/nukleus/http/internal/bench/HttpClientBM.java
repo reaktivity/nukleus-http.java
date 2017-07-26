@@ -37,13 +37,14 @@ import java.util.Properties;
 import java.util.Random;
 import java.util.function.BooleanSupplier;
 import java.util.function.LongSupplier;
+import java.util.function.ToIntFunction;
 
+import org.agrona.DirectBuffer;
 import org.agrona.LangUtil;
 import org.agrona.MutableDirectBuffer;
 import org.agrona.concurrent.AtomicBuffer;
 import org.agrona.concurrent.BackoffIdleStrategy;
 import org.agrona.concurrent.IdleStrategy;
-import org.agrona.concurrent.MessageHandler;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -66,8 +67,10 @@ import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 import org.openjdk.jmh.runner.options.TimeValue;
 import org.reaktivity.nukleus.Configuration;
+import org.reaktivity.nukleus.function.MessageConsumer;
+import org.reaktivity.nukleus.function.MessagePredicate;
 import org.reaktivity.nukleus.http.internal.HttpController;
-import org.reaktivity.nukleus.http.internal.HttpStreams;
+import org.reaktivity.nukleus.http.internal.bench.HttpClientBM.SharedState.Writer;
 import org.reaktivity.nukleus.http.internal.types.stream.BeginFW;
 import org.reaktivity.nukleus.http.internal.types.stream.DataFW;
 import org.reaktivity.nukleus.http.internal.types.stream.EndFW;
@@ -98,10 +101,10 @@ public class HttpClientBM
         private final Configuration configuration;
         private volatile Reaktor reaktor;
 
-        private volatile HttpStreams clientAcceptStreams;
-        private volatile HttpStreams clientAcceptReplyStreams;
-        private volatile HttpStreams clientConnectStreams;
-        private volatile HttpStreams clientConnectReplyStreams;
+        private volatile Writer clientAcceptStreams;
+        private volatile Reader clientAcceptReplyStreams;
+        private volatile Reader clientConnectStreams;
+        private volatile Writer clientConnectReplyStreams;
 
         private String clientAccept;
         private long clientAcceptRef;
@@ -161,11 +164,11 @@ public class HttpClientBM
             this.clientConnectRef = targetRef;
             this.clientAcceptRef = controller.routeClient("source", 0L, "target", targetRef, emptyMap()).get();
 
-            this.clientAcceptStreams = controller.streams("source");
-            this.clientConnectReplyStreams = controller.streams("target");
+            this.clientAcceptStreams = controller.supplySource("source", Writer::new);
+            this.clientConnectReplyStreams = controller.supplySource("target", Writer::new);
 
-            // Map file streams/source/http#target created by routeOutputNew
-            clientConnectStreams = controller.streams("source", "target");
+            // Map file streams/source/http#target created by routeOutputNew TODO: the following may not do this
+            clientConnectStreams = controller.supplyTarget("target", Reader::new);
 
             RequestWriterState writer = new RequestWriterState();
             writer.reinit(this,  control);
@@ -210,8 +213,8 @@ public class HttpClientBM
             {
                 try
                 {
-                    // Map file streams/source/http#target
-                    clientAcceptReplyStreams = controller.streams("target", "source");
+                    // Map file streams/source/http#target TODO: the following may not do this
+                    clientAcceptReplyStreams = controller.supplyTarget("source", Reader::new);
                 }
                 catch (IllegalStateException e)
                 {
@@ -249,19 +252,39 @@ public class HttpClientBM
             }
             reaktor.close();
 
-            this.clientAcceptStreams.close();
             this.clientAcceptStreams = null;
-            this.clientAcceptReplyStreams.close();
             this.clientAcceptReplyStreams = null;
-            this.clientConnectStreams.close();
             this.clientConnectStreams = null;
-            this.clientConnectReplyStreams.close();
             this.clientConnectReplyStreams = null;
         }
 
         LongSupplier supplyStreamId()
         {
             return () -> streamsSourced++;
+        }
+
+        class Reader
+        {
+            private final ToIntFunction<MessageConsumer> streams;
+            private final MessagePredicate throttle;
+
+            Reader(ToIntFunction<MessageConsumer> streams, MessagePredicate throttle)
+            {
+                this.throttle = throttle;
+                this.streams = streams;
+            }
+        }
+
+        class Writer
+        {
+            private final MessagePredicate streams;
+            private final ToIntFunction<MessageConsumer> throttle;
+
+            Writer(MessagePredicate streams, ToIntFunction<MessageConsumer> throttle)
+            {
+                this.streams = streams;
+                this.throttle = throttle;
+            }
         }
     }
 
@@ -342,7 +365,7 @@ public class HttpClientBM
             beginRW.source(sharedState.clientAccept);
             beginRW.sourceRef(sharedState.clientAcceptRef);
             BeginFW begin = beginRW.build();
-            return sharedState.clientAcceptStreams.writeStreams(begin.typeId(), begin.buffer(), begin.offset(), begin.sizeof());
+            return sharedState.clientAcceptStreams.streams.test(begin.typeId(), begin.buffer(), begin.offset(), begin.sizeof());
         }
 
         private boolean writeRequestDataAndEnd()
@@ -350,18 +373,18 @@ public class HttpClientBM
             DataFW data = dataRW.build();
             EndFW end = endRW.build();
             boolean result = false;
-            HttpStreams clientAcceptStreams = sharedState.clientAcceptStreams;
+            Writer clientAcceptStreams = sharedState.clientAcceptStreams;
             while (!result && !measurementEnded.getAsBoolean())
             {
-                clientAcceptStreams.readThrottle(this::throttle);
+                clientAcceptStreams.throttle.applyAsInt(this::throttle);
                 result = availableWindow >= data.length();
                 if (result)
                 {
-                    result = clientAcceptStreams.writeStreams(data.typeId(), data.buffer(), 0, data.limit());
+                    result = clientAcceptStreams.streams.test(data.typeId(), data.buffer(), 0, data.limit());
                     if (result)
                     {
                         availableWindow -= data.length();
-                        clientAcceptStreams.writeStreams(end.typeId(), end.buffer(), 0, end.limit());
+                        clientAcceptStreams.streams.test(end.typeId(), end.buffer(), 0, end.limit());
                     }
                     else
                     {
@@ -377,7 +400,7 @@ public class HttpClientBM
 
         private void throttle(
                 int msgTypeId,
-                MutableDirectBuffer buffer,
+                DirectBuffer buffer,
                 int index,
                 int length)
         {
@@ -405,7 +428,7 @@ public class HttpClientBM
     public static class ResponseReaderState
     {
         private SharedState sharedState;
-        private MessageHandler clientAcceptReplyHandler;
+        private MessageConsumer clientAcceptReplyHandler;
         private final BeginFW beginRO = new BeginFW();
         private final DataFW dataRO = new DataFW();
         private final WindowFW.Builder windowRW = new WindowFW.Builder();
@@ -421,12 +444,12 @@ public class HttpClientBM
 
         int readResponse()
         {
-            return sharedState.clientAcceptReplyStreams.readStreams(clientAcceptReplyHandler);
+            return sharedState.clientAcceptReplyStreams.streams.applyAsInt(clientAcceptReplyHandler);
         }
 
         private void processResponseFrame(
             int msgTypeId,
-            MutableDirectBuffer buffer,
+            DirectBuffer buffer,
             int index,
             int length)
         {
@@ -460,7 +483,7 @@ public class HttpClientBM
                     .streamId(streamId)
                     .update(update)
                     .build();
-            sharedState.clientAcceptReplyStreams.writeThrottle(window.typeId(), window.buffer(), window.offset(),
+            sharedState.clientAcceptReplyStreams.throttle.test(window.typeId(), window.buffer(), window.offset(),
                     window.sizeof());
         }
     }
@@ -473,7 +496,7 @@ public class HttpClientBM
         private final DataFW dataRO = new DataFW();
         private final WindowFW.Builder windowRW = new WindowFW.Builder();
         private MutableDirectBuffer throttleBuffer;
-        private MessageHandler clientConnectHandler;
+        private MessageConsumer clientConnectHandler;
         long streamId;
         private RemoteWriterState writer;
 
@@ -488,12 +511,12 @@ public class HttpClientBM
         int processRequests(RemoteWriterState writer)
         {
             this.writer = writer;
-            return sharedState.clientConnectStreams.readStreams(clientConnectHandler);
+            return sharedState.clientConnectStreams.streams.applyAsInt(clientConnectHandler);
         }
 
         private void processRequestFrame(
             int msgTypeId,
-            MutableDirectBuffer buffer,
+            DirectBuffer buffer,
             int index,
             int length)
         {
@@ -536,7 +559,7 @@ public class HttpClientBM
                     .streamId(streamId)
                     .update(update)
                     .build();
-            sharedState.clientConnectStreams.writeThrottle(window.typeId(), window.buffer(), window.offset(), window.sizeof());
+            sharedState.clientConnectStreams.throttle.test(window.typeId(), window.buffer(), window.offset(), window.sizeof());
         }
     }
 
@@ -586,10 +609,10 @@ public class HttpClientBM
             beginRW.streamId(streamId).correlationId(correlationId);
             BeginFW begin = beginRW.build();
             boolean result = false;
-            HttpStreams clientConnectReplyStreams = sharedState.clientConnectReplyStreams;
+            Writer clientConnectReplyStreams = sharedState.clientConnectReplyStreams;
             while (!measurementEnded.getAsBoolean() && !result)
             {
-                result = clientConnectReplyStreams.writeStreams(begin.typeId(), begin.buffer(), begin.offset(), begin.sizeof());
+                result = clientConnectReplyStreams.streams.test(begin.typeId(), begin.buffer(), begin.offset(), begin.sizeof());
             }
             return result;
         }
@@ -599,14 +622,14 @@ public class HttpClientBM
             dataRW.streamId(streamId);
             DataFW data = dataRW.build();
             boolean result = false;
-            HttpStreams clientConnectReplyStreams = sharedState.clientConnectReplyStreams;
+            Writer clientConnectReplyStreams = sharedState.clientConnectReplyStreams;
             while (!result && !measurementEnded.getAsBoolean())
             {
-                clientConnectReplyStreams.readThrottle(this::throttle);
+                clientConnectReplyStreams.throttle.applyAsInt(this::throttle);
                 result = availableWindow >= data.length();
                 if (result)
                 {
-                    result = clientConnectReplyStreams.writeStreams(data.typeId(), data.buffer(), 0, data.limit());
+                    result = clientConnectReplyStreams.streams.test(data.typeId(), data.buffer(), 0, data.limit());
                     if (result)
                     {
                         availableWindow -= data.length();
@@ -627,17 +650,17 @@ public class HttpClientBM
             endRW.streamId(streamId);
             EndFW end = endRW.build();
             boolean result = false;
-            HttpStreams clientConnectReplyStreams = sharedState.clientConnectReplyStreams;
+            Writer clientConnectReplyStreams = sharedState.clientConnectReplyStreams;
             while (!measurementEnded.getAsBoolean() && !result)
             {
-                result = clientConnectReplyStreams.writeStreams(end.typeId(), end.buffer(), end.offset(), end.sizeof());
+                result = clientConnectReplyStreams.streams.test(end.typeId(), end.buffer(), end.offset(), end.sizeof());
             }
             return result;
         }
 
         private void throttle(
                 int msgTypeId,
-                MutableDirectBuffer buffer,
+                DirectBuffer buffer,
                 int index,
                 int length)
         {

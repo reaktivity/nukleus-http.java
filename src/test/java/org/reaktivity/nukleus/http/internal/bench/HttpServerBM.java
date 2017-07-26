@@ -33,11 +33,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Properties;
 import java.util.Random;
+import java.util.function.ToIntFunction;
 
+import org.agrona.DirectBuffer;
 import org.agrona.LangUtil;
 import org.agrona.MutableDirectBuffer;
 import org.agrona.concurrent.AtomicBuffer;
-import org.agrona.concurrent.MessageHandler;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -60,8 +61,9 @@ import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 import org.openjdk.jmh.runner.options.TimeValue;
 import org.reaktivity.nukleus.Configuration;
+import org.reaktivity.nukleus.function.MessageConsumer;
+import org.reaktivity.nukleus.function.MessagePredicate;
 import org.reaktivity.nukleus.http.internal.HttpController;
-import org.reaktivity.nukleus.http.internal.HttpStreams;
 import org.reaktivity.nukleus.http.internal.types.stream.BeginFW;
 import org.reaktivity.nukleus.http.internal.types.stream.DataFW;
 import org.reaktivity.nukleus.http.internal.types.stream.ResetFW;
@@ -117,17 +119,16 @@ public class HttpServerBM
         private final DataFW.Builder dataRW = new DataFW.Builder();
         private final WindowFW.Builder windowRW = new WindowFW.Builder();
 
-        private HttpStreams sourceInputStreams;
-        private HttpStreams sourceOutputEstStreams;
-
         private MutableDirectBuffer throttleBuffer;
 
         private long sourceInputRef;
+        private Writer sourceInput;
+        private Reader sourceOutputEst;
 
         private long sourceInputId;
         private DataFW data;
 
-        private MessageHandler sourceOutputEstHandler;
+        private MessageConsumer sourceOutputEstHandler;
         int availableSourceInputWindow = 0;
         public int writeFails;
         public int readFails;
@@ -140,7 +141,7 @@ public class HttpServerBM
 
             this.sourceInputRef = controller.routeServer("source", 0L, "http", 0L, emptyMap()).get();
 
-            this.sourceInputStreams = controller.streams("source");
+            this.sourceInput = controller.supplySource("source", Writer::new);
 
             this.sourceInputId = random.nextLong();
             this.sourceOutputEstHandler = this::processBegin;
@@ -155,7 +156,7 @@ public class HttpServerBM
                     .extension(e -> e.reset())
                     .build();
 
-            this.sourceInputStreams.writeStreams(begin.typeId(), begin.buffer(), begin.offset(), begin.sizeof());
+            this.sourceInput.streams.test(begin.typeId(), begin.buffer(), begin.offset(), begin.sizeof());
 
             String payload =
                     "POST / HTTP/1.1\r\n" +
@@ -182,11 +183,11 @@ public class HttpServerBM
 
             if (writeSucceeded)
             {
-                for (int i=0; i < 100 && sourceOutputEstStreams == null; i++)
+                for (int i=0; i < 100 && sourceOutputEst == null; i++)
                 {
                     try
                     {
-                        sourceOutputEstStreams = controller.streams("http", "source");
+                        sourceOutputEst = controller.supplyTarget("http", Reader::new);
                     }
                     catch (IllegalStateException e)
                     {
@@ -213,25 +214,23 @@ public class HttpServerBM
 
             controller.unrouteServer("source", sourceInputRef, "http", 0L, null).get();
 
-            this.sourceInputStreams.close();
-            this.sourceInputStreams = null;
+            this.sourceInput = null;
 
-            this.sourceOutputEstStreams.close();
-            this.sourceOutputEstStreams = null;
+            this.sourceOutputEst = null;
         }
 
         private int read()
         {
-            return sourceOutputEstStreams.readStreams(this::handleSourceOutputEst);
+            return sourceOutputEst.streams.applyAsInt(this::handleSourceOutputEst);
         }
 
         private boolean write()
         {
-            sourceInputStreams.readThrottle(this::sourceInputThrottle);
+            sourceInput.throttle.applyAsInt(this::sourceInputThrottle);
             boolean result = availableSourceInputWindow >= data.length();
             if (result)
             {
-                result = sourceInputStreams.writeStreams(data.typeId(), data.buffer(), 0, data.limit());
+                result = sourceInput.streams.test(data.typeId(), data.buffer(), 0, data.limit());
                 if (result)
                 {
                     availableSourceInputWindow -= data.length();
@@ -246,7 +245,7 @@ public class HttpServerBM
 
         private void sourceInputThrottle(
             int msgTypeId,
-            MutableDirectBuffer buffer,
+            DirectBuffer buffer,
             int index,
             int length)
         {
@@ -268,16 +267,16 @@ public class HttpServerBM
 
         private void handleSourceOutputEst(
             int msgTypeId,
-            MutableDirectBuffer buffer,
+            DirectBuffer buffer,
             int index,
             int length)
         {
-            sourceOutputEstHandler.onMessage(msgTypeId, buffer, index, length);
+            sourceOutputEstHandler.accept(msgTypeId, buffer, index, length);
         }
 
         private void processBegin(
             int msgTypeId,
-            MutableDirectBuffer buffer,
+            DirectBuffer buffer,
             int index,
             int length)
         {
@@ -290,7 +289,7 @@ public class HttpServerBM
 
         private void processData(
             int msgTypeId,
-            MutableDirectBuffer buffer,
+            DirectBuffer buffer,
             int index,
             int length)
         {
@@ -308,7 +307,31 @@ public class HttpServerBM
                     .streamId(streamId)
                     .update(update)
                     .build();
-            sourceOutputEstStreams.writeThrottle(window.typeId(), window.buffer(), window.offset(), window.sizeof());
+            sourceOutputEst.throttle.test(window.typeId(), window.buffer(), window.offset(), window.sizeof());
+        }
+
+        class Reader
+        {
+            private final ToIntFunction<MessageConsumer> streams;
+            private final MessagePredicate throttle;
+
+            Reader(ToIntFunction<MessageConsumer> streams, MessagePredicate throttle)
+            {
+                this.throttle = throttle;
+                this.streams = streams;
+            }
+        }
+
+        class Writer
+        {
+            private final MessagePredicate streams;
+            private final ToIntFunction<MessageConsumer> throttle;
+
+            Writer(MessagePredicate streams, ToIntFunction<MessageConsumer> throttle)
+            {
+                this.streams = streams;
+                this.throttle = throttle;
+            }
         }
     }
 

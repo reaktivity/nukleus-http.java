@@ -13,16 +13,29 @@
  * License for the specific language governing permissions and limitations
  * under the License.
  */
-package org.reaktivity.nukleus.http.internal.layouts;
+package org.reaktivity.nukleus.http.internal.stream;
 
+import org.reaktivity.nukleus.http.internal.stream.ConnectionPool.Connection;
 
-public abstract class Layout implements AutoCloseable
+final class ClientConnectReplyState
 {
-    @Override
-    public abstract void close();
+    final ConnectionPool connectionPool;
+    final Connection connection;
 
-    public abstract static class Builder<T extends Layout>
+    ClientConnectReplyState(ConnectionPool connectionPool,
+                            Connection connection)
     {
-        public abstract T build();
+       this.connectionPool = connectionPool;
+       this.connection = connection;
     }
+
+    @Override
+    public String toString()
+    {
+        return String.format(
+                "%s[streamId=%016x, window=%d]",
+                getClass().getSimpleName(), connection.connectStreamId, connection.window);
+    }
+
 }
+

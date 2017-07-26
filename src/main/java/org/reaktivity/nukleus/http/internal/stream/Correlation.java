@@ -13,39 +13,33 @@
  * License for the specific language governing permissions and limitations
  * under the License.
  */
-package org.reaktivity.nukleus.http.internal.routable;
+package org.reaktivity.nukleus.http.internal.stream;
 
 import static java.util.Objects.requireNonNull;
 
 import java.util.Objects;
 
-import org.reaktivity.nukleus.http.internal.router.RouteKind;
-
 public class Correlation<S>
 {
     private final String source;
     private final long id;
-    private final RouteKind established;
     private final S state;
 
     public Correlation(
         long id,
         String source,
-        RouteKind established,
         S state)
     {
         this.id = id;
         this.source = requireNonNull(source, "source");
-        this.established = requireNonNull(established, "established");
         this.state = state;
     }
 
     public Correlation(
             long id,
-            String source,
-            RouteKind established)
+            String source)
     {
-        this(id, source, established, null);
+        this(id, source, null);
     }
 
     public String source()
@@ -58,10 +52,6 @@ public class Correlation<S>
         return id;
     }
 
-    public RouteKind established()
-    {
-        return established;
-    }
 
     public S state()
     {
@@ -73,7 +63,6 @@ public class Correlation<S>
     {
         int result = Long.hashCode(id);
         result = 31 * result + source.hashCode();
-        result = 31 * result + established.hashCode();
 
         return result;
     }
@@ -89,7 +78,6 @@ public class Correlation<S>
 
         Correlation<?> that = (Correlation<?>) obj;
         return this.id == that.id &&
-                this.established == that.established &&
                 Objects.equals(this.source, that.source) &&
                 Objects.equals(this.state, that.state);
     }
@@ -97,6 +85,6 @@ public class Correlation<S>
     @Override
     public String toString()
     {
-        return String.format("[id=%s, source=\"%s\", established=%s]", id, source, established);
+        return String.format("[id=%s, source=\"%s\", established=%s]", id, source);
     }
 }

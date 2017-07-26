@@ -13,7 +13,7 @@
  * License for the specific language governing permissions and limitations
  * under the License.
  */
-package org.reaktivity.nukleus.http.internal.routable;
+package org.reaktivity.nukleus.http.internal.stream;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
@@ -21,112 +21,45 @@ import java.util.function.Consumer;
 
 import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
-import org.agrona.collections.Long2ObjectHashMap;
-import org.agrona.concurrent.AtomicBuffer;
-import org.agrona.concurrent.MessageHandler;
 import org.agrona.concurrent.UnsafeBuffer;
-import org.agrona.concurrent.ringbuffer.RingBuffer;
-import org.reaktivity.nukleus.Nukleus;
-import org.reaktivity.nukleus.http.internal.HttpNukleus;
-import org.reaktivity.nukleus.http.internal.layouts.StreamsLayout;
+import org.reaktivity.nukleus.function.MessageConsumer;
+import org.reaktivity.nukleus.http.internal.HttpNukleusFactorySpi;
 import org.reaktivity.nukleus.http.internal.types.Flyweight;
 import org.reaktivity.nukleus.http.internal.types.HttpHeaderFW;
 import org.reaktivity.nukleus.http.internal.types.ListFW;
 import org.reaktivity.nukleus.http.internal.types.OctetsFW;
+import org.reaktivity.nukleus.http.internal.types.stream.AbortFW;
 import org.reaktivity.nukleus.http.internal.types.stream.BeginFW;
 import org.reaktivity.nukleus.http.internal.types.stream.DataFW;
 import org.reaktivity.nukleus.http.internal.types.stream.EndFW;
-import org.reaktivity.nukleus.http.internal.types.stream.FrameFW;
 import org.reaktivity.nukleus.http.internal.types.stream.HttpBeginExFW;
+import org.reaktivity.nukleus.http.internal.types.stream.ResetFW;
+import org.reaktivity.nukleus.http.internal.types.stream.WindowFW;
 
-public final class Target implements Nukleus
+final class MessageWriter
 {
-    private static final DirectBuffer SOURCE_NAME_BUFFER = new UnsafeBuffer(HttpNukleus.NAME.getBytes(UTF_8));
-
-    private final FrameFW frameRO = new FrameFW();
+    private static final DirectBuffer SOURCE_NAME_BUFFER = new UnsafeBuffer(HttpNukleusFactorySpi.NAME.getBytes(UTF_8));
 
     private final BeginFW.Builder beginRW = new BeginFW.Builder();
     private final DataFW.Builder dataRW = new DataFW.Builder();
     private final EndFW.Builder endRW = new EndFW.Builder();
 
+    private AbortFW.Builder abortRW = new AbortFW.Builder();
+
     private final HttpBeginExFW.Builder httpBeginExRW = new HttpBeginExFW.Builder();
 
-    private final String name;
-    private final StreamsLayout layout;
-    private final AtomicBuffer writeBuffer;
+    private final WindowFW.Builder windowRW = new WindowFW.Builder();
+    private final ResetFW.Builder resetRW = new ResetFW.Builder();
 
-    private final RingBuffer streamsBuffer;
-    private final RingBuffer throttleBuffer;
-    private final Long2ObjectHashMap<MessageHandler> throttles;
+    private MutableDirectBuffer writeBuffer;
 
-    public Target(
-        String name,
-        StreamsLayout layout,
-        AtomicBuffer writeBuffer)
+    MessageWriter(MutableDirectBuffer writeBuffer)
     {
-        this.name = name;
-        this.layout = layout;
         this.writeBuffer = writeBuffer;
-        this.streamsBuffer = layout.streamsBuffer();
-        this.throttleBuffer = layout.throttleBuffer();
-        this.throttles = new Long2ObjectHashMap<>();
     }
 
-    @Override
-    public int process()
-    {
-        return throttleBuffer.read(this::handleRead);
-    }
-
-    @Override
-    public void close() throws Exception
-    {
-        layout.close();
-    }
-
-    @Override
-    public String name()
-    {
-        return name;
-    }
-
-    @Override
-    public String toString()
-    {
-        return name;
-    }
-
-    public void setThrottle(
-        long streamId,
-        MessageHandler throttle)
-    {
-        throttles.put(streamId, throttle);
-    }
-
-    public void removeThrottle(
-        long streamId)
-    {
-        throttles.remove(streamId);
-    }
-
-    private void handleRead(
-        int msgTypeId,
-        MutableDirectBuffer buffer,
-        int index,
-        int length)
-    {
-        frameRO.wrap(buffer, index, index + length);
-
-        final long streamId = frameRO.streamId();
-        final MessageHandler throttle = throttles.get(streamId);
-
-        if (throttle != null)
-        {
-            throttle.onMessage(msgTypeId, buffer, index, length);
-        }
-    }
-
-    public void doBegin(
+    void doBegin(
+        MessageConsumer stream,
         long targetId,
         long targetRef,
         long correlationId)
@@ -139,50 +72,41 @@ public final class Target implements Nukleus
                 .extension(e -> e.reset())
                 .build();
 
-        streamsBuffer.write(begin.typeId(), begin.buffer(), begin.offset(), begin.sizeof());
+        stream.accept(begin.typeId(), begin.buffer(), begin.offset(), begin.sizeof());
     }
 
-    public void doData(
-        long targetId,
+    void doData(
+        MessageConsumer stream,
+        long streamId,
         DirectBuffer payload,
         int offset,
         int length)
     {
         DataFW data = dataRW.wrap(writeBuffer, 0, writeBuffer.capacity())
-                .streamId(targetId)
+                .streamId(streamId)
                 .payload(p -> p.set(payload, offset, length))
                 .extension(e -> e.reset())
                 .build();
 
-        streamsBuffer.write(data.typeId(), data.buffer(), data.offset(), data.sizeof());
+        stream.accept(data.typeId(), data.buffer(), data.offset(), data.sizeof());
     }
 
     public void doData(
-        long targetId,
+        MessageConsumer stream,
+        long streamId,
         OctetsFW payload)
     {
         DataFW data = dataRW.wrap(writeBuffer, 0, writeBuffer.capacity())
-                .streamId(targetId)
+                .streamId(streamId)
                 .payload(p -> p.set(payload))
                 .extension(e -> e.reset())
                 .build();
 
-        streamsBuffer.write(data.typeId(), data.buffer(), data.offset(), data.sizeof());
+        stream.accept(data.typeId(), data.buffer(), data.offset(), data.sizeof());
     }
 
-    public void doAbort(
-        long targetId)
-    {
-        // TODO: use ABORT frame once available
-        EndFW end = endRW.wrap(writeBuffer, 0, writeBuffer.capacity())
-                .streamId(targetId)
-                .extension(e -> e.reset())
-                .build();
-
-        streamsBuffer.write(end.typeId(), end.buffer(), end.offset(), end.sizeof());
-    }
-
-    public void doEnd(
+    void doEnd(
+        MessageConsumer stream,
         long targetId)
     {
         EndFW end = endRW.wrap(writeBuffer, 0, writeBuffer.capacity())
@@ -190,10 +114,20 @@ public final class Target implements Nukleus
                 .extension(e -> e.reset())
                 .build();
 
-        streamsBuffer.write(end.typeId(), end.buffer(), end.offset(), end.sizeof());
+        stream.accept(end.typeId(), end.buffer(), end.offset(), end.sizeof());
     }
 
-    public void doHttpBegin(
+    void doAbort(MessageConsumer stream, long targetId)
+    {
+        AbortFW abort = abortRW.wrap(writeBuffer, 0, writeBuffer.capacity())
+                .streamId(targetId)
+                .extension(e -> e.reset())
+                .build();
+        stream.accept(abort.typeId(), abort.buffer(), abort.offset(), abort.sizeof());
+    }
+
+    void doHttpBegin(
+        MessageConsumer stream,
         long targetId,
         long targetRef,
         long correlationId,
@@ -207,10 +141,11 @@ public final class Target implements Nukleus
                 .extension(e -> e.set(visitHttpBeginEx(mutator)))
                 .build();
 
-        streamsBuffer.write(begin.typeId(), begin.buffer(), begin.offset(), begin.sizeof());
+        stream.accept(begin.typeId(), begin.buffer(), begin.offset(), begin.sizeof());
     }
 
-    public void doHttpData(
+    void doHttpData(
+        MessageConsumer stream,
         long targetId,
         DirectBuffer payload,
         int offset,
@@ -222,10 +157,11 @@ public final class Target implements Nukleus
                 .extension(e -> e.reset())
                 .build();
 
-        streamsBuffer.write(data.typeId(), data.buffer(), data.offset(), data.sizeof());
+        stream.accept(data.typeId(), data.buffer(), data.offset(), data.sizeof());
     }
 
-    public void doHttpEnd(
+    void doHttpEnd(
+        MessageConsumer stream,
         long targetId)
     {
         EndFW end = endRW.wrap(writeBuffer, 0, writeBuffer.capacity())
@@ -233,7 +169,33 @@ public final class Target implements Nukleus
                 .extension(e -> e.reset())
                 .build();
 
-        streamsBuffer.write(end.typeId(), end.buffer(), end.offset(), end.sizeof());
+        stream.accept(end.typeId(), end.buffer(), end.offset(), end.sizeof());
+    }
+
+    void doWindow(
+        final MessageConsumer throttle,
+        final long throttleId,
+        final int writableBytes,
+        final int writableFrames)
+    {
+        final WindowFW window = windowRW.wrap(writeBuffer, 0, writeBuffer.capacity())
+                .streamId(throttleId)
+                .update(writableBytes)
+                .frames(writableFrames)
+                .build();
+
+        throttle.accept(window.typeId(), window.buffer(), window.offset(), window.sizeof());
+    }
+
+    void doReset(
+        final MessageConsumer throttle,
+        final long throttleId)
+    {
+        final ResetFW reset = resetRW.wrap(writeBuffer, 0, writeBuffer.capacity())
+               .streamId(throttleId)
+               .build();
+
+        throttle.accept(reset.typeId(), reset.buffer(), reset.offset(), reset.sizeof());
     }
 
     private Flyweight.Builder.Visitor visitHttpBeginEx(
@@ -245,4 +207,5 @@ public final class Target implements Nukleus
                          .build()
                          .sizeof();
     }
+
 }
