@@ -34,7 +34,7 @@ final class ClientConnectReplyState
     {
         return String.format(
                 "%s[streamId=%016x, window=%d]",
-                getClass().getSimpleName(), connection.outputStreamId, connection.window);
+                getClass().getSimpleName(), connection.connectStreamId, connection.window);
     }
 
 }

@@ -253,7 +253,7 @@ final class ServerAcceptStream implements MessageConsumer
         }
     }
 
-    private void releaseSlotIfNecessary()
+    void releaseSlotIfNecessary()
     {
         if (slotIndex != NO_SLOT)
         {

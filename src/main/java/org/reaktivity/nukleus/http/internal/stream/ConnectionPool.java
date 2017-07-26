@@ -65,18 +65,19 @@ final class ConnectionPool
 
     private Connection newConnection()
     {
-        Connection connection = new Connection(factory.supplyStreamId.getAsLong());
-        long targetCorrelationId = connection.outputStreamId;
+        final long correlationId = factory.supplyCorrelationId.getAsLong();
+        final long streamId = factory.supplyStreamId.getAsLong();
+        Connection connection = new Connection(streamId, correlationId);
         MessageConsumer output = factory.router.supplyTarget(connectName);
-        factory.writer.doBegin(output, connection.outputStreamId, connectRef, targetCorrelationId);
-        factory.router.setThrottle(connectName, connection.outputStreamId, connection::handleThrottleDefault);
+        factory.writer.doBegin(output, streamId, connectRef, correlationId);
+        factory.router.setThrottle(connectName, streamId, connection::handleThrottleDefault);
         connectionsInUse++;
         return connection;
     }
 
     public void release(Connection connection, boolean doEndIfNotPersistent)
     {
-        final Correlation<?> correlation = factory.correlations.remove(connection.connectCorrelationId);
+        final Correlation<?> correlation = factory.correlations.remove(connection.correlationId);
         if (correlation != null)
         {
             // We did not yet send response headers (high level begin) to the client accept reply stream.
@@ -90,7 +91,7 @@ final class ConnectionPool
         }
         if (connection.persistent)
         {
-            factory.router.setThrottle(connectName, connection.outputStreamId, connection::handleThrottleDefault);
+            setDefaultThrottle(connection);
             availableConnections.add(connection);
         }
         else
@@ -103,7 +104,7 @@ final class ConnectionPool
             if (doEndIfNotPersistent)
             {
                 MessageConsumer connect = factory.router.supplyTarget(connectName);
-                factory.writer.doEnd(connect, connection.outputStreamId);
+                factory.writer.doEnd(connect, connection.connectStreamId);
                 connection.endSent = true;
             }
         }
@@ -113,6 +114,11 @@ final class ConnectionPool
             nextRequest = nextRequest.next();
             acquire(current);
         }
+    }
+
+    public void setDefaultThrottle(Connection connection)
+    {
+        factory.router.setThrottle(connectName, connection.connectStreamId, connection::handleThrottleDefault);
     }
 
     private void enqueue(ConnectionRequest request)
@@ -143,25 +149,25 @@ final class ConnectionPool
 
     public class Connection
     {
-        final long outputStreamId;
+        final long connectStreamId;
+        final long correlationId;
         int window;
         boolean persistent = true;
         boolean endSent;
 
         private long connectReplyStreamId;
         private MessageConsumer connectReplyThrottle;
-        private long connectCorrelationId = -1;
 
-        Connection(long targetStreamId)
+        Connection(long outputStreamId, long outputCorrelationId)
         {
-            this.outputStreamId = targetStreamId;
+            this.connectStreamId = outputStreamId;
+            this.correlationId = outputCorrelationId;
         }
 
-        void setInput(MessageConsumer connectReplyThrottle, long sourceId, long connectCorrelationId)
+        void setInput(MessageConsumer connectReplyThrottle, long connectReplyStreamId)
         {
             this.connectReplyThrottle = connectReplyThrottle;
-            this.connectReplyStreamId = sourceId;
-            this.connectCorrelationId = connectCorrelationId;
+            this.connectReplyStreamId = connectReplyStreamId;
         }
 
         void handleThrottleDefault(

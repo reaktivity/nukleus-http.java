@@ -17,6 +17,7 @@ package org.reaktivity.nukleus.http.internal;
 
 import static org.hamcrest.Matchers.instanceOf;
 import static org.junit.Assert.assertThat;
+import static org.reaktivity.nukleus.route.RouteKind.CLIENT;
 import static org.reaktivity.nukleus.route.RouteKind.SERVER;
 
 import java.util.Properties;
@@ -49,6 +50,8 @@ public class HttpNukleusFactorySpiTest
         context.checking(new Expectations()
         {
             {
+                oneOf(builder).streamFactory(with(CLIENT), with(any(StreamFactoryBuilder.class)));
+                will(returnValue(builder));
                 oneOf(builder).streamFactory(with(SERVER), with(any(StreamFactoryBuilder.class)));
             }
         });

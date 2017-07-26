@@ -1,3 +1,18 @@
+/**
+ * Copyright 2016-2017 The Reaktivity Project
+ *
+ * The Reaktivity Project licenses this file to you under the Apache License,
+ * version 2.0 (the "License"); you may not use this file except in compliance
+ * with the License. You may obtain a copy of the License at:
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ */
 package org.reaktivity.nukleus.http.internal.stream;
 
 import static java.lang.Integer.parseInt;
@@ -49,32 +64,31 @@ final class ClientConnectReplyStream implements MessageConsumer
 
     private long sourceId;
 
-    private MessageConsumer target;
-    private long targetId;
-    private String targetName;
+    private MessageConsumer acceptReply;
+    private long acceptReplyId;
+    private String acceptReplyName;
 
-    private long sourceCorrelationId;
+    private long acceptCorrelationId;
     private int contentRemaining;
     private boolean isChunkedTransfer;
     private int chunkSizeRemaining;
-    private long clientConnectCorrelationId;
     private ConnectionPool connectionPool;
     private Connection connection;
 
-    private int sourceWindowBytes;
-    private int targetWindowBytes;
-    private int targetWindowFrames;
-    private int sourceWindowBytesAdjustment;
-    private int sourceWindowFrames;
-    private int sourceWindowFramesAdjustment;
+    private int connectReplyWindowBytes;
+    private int acceptReplyWindowBytes;
+    private int acceptReplyWindowFrames;
+    private int connectReplyWindowBytesAdjustment;
+    private int connectReplyWindowFrames;
+    private int connectReplyWindowFramesAdjustment;
     private Consumer<WindowFW> windowHandler;
-    private int sourceWindowBytesDeltaRemaining;
+    private int connectReplyWindowBytesDeltaRemaining;
 
     @Override
     public String toString()
     {
         return String.format("%s[source=%s, sourceId=%016x, sourceWindowBytes=%d, targetId=%016x]",
-                getClass().getSimpleName(), connectReplyName, sourceId, sourceWindowBytes, targetId);
+                getClass().getSimpleName(), connectReplyName, sourceId, connectReplyWindowBytes, acceptReplyId);
     }
 
     ClientConnectReplyStream(
@@ -85,7 +99,7 @@ final class ClientConnectReplyStream implements MessageConsumer
     {
         this.factory = factory;
         this.connectReplyThrottle = connectReplyThrottle;
-        this.targetId = connectReplyId;
+        this.acceptReplyId = connectReplyId;
         this.connectReplyName = connectReplyName;
         this.streamState = this::handleStreamBeforeBegin;
         this.throttleState = this::handleThrottleBeforeBegin;
@@ -247,14 +261,14 @@ final class ClientConnectReplyStream implements MessageConsumer
     {
         this.sourceId = begin.streamId();
         final long sourceRef = begin.sourceRef();
-        this.clientConnectCorrelationId = begin.correlationId();
+        long connectCorrelationId = begin.correlationId();
 
         @SuppressWarnings("unchecked")
         final Correlation<ClientConnectReplyState> correlation =
-                (Correlation<ClientConnectReplyState>) factory.correlations.get(clientConnectCorrelationId);
+                (Correlation<ClientConnectReplyState>) factory.correlations.get(connectCorrelationId);
         connection = correlation.state().connection;
         connectionPool = correlation.state().connectionPool;
-        connection.setInput(connectReplyThrottle, sourceId, clientConnectCorrelationId);
+        connection.setInput(connectReplyThrottle, sourceId);
         if (sourceRef == 0L && correlation != null)
         {
             httpResponseBegin();
@@ -268,10 +282,10 @@ final class ClientConnectReplyStream implements MessageConsumer
     private void handleDataWhenNotBuffering(
         DataFW data)
     {
-        sourceWindowBytes -= data.length();
-        sourceWindowFrames--;
+        connectReplyWindowBytes -= data.length();
+        connectReplyWindowFrames--;
 
-        if (sourceWindowBytes < 0 || sourceWindowFrames < 0)
+        if (connectReplyWindowBytes < 0 || connectReplyWindowFrames < 0)
         {
             handleUnexpected(data.streamId());
         }
@@ -297,8 +311,8 @@ final class ClientConnectReplyStream implements MessageConsumer
         final long streamId = end.streamId();
         assert streamId == sourceId;
 
-        if (responseState == ResponseState.BEFORE_HEADERS && target == null
-                && factory.correlations.remove(clientConnectCorrelationId) == null)
+        if (responseState == ResponseState.BEFORE_HEADERS && acceptReply == null
+                && factory.correlations.get(connection.correlationId) == null)
         {
             responseState = ResponseState.FINAL;
         }
@@ -353,10 +367,10 @@ final class ClientConnectReplyStream implements MessageConsumer
     private void handleDataWhenBuffering(
         DataFW data)
     {
-        sourceWindowBytes -= data.length();
-        sourceWindowFrames--;
+        connectReplyWindowBytes -= data.length();
+        connectReplyWindowFrames--;
 
-        if (sourceWindowBytes < 0 || sourceWindowFrames < 0)
+        if (connectReplyWindowBytes < 0 || connectReplyWindowFrames < 0)
         {
             handleUnexpected(data.streamId());
         }
@@ -398,7 +412,7 @@ final class ClientConnectReplyStream implements MessageConsumer
                 connection.persistent = false;
                 if (contentRemaining > 0)
                 {
-                    factory.writer.doAbort(target, targetId);
+                    factory.writer.doAbort(acceptReply, acceptReplyId);
                 }
                 doCleanup(true);
             }
@@ -441,8 +455,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         decoderState = (b, o, l) -> o;
         streamState = this::handleStreamAfterEnd;
         responseState = ResponseState.FINAL;
-        factory.slab.release(slotIndex);
-        slotIndex = NO_SLOT;
+        releaseSlotIfNecessary();
         connectionPool.release(connection, doEnd);
     }
 
@@ -496,9 +509,9 @@ final class ClientConnectReplyStream implements MessageConsumer
 
             resolveTarget();
 
-            factory.writer.doHttpBegin(target, targetId, 0L, sourceCorrelationId,
+            factory.writer.doHttpBegin(acceptReply, acceptReplyId, 0L, acceptCorrelationId,
                     hs -> headers.forEach((k, v) -> hs.item(i -> i.representation((byte) 0).name(k).value(v))));
-            factory.router.setThrottle(targetName, targetId, this::handleThrottle);
+            factory.router.setThrottle(acceptReplyName, acceptReplyId, this::handleThrottle);
 
             boolean upgraded = "101".equals(headers.get(":status"));
             String connectionOptions = headers.get("connection");
@@ -529,7 +542,7 @@ final class ClientConnectReplyStream implements MessageConsumer
                 windowHandler = this::handleBoundedWindow;
                 this.responseState = ResponseState.DATA;
 
-                sourceWindowBytesDeltaRemaining = Math.max(contentRemaining - content, 0);
+                connectReplyWindowBytesDeltaRemaining = Math.max(contentRemaining - content, 0);
             }
             else if (isChunkedTransfer)
             {
@@ -539,8 +552,8 @@ final class ClientConnectReplyStream implements MessageConsumer
                 this.responseState = ResponseState.DATA;
 
                 // 0\r\n\r\n
-                sourceWindowBytesAdjustment += 5;
-                sourceWindowBytesAdjustment -= content;
+                connectReplyWindowBytesAdjustment += 5;
+                connectReplyWindowBytesAdjustment -= content;
             }
             else
             {
@@ -616,14 +629,14 @@ final class ClientConnectReplyStream implements MessageConsumer
         final int length = limit - offset;
 
         final int remainingBytes = Math.min(length, contentRemaining);
-        final int targetWindow = targetWindowFrames == 0 ? 0 : targetWindowBytes;
+        final int targetWindow = acceptReplyWindowFrames == 0 ? 0 : acceptReplyWindowBytes;
         final int writableBytes = Math.min(targetWindow, remainingBytes);
 
         if (writableBytes > 0)
         {
-            factory.writer.doHttpData(target, targetId, payload, offset, writableBytes);
-            targetWindowBytes -= writableBytes;
-            targetWindowFrames--;
+            factory.writer.doHttpData(acceptReply, acceptReplyId, payload, offset, writableBytes);
+            acceptReplyWindowBytes -= writableBytes;
+            acceptReplyWindowFrames--;
             contentRemaining -= writableBytes;
         }
 
@@ -669,8 +682,8 @@ final class ClientConnectReplyStream implements MessageConsumer
             }
             else
             {
-                sourceWindowBytesAdjustment += chunkSizeLength + CRLF_BYTES.length + CRLF_BYTES.length;
-                sourceWindowBytesDeltaRemaining += chunkSizeRemaining;
+                connectReplyWindowBytesAdjustment += chunkSizeLength + CRLF_BYTES.length + CRLF_BYTES.length;
+                connectReplyWindowBytesDeltaRemaining += chunkSizeRemaining;
 
                 decoderState = this::decodeHttpChunkData;
                 result = chunkHeaderLimit;
@@ -713,14 +726,14 @@ final class ClientConnectReplyStream implements MessageConsumer
         final int length = limit - offset;
 
         final int remainingBytes = Math.min(length, chunkSizeRemaining);
-        final int targetWindow = targetWindowFrames == 0 ? 0 : targetWindowBytes;
+        final int targetWindow = acceptReplyWindowFrames == 0 ? 0 : acceptReplyWindowBytes;
         final int writableBytes = Math.min(targetWindow, remainingBytes);
 
         if (writableBytes > 0)
         {
-            factory.writer.doHttpData(target, targetId, payload, offset, writableBytes);
-            targetWindowBytes -= writableBytes;
-            targetWindowFrames--;
+            factory.writer.doHttpData(acceptReply, acceptReplyId, payload, offset, writableBytes);
+            acceptReplyWindowBytes -= writableBytes;
+            acceptReplyWindowFrames--;
             chunkSizeRemaining -= writableBytes;
         }
 
@@ -739,14 +752,14 @@ final class ClientConnectReplyStream implements MessageConsumer
     {
         final int length = limit - offset;
 
-        final int targetWindow = targetWindowFrames == 0 ? 0 : targetWindowBytes;
+        final int targetWindow = acceptReplyWindowFrames == 0 ? 0 : acceptReplyWindowBytes;
         final int writableBytes = Math.min(targetWindow, length);
 
         if (writableBytes > 0)
         {
-            factory.writer.doData(target, targetId, payload, offset, writableBytes);
-            targetWindowBytes -= writableBytes;
-            targetWindowFrames--;
+            factory.writer.doData(acceptReply, acceptReplyId, payload, offset, writableBytes);
+            acceptReplyWindowBytes -= writableBytes;
+            acceptReplyWindowFrames--;
         }
 
         return offset + writableBytes;
@@ -767,7 +780,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         int limit)
     {
         // TODO: consider chunks, trailers
-        factory.writer.doHttpEnd(target, targetId);
+        factory.writer.doHttpEnd(acceptReply, acceptReplyId);
         connectionPool.release(connection, true);
         return limit;
     }
@@ -778,22 +791,23 @@ final class ClientConnectReplyStream implements MessageConsumer
         this.decoderState = this::decodeHttpBegin;
         this.responseState = ResponseState.BEFORE_HEADERS;
 
-        final int sourceWindowBytesDelta = this.factory.maximumHeadersSize - sourceWindowBytes + sourceWindowBytesAdjustment;
+        final int connectReplyWindowBytesDelta =
+                factory.maximumHeadersSize - connectReplyWindowBytes + connectReplyWindowBytesAdjustment;
 
-        sourceWindowBytes += sourceWindowBytesDelta;
-        sourceWindowFrames = this.factory.maximumHeadersSize;
+        connectReplyWindowBytes += connectReplyWindowBytesDelta;
+        connectReplyWindowFrames = this.factory.maximumHeadersSize;
 
         // TODO: Support HTTP/1.1 Pipelined Responses (may be buffered already)
-        sourceWindowBytesAdjustment = 0;
-        sourceWindowFramesAdjustment = 0;
+        connectReplyWindowBytesAdjustment = 0;
+        connectReplyWindowFramesAdjustment = 0;
 
-        factory.writer.doWindow(connectReplyThrottle, sourceId, sourceWindowBytesDelta, sourceWindowBytesDelta);
+        factory.writer.doWindow(connectReplyThrottle, sourceId, connectReplyWindowBytesDelta, connectReplyWindowBytesDelta);
     }
 
     private void httpResponseComplete()
     {
-        factory.writer.doHttpEnd(target, targetId);
-        target = null;
+        factory.writer.doHttpEnd(acceptReply, acceptReplyId);
+        acceptReply = null;
 
         if (connection.persistent)
         {
@@ -810,12 +824,12 @@ final class ClientConnectReplyStream implements MessageConsumer
 
     private void resolveTarget()
     {
-        final Correlation<?> correlation = factory.correlations.remove(clientConnectCorrelationId);
-        this.targetName = correlation.source();
-        this.target = factory.router.supplyTarget(targetName);
-        this.targetId = factory.supplyStreamId.getAsLong();
-        this.sourceCorrelationId = correlation.id();
-        this.targetWindowBytes = 0;
+        final Correlation<?> correlation = factory.correlations.remove(connection.correlationId);
+        this.acceptReplyName = correlation.source();
+        this.acceptReply = factory.router.supplyTarget(acceptReplyName);
+        this.acceptReplyId = factory.supplyStreamId.getAsLong();
+        this.acceptCorrelationId = correlation.id();
+        this.acceptReplyWindowBytes = 0;
     }
 
     private void handleThrottle(
@@ -873,32 +887,32 @@ final class ClientConnectReplyStream implements MessageConsumer
         final int targetWindowBytesDelta = window.update();
         final int targetWindowFramesDelta = window.frames();
 
-        targetWindowBytes += targetWindowBytesDelta;
-        targetWindowFrames += targetWindowFramesDelta;
+        acceptReplyWindowBytes += targetWindowBytesDelta;
+        acceptReplyWindowFrames += targetWindowFramesDelta;
 
         if (slotIndex != NO_SLOT)
         {
             decodeBufferedData();
         }
 
-        if (sourceWindowBytesDeltaRemaining > 0)
+        if (connectReplyWindowBytesDeltaRemaining > 0)
         {
             final int sourceWindowBytesDelta =
-                    Math.min(targetWindowBytes - sourceWindowBytes, sourceWindowBytesDeltaRemaining) +
-                    sourceWindowBytesAdjustment;
-            final int sourceWindowFramesDelta = targetWindowFramesDelta + sourceWindowFramesAdjustment;
+                    Math.min(acceptReplyWindowBytes - connectReplyWindowBytes, connectReplyWindowBytesDeltaRemaining) +
+                    connectReplyWindowBytesAdjustment;
+            final int sourceWindowFramesDelta = targetWindowFramesDelta + connectReplyWindowFramesAdjustment;
 
-            sourceWindowBytes += Math.max(sourceWindowBytesDelta, 0);
-            sourceWindowBytesAdjustment = Math.min(sourceWindowBytesDelta, 0);
+            connectReplyWindowBytes += Math.max(sourceWindowBytesDelta, 0);
+            connectReplyWindowBytesAdjustment = Math.min(sourceWindowBytesDelta, 0);
 
-            sourceWindowFrames += Math.max(sourceWindowFramesDelta, 0);
-            sourceWindowFramesAdjustment = Math.min(sourceWindowFramesDelta, 0);
+            connectReplyWindowFrames += Math.max(sourceWindowFramesDelta, 0);
+            connectReplyWindowFramesAdjustment = Math.min(sourceWindowFramesDelta, 0);
 
             if (sourceWindowBytesDelta > 0 || sourceWindowFramesDelta > 0)
             {
                 int windowUpdate = Math.max(sourceWindowBytesDelta, 0);
                 factory.writer.doWindow(connectReplyThrottle, sourceId, windowUpdate, windowUpdate);
-                sourceWindowBytesDeltaRemaining -= Math.max(sourceWindowBytesDelta, 0);
+                connectReplyWindowBytesDeltaRemaining -= Math.max(sourceWindowBytesDelta, 0);
             }
         }
     }
@@ -909,22 +923,22 @@ final class ClientConnectReplyStream implements MessageConsumer
         final int targetWindowBytesDelta = window.update();
         final int targetWindowFramesDelta = window.frames();
 
-        targetWindowBytes += targetWindowBytesDelta;
-        targetWindowFrames += targetWindowFramesDelta;
+        acceptReplyWindowBytes += targetWindowBytesDelta;
+        acceptReplyWindowFrames += targetWindowFramesDelta;
 
         if (slotIndex != NO_SLOT)
         {
             decodeBufferedData();
         }
 
-        final int sourceWindowBytesDelta = targetWindowBytesDelta + sourceWindowBytesAdjustment;
-        final int sourceWindowFramesDelta = targetWindowFramesDelta + sourceWindowFramesAdjustment;
+        final int sourceWindowBytesDelta = targetWindowBytesDelta + connectReplyWindowBytesAdjustment;
+        final int sourceWindowFramesDelta = targetWindowFramesDelta + connectReplyWindowFramesAdjustment;
 
-        sourceWindowBytes += Math.max(sourceWindowBytesDelta, 0);
-        sourceWindowBytesAdjustment = Math.min(sourceWindowBytesDelta, 0);
+        connectReplyWindowBytes += Math.max(sourceWindowBytesDelta, 0);
+        connectReplyWindowBytesAdjustment = Math.min(sourceWindowBytesDelta, 0);
 
-        sourceWindowFrames += Math.max(sourceWindowFramesDelta, 0);
-        sourceWindowFramesAdjustment = Math.min(sourceWindowFramesDelta, 0);
+        connectReplyWindowFrames += Math.max(sourceWindowFramesDelta, 0);
+        connectReplyWindowFramesAdjustment = Math.min(sourceWindowFramesDelta, 0);
 
         if (sourceWindowBytesDelta > 0 || sourceWindowFramesDelta > 0)
         {
@@ -936,10 +950,19 @@ final class ClientConnectReplyStream implements MessageConsumer
     private void handleReset(
         ResetFW reset)
     {
-        factory.slab.release(slotIndex);
+        releaseSlotIfNecessary();
         factory.writer.doReset(connectReplyThrottle, sourceId);
         connection.persistent = false;
         connectionPool.release(connection, false);
+    }
+
+    private void releaseSlotIfNecessary()
+    {
+        if (slotIndex != NO_SLOT)
+        {
+            factory.slab.release(slotIndex);
+            slotIndex = NO_SLOT;
+        }
     }
 
     @FunctionalInterface interface DecoderState

@@ -15,6 +15,7 @@
  */
 package org.reaktivity.nukleus.http.internal.streams.rfc7230.server;
 
+import static java.lang.String.format;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.rules.RuleChain.outerRule;
 
@@ -27,6 +28,7 @@ import org.junit.rules.Timeout;
 import org.kaazing.k3po.junit.annotation.ScriptProperty;
 import org.kaazing.k3po.junit.annotation.Specification;
 import org.kaazing.k3po.junit.rules.K3poRule;
+import org.reaktivity.reaktor.internal.ReaktorConfiguration;
 import org.reaktivity.reaktor.test.ReaktorRule;
 
 public class MessageFormatIT
@@ -43,7 +45,8 @@ public class MessageFormatIT
         .directory("target/nukleus-itests")
         .commandBufferCapacity(1024)
         .responseBufferCapacity(1024)
-        .counterValuesBufferCapacity(1024);
+        .counterValuesBufferCapacity(1024)
+        .configure(format(ReaktorConfiguration.NUKLEUS_BUFFER_SLOT_CAPACITY_PROPERTY_FORMAT, "http"), "8192");
 
     @Rule
     public final TestRule chain = outerRule(reaktor).around(k3po).around(timeout);

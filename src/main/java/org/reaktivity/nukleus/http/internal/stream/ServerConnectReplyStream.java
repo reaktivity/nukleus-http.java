@@ -456,9 +456,18 @@ public final class ServerConnectReplyStream implements MessageConsumer
         int length)
     {
         factory.resetRO.wrap(buffer, index, index + length);
-        factory.slab.release(slotIndex);
+        releaseSlotIfNecessary();
 
         factory.writer.doReset(connectReplyThrottle, connectReplyId);
+    }
+
+    private void releaseSlotIfNecessary()
+    {
+        if (slotIndex != NO_SLOT)
+        {
+            factory.slab.release(slotIndex);
+            slotIndex = NO_SLOT;
+        }
     }
 }
 

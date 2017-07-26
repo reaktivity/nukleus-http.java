@@ -1,5 +1,21 @@
+/**
+ * Copyright 2016-2017 The Reaktivity Project
+ *
+ * The Reaktivity Project licenses this file to you under the Apache License,
+ * version 2.0 (the "License"); you may not use this file except in compliance
+ * with the License. You may obtain a copy of the License at:
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ */
 package org.reaktivity.nukleus.http.internal.stream;
 
+import static org.reaktivity.nukleus.buffer.BufferPool.NO_SLOT;
 import static org.reaktivity.nukleus.http.internal.util.HttpUtil.appendHeader;
 
 import java.nio.charset.StandardCharsets;
@@ -287,7 +303,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         else
         {
             final OctetsFW payload = this.factory.dataRO.payload();
-            factory.writer.doData(target, connection.outputStreamId, payload);
+            factory.writer.doData(target, connection.connectStreamId, payload);
             connection.window -= payload.sizeof();
         }
     }
@@ -303,6 +319,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
 
     private void doEnd()
     {
+        connectionPool.setDefaultThrottle(connection);
         this.streamState = this::streamAfterEnd;
     }
 
@@ -395,7 +412,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
     {
         int writableBytes = Math.min(slotPosition - slotOffset, connection.window);
         MutableDirectBuffer slot = this.factory.slab.buffer(slotIndex);
-        factory.writer.doData(target, connection.outputStreamId, slot, slotOffset, writableBytes);
+        factory.writer.doData(target, connection.connectStreamId, slot, slotOffset, writableBytes);
         connection.window -= writableBytes;
         slotOffset += writableBytes;
         int bytesDeferred = slotPosition - slotOffset;
@@ -430,11 +447,20 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         int index,
         int length)
     {
-        this.factory.resetRO.wrap(buffer, index, index + length);
-        this.factory.slab.release(slotIndex);
+        factory.resetRO.wrap(buffer, index, index + length);
+        releaseSlotIfNecessary();
         connection.persistent = false;
         connectionPool.release(connection, false);
         factory.writer.doReset(acceptThrottle, acceptId);
+    }
+
+    private void releaseSlotIfNecessary()
+    {
+        if (slotIndex != NO_SLOT)
+        {
+            factory.slab.release(slotIndex);
+            slotIndex = NO_SLOT;
+        }
     }
 
     @Override
@@ -460,12 +486,11 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
     {
         this.connection = connection;
         connection.persistent = persistent;
-        final long targetCorrelationId = connection.outputStreamId;
         ClientConnectReplyState state = new ClientConnectReplyState(connectionPool, connection);
         final Correlation<ClientConnectReplyState> correlation =
                 new Correlation<>(acceptCorrelationId, acceptName, state);
-        factory.correlations.put(targetCorrelationId, correlation);
-        factory.router.setThrottle(connectName, connection.outputStreamId, this::handleThrottle);
+        factory.correlations.put(connection.correlationId, correlation);
+        factory.router.setThrottle(connectName, connection.connectStreamId, this::handleThrottle);
         if (connection.window > 0)
         {
             useWindowToWriteRequestHeaders();
