@@ -44,7 +44,7 @@ import org.reaktivity.nukleus.http.internal.types.stream.FrameFW;
 import org.reaktivity.nukleus.http.internal.types.stream.HttpBeginExFW;
 import org.reaktivity.nukleus.http.internal.types.stream.ResetFW;
 import org.reaktivity.nukleus.http.internal.types.stream.WindowFW;
-import org.reaktivity.nukleus.route.RouteHandler;
+import org.reaktivity.nukleus.route.RouteManager;
 import org.reaktivity.nukleus.stream.StreamFactory;
 
 public final class ClientStreamFactory implements StreamFactory
@@ -73,7 +73,7 @@ public final class ClientStreamFactory implements StreamFactory
     final WindowFW windowRO = new WindowFW();
     final ResetFW resetRO = new ResetFW();
 
-    final RouteHandler router;
+    final RouteManager router;
     final LongSupplier supplyStreamId;
     final LongSupplier supplyCorrelationId;
     final BufferPool bufferPool;
@@ -90,7 +90,7 @@ public final class ClientStreamFactory implements StreamFactory
 
     public ClientStreamFactory(
         HttpConfiguration configuration,
-        RouteHandler router,
+        RouteManager router,
         MutableDirectBuffer writeBuffer,
         BufferPool bufferPool,
         LongSupplier supplyStreamId,
