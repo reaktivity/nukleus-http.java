@@ -18,7 +18,7 @@ package org.reaktivity.nukleus.http.internal.stream;
 import java.util.function.Consumer;
 
 import org.reaktivity.nukleus.function.MessageConsumer;
-import org.reaktivity.nukleus.route.RouteHandler;
+import org.reaktivity.nukleus.route.RouteManager;
 
 /**
  * This class represents state shared between the server accept (source input) and server accept reply
@@ -37,7 +37,7 @@ final class ServerAcceptState
     boolean persistent = true;
 
     ServerAcceptState(String acceptReplyName, long replyStreamId, MessageConsumer acceptReply, MessageWriter writer,
-            MessageConsumer initialThrottle, RouteHandler router)
+            MessageConsumer initialThrottle, RouteManager router)
     {
         this.replyStreamId = replyStreamId;
         this.acceptReply = acceptReply;

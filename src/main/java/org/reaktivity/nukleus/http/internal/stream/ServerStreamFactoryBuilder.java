@@ -22,7 +22,7 @@ import org.agrona.MutableDirectBuffer;
 import org.agrona.collections.Long2ObjectHashMap;
 import org.reaktivity.nukleus.Configuration;
 import org.reaktivity.nukleus.buffer.BufferPool;
-import org.reaktivity.nukleus.route.RouteHandler;
+import org.reaktivity.nukleus.route.RouteManager;
 import org.reaktivity.nukleus.stream.StreamFactory;
 import org.reaktivity.nukleus.stream.StreamFactoryBuilder;
 
@@ -31,7 +31,7 @@ public final class ServerStreamFactoryBuilder implements StreamFactoryBuilder
     private final Configuration config;
     private final Long2ObjectHashMap<Correlation<?>> correlations;
 
-    private RouteHandler router;
+    private RouteManager router;
     private MutableDirectBuffer writeBuffer;
     private LongSupplier supplyStreamId;
     private LongSupplier supplyCorrelationId;
@@ -45,8 +45,8 @@ public final class ServerStreamFactoryBuilder implements StreamFactoryBuilder
     }
 
     @Override
-    public ServerStreamFactoryBuilder setRouteHandler(
-        RouteHandler router)
+    public ServerStreamFactoryBuilder setRouteManager(
+        RouteManager router)
     {
         this.router = router;
         return this;
