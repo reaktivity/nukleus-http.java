@@ -187,11 +187,12 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
             byte[] bytes = encodeHeaders(headers, buffer, index, length);
             headers = null; // allow gc
             slotPosition = 0;
-            MutableDirectBuffer slot = this.factory.bufferPool.buffer(slotIndex);
+            MutableDirectBuffer slot = factory.bufferPool.buffer(slotIndex);
             if (bytes.length > slot.capacity())
             {
                 // TODO: diagnostics (reset reason?)
                 factory.writer.doReset(acceptThrottle, acceptId);
+                factory.bufferPool.release(slotIndex);
             }
             else
             {
