@@ -17,7 +17,6 @@ package org.reaktivity.nukleus.http.internal.streams.rfc7230.server;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.rules.RuleChain.outerRule;
-import static org.reaktivity.reaktor.internal.ReaktorConfiguration.ABORT_STREAM_FRAME_TYPE_ID;
 
 import org.junit.Rule;
 import org.junit.Test;
@@ -26,7 +25,6 @@ import org.junit.rules.TestRule;
 import org.junit.rules.Timeout;
 import org.kaazing.k3po.junit.annotation.Specification;
 import org.kaazing.k3po.junit.rules.K3poRule;
-import org.reaktivity.nukleus.http.internal.types.stream.AbortFW;
 import org.reaktivity.reaktor.test.ReaktorRule;
 
 public class ArchitectureIT
@@ -44,7 +42,6 @@ public class ArchitectureIT
         .commandBufferCapacity(1024)
         .responseBufferCapacity(1024)
         .counterValuesBufferCapacity(1024)
-        .configure(ABORT_STREAM_FRAME_TYPE_ID, AbortFW.TYPE_ID)
         .clean();
 
     @Rule
