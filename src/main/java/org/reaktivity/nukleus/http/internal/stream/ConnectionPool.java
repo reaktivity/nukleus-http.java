@@ -150,7 +150,8 @@ final class ConnectionPool
     {
         final long connectStreamId;
         final long correlationId;
-        int window;
+        int budget;
+        int padding;
         boolean persistent = true;
         boolean endSent;
 
@@ -187,7 +188,8 @@ final class ConnectionPool
                 break;
             case WindowFW.TYPE_ID:
                 final WindowFW window = factory.windowRO.wrap(buffer, index, index + length);
-                this.window += window.update();
+                this.budget += window.credit();
+                this.padding = window.padding();
                 break;
             default:
                 // ignore
