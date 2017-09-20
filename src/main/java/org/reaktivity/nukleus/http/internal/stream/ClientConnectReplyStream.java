@@ -79,6 +79,7 @@ final class ClientConnectReplyStream implements MessageConsumer
     private int acceptReplyWindowBytes;
     private int acceptReplyWindowFrames;
     private int connectReplyWindowBytesAdjustment;
+    private int connectReplyWindowBytesMinimum;
     private int connectReplyWindowFrames;
     private int connectReplyWindowFramesAdjustment;
     private Consumer<WindowFW> windowHandler;
@@ -479,8 +480,8 @@ final class ClientConnectReplyStream implements MessageConsumer
         else
         {
             final int sizeofHeaders = endOfHeadersAt - offset;
-            decodeCompleteHttpBegin(payload, offset, sizeofHeaders);
             connectReplyWindowBytesAdjustment += sizeofHeaders;
+            decodeCompleteHttpBegin(payload, offset, sizeofHeaders);
             result = endOfHeadersAt;
         }
 
@@ -550,7 +551,7 @@ final class ClientConnectReplyStream implements MessageConsumer
                 this.responseState = ResponseState.DATA;
 
                 // 0\r\n\r\n
-                connectReplyWindowBytesAdjustment += 5;
+                connectReplyWindowBytesMinimum += 5;
             }
             else
             {
@@ -805,6 +806,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         // TODO: Support HTTP/1.1 Pipelined Responses (may be buffered already)
         this.connectReplyWindowBytes = factory.maximumHeadersSize;
         this.connectReplyWindowBytesAdjustment = -factory.maximumHeadersSize;
+        this.connectReplyWindowBytesMinimum = 0;
         this.connectReplyWindowFrames = factory.maximumHeadersSize;
         this.contentRemaining = 0;
     }
@@ -900,9 +902,11 @@ final class ClientConnectReplyStream implements MessageConsumer
             decodeBufferedData();
         }
 
+        final int sourceWindowBytesDeltaAdjustment = Math.max(connectReplyWindowBytesMinimum - connectReplyWindowBytes, 0);
         final int sourceWindowBytesDeltaLimit = Math.max(contentRemaining + connectReplyWindowBytesAdjustment, 0);
 
-        final int sourceWindowBytesDelta = Math.min(targetWindowBytesDelta, sourceWindowBytesDeltaLimit);
+        final int sourceWindowBytesDelta =
+                Math.min(targetWindowBytesDelta, sourceWindowBytesDeltaLimit) + sourceWindowBytesDeltaAdjustment;
         final int sourceWindowFramesDelta = targetWindowFramesDelta + connectReplyWindowFramesAdjustment;
 
         final int sourceWindowBytesPositiveDelta = Math.max(sourceWindowBytesDelta, 0);
