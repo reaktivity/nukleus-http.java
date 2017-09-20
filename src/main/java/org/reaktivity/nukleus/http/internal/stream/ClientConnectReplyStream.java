@@ -792,7 +792,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         this.responseState = ResponseState.BEFORE_HEADERS;
 
         final int connectReplyWindowBytesDelta =
-                factory.maximumHeadersSize - connectReplyWindowBytes + connectReplyWindowBytesAdjustment;
+                factory.maximumHeadersSize - connectReplyWindowBytes;
 
         connectReplyWindowBytes += connectReplyWindowBytesDelta;
         connectReplyWindowFrames = this.factory.maximumHeadersSize;
