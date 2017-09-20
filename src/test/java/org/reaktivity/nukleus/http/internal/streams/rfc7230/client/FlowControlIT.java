@@ -127,6 +127,17 @@ public class FlowControlIT
     @Test
     @Specification({
         "${route}/client/controller",
+        "${client}/transfer.codings/response.transfer.encoding.chunked/client",
+        "${server}/transfer.codings/response.transfer.encoding.chunked/server" })
+    @ScriptProperty("clientInitialWindow \"9\"")
+    public void shouldFlowControlResponseWithChunkedTransferEncoding() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/client/controller",
         "${client}/message.format/response.with.content.length//client",
         "${server}/flow.control/response.with.content.length.and.transport.close/server" })
     public void shouldDeferEndProcessingUntilResponseProcessed() throws Exception
