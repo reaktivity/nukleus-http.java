@@ -82,7 +82,6 @@ final class ClientConnectReplyStream implements MessageConsumer
     private int connectReplyWindowFrames;
     private int connectReplyWindowFramesAdjustment;
     private Consumer<WindowFW> windowHandler;
-    private int connectReplyWindowBytesDeltaRemaining;
 
     @Override
     public String toString()
@@ -479,7 +478,9 @@ final class ClientConnectReplyStream implements MessageConsumer
         }
         else
         {
-            decodeCompleteHttpBegin(payload, offset, endOfHeadersAt - offset);
+            final int sizeofHeaders = endOfHeadersAt - offset;
+            connectReplyWindowBytesAdjustment += sizeofHeaders;
+            decodeCompleteHttpBegin(payload, offset, sizeofHeaders);
             result = endOfHeadersAt;
         }
 
@@ -540,8 +541,6 @@ final class ClientConnectReplyStream implements MessageConsumer
                 throttleState = this::handleThrottleAfterBegin;
                 windowHandler = this::handleBoundedWindow;
                 this.responseState = ResponseState.DATA;
-
-                connectReplyWindowBytesDeltaRemaining = contentRemaining;
             }
             else if (isChunkedTransfer)
             {
@@ -682,7 +681,7 @@ final class ClientConnectReplyStream implements MessageConsumer
             else
             {
                 connectReplyWindowBytesAdjustment += chunkSizeLength + CRLF_BYTES.length + CRLF_BYTES.length;
-                connectReplyWindowBytesDeltaRemaining += chunkSizeRemaining;
+                contentRemaining += chunkSizeRemaining;
 
                 decoderState = this::decodeHttpChunkData;
                 result = chunkHeaderLimit;
@@ -734,7 +733,7 @@ final class ClientConnectReplyStream implements MessageConsumer
             acceptReplyWindowBytes -= writableBytes;
             acceptReplyWindowFrames--;
             chunkSizeRemaining -= writableBytes;
-            connectReplyWindowBytesDeltaRemaining -= writableBytes;
+            contentRemaining -= writableBytes;
         }
 
         if (chunkSizeRemaining == 0)
@@ -791,18 +790,24 @@ final class ClientConnectReplyStream implements MessageConsumer
         this.decoderState = this::decodeHttpBegin;
         this.responseState = ResponseState.BEFORE_HEADERS;
 
-        final int connectReplyWindowBytesDelta =
-                factory.maximumHeadersSize - connectReplyWindowBytes;
+        final int connectReplyWindowBytesDelta = factory.maximumHeadersSize - connectReplyWindowBytes;
 
-        connectReplyWindowBytes += connectReplyWindowBytesDelta;
-        connectReplyWindowFrames = this.factory.maximumHeadersSize;
+        if (connectReplyWindowBytesDelta < 0)
+        {
+            throw new IllegalStateException("over-provisioned window");
+        }
+
+        if (connectReplyWindowBytesDelta > 0)
+        {
+            factory.writer.doWindow(connectReplyThrottle, sourceId, connectReplyWindowBytesDelta, connectReplyWindowBytesDelta);
+        }
 
         // TODO: Support HTTP/1.1 Pipelined Responses (may be buffered already)
-        connectReplyWindowBytesAdjustment = 0;
-        connectReplyWindowFramesAdjustment = 0;
-        connectReplyWindowBytesDeltaRemaining = 0;
-
-        factory.writer.doWindow(connectReplyThrottle, sourceId, connectReplyWindowBytesDelta, connectReplyWindowBytesDelta);
+        this.connectReplyWindowBytes = factory.maximumHeadersSize;
+        this.connectReplyWindowBytesAdjustment = -factory.maximumHeadersSize;
+        this.connectReplyWindowFrames = factory.maximumHeadersSize;
+        this.connectReplyWindowFramesAdjustment = 0;
+        this.contentRemaining = 0;
     }
 
     private void httpResponseComplete()
@@ -896,28 +901,24 @@ final class ClientConnectReplyStream implements MessageConsumer
             decodeBufferedData();
         }
 
-        if (connectReplyWindowBytesDeltaRemaining + connectReplyWindowBytesAdjustment > connectReplyWindowBytes)
+        final int sourceWindowBytesDeltaLimit = Math.max(contentRemaining + connectReplyWindowBytesAdjustment, 0);
+
+        final int sourceWindowBytesDelta = Math.min(targetWindowBytesDelta, sourceWindowBytesDeltaLimit);
+        final int sourceWindowFramesDelta = targetWindowFramesDelta + connectReplyWindowFramesAdjustment;
+
+        final int sourceWindowBytesPositiveDelta = Math.max(sourceWindowBytesDelta, 0);
+        final int sourceWindowFramesPositiveDelta = Math.max(sourceWindowFramesDelta, 0);
+
+        connectReplyWindowBytes += sourceWindowBytesPositiveDelta;
+        connectReplyWindowBytesAdjustment = Math.min(sourceWindowBytesDelta, 0);
+
+        connectReplyWindowFrames += sourceWindowFramesPositiveDelta;
+        connectReplyWindowFramesAdjustment = Math.min(sourceWindowFramesDelta, 0);
+
+        if (sourceWindowBytesPositiveDelta > 0 || sourceWindowFramesPositiveDelta > 0)
         {
-            final int connectReplyWindowBytesLimit =
-                    Math.min(acceptReplyWindowBytes, connectReplyWindowBytesDeltaRemaining) + connectReplyWindowBytesAdjustment;
-
-            final int sourceWindowBytesDelta = connectReplyWindowBytesLimit - connectReplyWindowBytes;
-            final int sourceWindowFramesDelta = targetWindowFramesDelta + connectReplyWindowFramesAdjustment;
-
-            final int sourceWindowBytesPositiveDelta = Math.max(sourceWindowBytesDelta, 0);
-            final int sourceWindowFramesPositiveDelta = Math.max(sourceWindowFramesDelta, 0);
-
-            connectReplyWindowBytes += sourceWindowBytesPositiveDelta;
-            connectReplyWindowBytesAdjustment = Math.min(sourceWindowBytesDelta, 0); // TODO: fix this
-
-            connectReplyWindowFrames += sourceWindowFramesPositiveDelta;
-            connectReplyWindowFramesAdjustment = Math.min(sourceWindowFramesDelta, 0);
-
-            if (sourceWindowBytesPositiveDelta > 0 || sourceWindowFramesPositiveDelta > 0)
-            {
-                factory.writer.doWindow(connectReplyThrottle, sourceId,
-                                        sourceWindowBytesPositiveDelta, sourceWindowFramesPositiveDelta);
-            }
+            factory.writer.doWindow(connectReplyThrottle, sourceId,
+                                    sourceWindowBytesPositiveDelta, sourceWindowFramesPositiveDelta);
         }
     }
 
