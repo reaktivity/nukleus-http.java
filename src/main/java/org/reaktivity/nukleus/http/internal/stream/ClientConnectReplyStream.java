@@ -679,7 +679,8 @@ final class ClientConnectReplyStream implements MessageConsumer
             }
             else
             {
-                connectReplyWindowBytesAdjustment += chunkSizeLength + CRLF_BYTES.length + CRLF_BYTES.length;
+                final int chunkHeaderLength = chunkHeaderLimit - offset;
+                connectReplyWindowBytesAdjustment += chunkHeaderLength + CRLF_BYTES.length;
                 contentRemaining += chunkSizeRemaining;
 
                 decoderState = this::decodeHttpChunkData;
