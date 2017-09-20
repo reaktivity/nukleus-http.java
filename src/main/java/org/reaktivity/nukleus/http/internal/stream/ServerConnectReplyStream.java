@@ -270,10 +270,10 @@ public final class ServerConnectReplyStream implements MessageConsumer
         int index,
         int length)
     {
-
         DataFW data = factory.dataRO.wrap(buffer, index, index + length);
+        acceptState.budget -= data.length() + acceptState.padding;
 
-        if (acceptState.budget < data.length())
+        if (acceptState.budget < 0)
         {
             processUnexpected(buffer, index, length);
         }
@@ -281,7 +281,6 @@ public final class ServerConnectReplyStream implements MessageConsumer
         {
             final OctetsFW payload = data.payload();
             factory.writer.doData(acceptState.acceptReply, acceptState.replyStreamId, payload);
-            acceptState.budget -=  data.length();
         }
     }
 
@@ -433,7 +432,7 @@ public final class ServerConnectReplyStream implements MessageConsumer
                 throttleState = this::throttleNextWindow;
                 if (acceptState.budget > 0)
                 {
-                    doSourceWindow(acceptState.budget, acceptState.padding);
+                    doSourceWindow(acceptState.budget - acceptState.padding, acceptState.padding);
                 }
             }
         }
