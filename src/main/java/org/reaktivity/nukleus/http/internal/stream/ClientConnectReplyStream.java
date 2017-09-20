@@ -479,8 +479,8 @@ final class ClientConnectReplyStream implements MessageConsumer
         else
         {
             final int sizeofHeaders = endOfHeadersAt - offset;
-            connectReplyWindowBytesAdjustment += sizeofHeaders;
             decodeCompleteHttpBegin(payload, offset, sizeofHeaders);
+            connectReplyWindowBytesAdjustment += sizeofHeaders;
             result = endOfHeadersAt;
         }
 
@@ -635,7 +635,6 @@ final class ClientConnectReplyStream implements MessageConsumer
             acceptReplyWindowBytes -= writableBytes;
             acceptReplyWindowFrames--;
             contentRemaining -= writableBytes;
-            connectReplyWindowBytesDeltaRemaining -= writableBytes;
         }
 
         if (contentRemaining == 0)
@@ -806,7 +805,6 @@ final class ClientConnectReplyStream implements MessageConsumer
         this.connectReplyWindowBytes = factory.maximumHeadersSize;
         this.connectReplyWindowBytesAdjustment = -factory.maximumHeadersSize;
         this.connectReplyWindowFrames = factory.maximumHeadersSize;
-        this.connectReplyWindowFramesAdjustment = 0;
         this.contentRemaining = 0;
     }
 
