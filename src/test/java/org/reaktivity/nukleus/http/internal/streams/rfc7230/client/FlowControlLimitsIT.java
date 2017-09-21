@@ -47,7 +47,8 @@ public class FlowControlLimitsIT
         // Maximum headers size is limited to the size of each slot in the buffer pool:
         .configure(ReaktorConfiguration.BUFFER_SLOT_CAPACITY_PROPERTY, 64)
         // Overall buffer pool size:
-        .configure(ReaktorConfiguration.BUFFER_POOL_CAPACITY_PROPERTY, 64);
+        .configure(ReaktorConfiguration.BUFFER_POOL_CAPACITY_PROPERTY, 64)
+        .clean();
 
     @Rule
     public final TestRule chain = outerRule(reaktor).around(k3po).around(timeout);
@@ -67,6 +68,16 @@ public class FlowControlLimitsIT
         "${client}/flow.control/response.first.fragment.maximum.headers/client",
         "${server}/flow.control/response.first.fragment.maximum.headers/server"})
     public void shouldAcceptResponseWithFirstFragmentHeadersOfLengthMaxHttpHeadersSize() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/client/controller",
+        "${client}/transfer.codings/response.transfer.encoding.chunked/client",
+        "${server}/transfer.codings/response.transfer.encoding.chunked/server" })
+    public void shouldHandleChunkedResponseExceedingInitialWindow() throws Exception
     {
         k3po.finish();
     }
