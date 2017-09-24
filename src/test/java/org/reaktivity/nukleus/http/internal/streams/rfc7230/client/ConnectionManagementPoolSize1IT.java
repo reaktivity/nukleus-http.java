@@ -48,7 +48,8 @@ public class ConnectionManagementPoolSize1IT
         .commandBufferCapacity(1024)
         .responseBufferCapacity(1024)
         .counterValuesBufferCapacity(1024)
-        .configure(HttpConfiguration.MAXIMUM_CONNECTIONS_PROPERTY_NAME, "1");
+        .configure(HttpConfiguration.MAXIMUM_CONNECTIONS_PROPERTY_NAME, "1")
+        .clean();
 
     private final HttpCountersRule counters = new HttpCountersRule(reaktor);
 
