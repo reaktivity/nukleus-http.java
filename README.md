@@ -7,6 +7,6 @@
 
 ### Counters specific to the HTTP Nukleus
 
-enqueues: number of times an outgoing HTTP request was enqueued onto a connection pool in order to wait for an available connection
-dequeues: number of times a request was removed from the queue
+- **enqueues**: number of times an outgoing HTTP request was enqueued onto a connection pool in order to wait for an available connection
+- **dequeues**: number of times a request was removed from the queue
 
