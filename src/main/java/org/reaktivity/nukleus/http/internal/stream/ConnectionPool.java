@@ -84,6 +84,7 @@ final class ConnectionPool
         {
             prior.next(candidate.next());
         }
+        factory.incrementDequeues.getAsLong();
     }
 
     private Connection newConnection()
@@ -147,6 +148,7 @@ final class ConnectionPool
         {
             ConnectionRequest current = nextRequest;
             nextRequest = nextRequest.next();
+            factory.incrementDequeues.getAsLong();
             acquire(current);
         }
     }
@@ -162,7 +164,7 @@ final class ConnectionPool
         {
             this.nextRequest = request;
         }
-        else if (request != this.nextRequest)
+        else
         {
             ConnectionRequest latest = this.nextRequest;
             while (latest.next() != null)
@@ -171,6 +173,7 @@ final class ConnectionPool
             }
             latest.next(request);
         }
+        factory.incrementEnqueues.getAsLong();
     }
 
     public interface ConnectionRequest

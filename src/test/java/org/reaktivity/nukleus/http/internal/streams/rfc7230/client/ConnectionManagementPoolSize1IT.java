@@ -16,6 +16,7 @@
 package org.reaktivity.nukleus.http.internal.streams.rfc7230.client;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
+import static org.junit.Assert.assertEquals;
 import static org.junit.rules.RuleChain.outerRule;
 
 import org.junit.Ignore;
@@ -27,6 +28,8 @@ import org.junit.rules.Timeout;
 import org.kaazing.k3po.junit.annotation.Specification;
 import org.kaazing.k3po.junit.rules.K3poRule;
 import org.reaktivity.nukleus.http.internal.HttpConfiguration;
+import org.reaktivity.nukleus.http.internal.HttpController;
+import org.reaktivity.nukleus.http.internal.test.HttpCountersRule;
 import org.reaktivity.reaktor.test.ReaktorRule;
 
 public class ConnectionManagementPoolSize1IT
@@ -40,14 +43,17 @@ public class ConnectionManagementPoolSize1IT
 
     private final ReaktorRule reaktor = new ReaktorRule()
         .nukleus("http"::equals)
+        .controller(HttpController.class::isAssignableFrom)
         .directory("target/nukleus-itests")
         .commandBufferCapacity(1024)
         .responseBufferCapacity(1024)
         .counterValuesBufferCapacity(1024)
         .configure(HttpConfiguration.MAXIMUM_CONNECTIONS_PROPERTY_NAME, "1");
 
+    private final HttpCountersRule counters = new HttpCountersRule(reaktor);
+
     @Rule
-    public final TestRule chain = outerRule(reaktor).around(k3po).around(timeout);
+    public final TestRule chain = outerRule(reaktor).around(counters).around(k3po).around(timeout);
 
     @Test
     @Specification({
@@ -150,7 +156,11 @@ public class ConnectionManagementPoolSize1IT
         "${server}/pending.request.second.request.and.abort/server"})
     public void shouldLeaveTransportUntouchedWhenEnqueuedRequestIsAborted() throws Exception
     {
+        assertEquals(0, counters.enqueues());
+        assertEquals(0, counters.dequeues());
         k3po.finish();
+        assertEquals(1, counters.enqueues());
+        assertEquals(1, counters.dequeues());
     }
 
     @Test
