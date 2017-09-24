@@ -133,6 +133,11 @@ public final class HttpController implements Controller
         return unroute(Role.CLIENT, source, sourceRef, target, targetRef, headers);
     }
 
+    public long count(String name)
+    {
+        return controllerSpi.doCount(name);
+    }
+
     private Consumer<OctetsFW.Builder> extension(
         Map<String, String> headers)
     {
@@ -152,7 +157,8 @@ public final class HttpController implements Controller
         }
         else
         {
-            return e -> e.reset();
+            return e ->
+                { };
         }
     }
 
