@@ -42,7 +42,8 @@ public class FlowControlIT
         .directory("target/nukleus-itests")
         .commandBufferCapacity(1024)
         .responseBufferCapacity(1024)
-        .counterValuesBufferCapacity(1024);
+        .counterValuesBufferCapacity(1024)
+        .clean();
 
     @Rule
     public final TestRule chain = outerRule(reaktor).around(k3po).around(timeout);
@@ -118,7 +119,18 @@ public class FlowControlIT
         "${client}/message.format/response.with.content.length/client",
         "${server}/flow.control/response.fragmented.with.content.length/server"})
     @ScriptProperty("clientInitialWindow \"9\"")
-    public void shouldFlowControlFragmenteResponseWithContentLength() throws Exception
+    public void shouldFlowControlFragmentedResponseWithContentLength() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/client/controller",
+        "${client}/transfer.codings/response.transfer.encoding.chunked/client",
+        "${server}/transfer.codings/response.transfer.encoding.chunked/server" })
+    @ScriptProperty("clientInitialWindow \"9\"")
+    public void shouldFlowControlResponseWithChunkedTransferEncoding() throws Exception
     {
         k3po.finish();
     }

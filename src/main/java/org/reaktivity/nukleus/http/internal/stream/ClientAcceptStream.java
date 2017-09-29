@@ -28,9 +28,11 @@ import org.agrona.MutableDirectBuffer;
 import org.agrona.collections.Long2ObjectHashMap;
 import org.reaktivity.nukleus.buffer.BufferPool;
 import org.reaktivity.nukleus.function.MessageConsumer;
+import org.reaktivity.nukleus.http.internal.stream.ConnectionPool.CloseAction;
 import org.reaktivity.nukleus.http.internal.stream.ConnectionPool.Connection;
 import org.reaktivity.nukleus.http.internal.stream.ConnectionPool.ConnectionRequest;
 import org.reaktivity.nukleus.http.internal.types.OctetsFW;
+import org.reaktivity.nukleus.http.internal.types.stream.AbortFW;
 import org.reaktivity.nukleus.http.internal.types.stream.BeginFW;
 import org.reaktivity.nukleus.http.internal.types.stream.DataFW;
 import org.reaktivity.nukleus.http.internal.types.stream.EndFW;
@@ -116,6 +118,9 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         case EndFW.TYPE_ID:
             endDeferred = true;
             break;
+        case AbortFW.TYPE_ID:
+            processAbort(buffer, index, length);
+            break;
         default:
             this.factory.bufferPool.release(slotIndex);
             processUnexpected(buffer, index, length);
@@ -137,13 +142,16 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         case EndFW.TYPE_ID:
             processEnd(buffer, index, length);
             break;
+        case AbortFW.TYPE_ID:
+            processAbort(buffer, index, length);
+            break;
         default:
             processUnexpected(buffer, index, length);
             break;
         }
     }
 
-    private void streamAfterEnd(
+    private void streamAfterEndOrAbort(
         int msgTypeId,
         DirectBuffer buffer,
         int index,
@@ -158,16 +166,21 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         int index,
         int length)
     {
-        if (msgTypeId == DataFW.TYPE_ID)
+        switch (msgTypeId)
         {
+        case DataFW.TYPE_ID:
             DataFW data = this.factory.dataRO.wrap(buffer, index, index + length);
             final long streamId = data.streamId();
             factory.writer.doWindow(acceptThrottle, streamId, data.length(), data.length());
-        }
-        else if (msgTypeId == EndFW.TYPE_ID)
-        {
+            break;
+        case EndFW.TYPE_ID:
             factory.endRO.wrap(buffer, index, index + length);
-            this.streamState = this::streamAfterEnd;
+            this.streamState = this::streamAfterEndOrAbort;
+            break;
+        case AbortFW.TYPE_ID:
+            factory.abortRO.wrap(buffer, index, index + length);
+            this.streamState = this::streamAfterEndOrAbort;
+            break;
         }
     }
 
@@ -321,7 +334,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
     private void doEnd()
     {
         connectionPool.setDefaultThrottle(connection);
-        this.streamState = this::streamAfterEnd;
+        this.streamState = this::streamAfterEndOrAbort;
     }
 
     private void processUnexpected(
@@ -443,6 +456,27 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         factory.writer.doWindow(acceptThrottle, acceptId, update, update);
     }
 
+    private void processAbort(
+        DirectBuffer buffer,
+        int index,
+        int length)
+    {
+        factory.abortRO.wrap(buffer, index, index + length);
+        releaseSlotIfNecessary();
+
+        if (connection == null)
+        {
+            // request still enqueued, remove it from the queue
+            connectionPool.cancel(this);
+        }
+        else
+        {
+            factory.correlations.remove(connection.correlationId);
+            connection.persistent = false;
+            connectionPool.release(connection, CloseAction.ABORT);
+        }
+    }
+
     private void processReset(
         DirectBuffer buffer,
         int index,
@@ -451,7 +485,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         factory.resetRO.wrap(buffer, index, index + length);
         releaseSlotIfNecessary();
         connection.persistent = false;
-        connectionPool.release(connection, false);
+        connectionPool.release(connection);
         factory.writer.doReset(acceptThrottle, acceptId);
     }
 

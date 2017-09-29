@@ -29,6 +29,10 @@ import org.reaktivity.nukleus.http.internal.types.stream.WindowFW;
  */
 final class ConnectionPool
 {
+    public enum CloseAction
+    {
+        END, ABORT;
+    };
     private final Deque<Connection> availableConnections;
     private final String connectName;
     private final long connectRef;
@@ -62,6 +66,27 @@ final class ConnectionPool
         }
     }
 
+    public void cancel(ConnectionRequest request)
+    {
+        ConnectionRequest candidate = nextRequest;
+        ConnectionRequest prior = null;
+        while (request != candidate)
+        {
+            assert candidate != null;
+            prior = candidate;
+            candidate = candidate.next();
+        }
+        if (prior == null)
+        {
+            nextRequest = null;
+        }
+        else
+        {
+            prior.next(candidate.next());
+        }
+        factory.incrementDequeues.getAsLong();
+    }
+
     private Connection newConnection()
     {
         final long correlationId = factory.supplyCorrelationId.getAsLong();
@@ -74,7 +99,12 @@ final class ConnectionPool
         return connection;
     }
 
-    public void release(Connection connection, boolean doEndIfNotPersistent)
+    public void release(Connection connection)
+    {
+        release(connection, null);
+    }
+
+    public void release(Connection connection, CloseAction action)
     {
         final Correlation<?> correlation = factory.correlations.remove(connection.correlationId);
         if (correlation != null)
@@ -100,17 +130,25 @@ final class ConnectionPool
             // In case the connection was previously released when it was still persistent
             availableConnections.removeFirstOccurrence(connection);
 
-            if (doEndIfNotPersistent)
+            if (action != null && !connection.endOrAbortSent)
             {
                 MessageConsumer connect = factory.router.supplyTarget(connectName);
-                factory.writer.doEnd(connect, connection.connectStreamId);
-                connection.endSent = true;
+                switch(action)
+                {
+                case END:
+                    factory.writer.doEnd(connect, connection.connectStreamId);
+                    break;
+                case ABORT:
+                    factory.writer.doAbort(connect, connection.connectStreamId);
+                }
+                connection.endOrAbortSent = true;
             }
         }
         if (nextRequest != null)
         {
             ConnectionRequest current = nextRequest;
             nextRequest = nextRequest.next();
+            factory.incrementDequeues.getAsLong();
             acquire(current);
         }
     }
@@ -126,7 +164,7 @@ final class ConnectionPool
         {
             this.nextRequest = request;
         }
-        else if (request != this.nextRequest)
+        else
         {
             ConnectionRequest latest = this.nextRequest;
             while (latest.next() != null)
@@ -135,6 +173,7 @@ final class ConnectionPool
             }
             latest.next(request);
         }
+        factory.incrementEnqueues.getAsLong();
     }
 
     public interface ConnectionRequest
@@ -152,7 +191,7 @@ final class ConnectionPool
         final long correlationId;
         int window;
         boolean persistent = true;
-        boolean endSent;
+        private boolean endOrAbortSent;
 
         private long connectReplyStreamId;
         private MessageConsumer connectReplyThrottle;
@@ -179,7 +218,7 @@ final class ConnectionPool
             {
             case ResetFW.TYPE_ID:
                 persistent = false;
-                release(this, false);
+                release(this);
                 if (connectReplyThrottle != null)
                 {
                     factory.writer.doReset(connectReplyThrottle, connectReplyStreamId);
