@@ -33,8 +33,10 @@ import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
 import org.reaktivity.nukleus.buffer.BufferPool;
 import org.reaktivity.nukleus.function.MessageConsumer;
+import org.reaktivity.nukleus.http.internal.stream.ConnectionPool.CloseAction;
 import org.reaktivity.nukleus.http.internal.stream.ConnectionPool.Connection;
 import org.reaktivity.nukleus.http.internal.types.OctetsFW;
+import org.reaktivity.nukleus.http.internal.types.stream.AbortFW;
 import org.reaktivity.nukleus.http.internal.types.stream.BeginFW;
 import org.reaktivity.nukleus.http.internal.types.stream.DataFW;
 import org.reaktivity.nukleus.http.internal.types.stream.EndFW;
@@ -78,8 +80,10 @@ final class ClientConnectReplyStream implements MessageConsumer
     private int connectReplyWindowBytes;
     private int acceptReplyWindowBytes;
     private int connectReplyWindowBytesAdjustment;
+    private int connectReplyWindowBytesMinimum;
+    private int connectReplyWindowFrames;
+    private int connectReplyWindowFramesAdjustment;
     private Consumer<WindowFW> windowHandler;
-    private int connectReplyWindowBytesDeltaRemaining;
 
     @Override
     public String toString()
@@ -141,6 +145,10 @@ final class ClientConnectReplyStream implements MessageConsumer
         case EndFW.TYPE_ID:
             handleEndWhenBuffering(buffer, index, length);
             break;
+        case AbortFW.TYPE_ID:
+            final AbortFW abort = this.factory.abortRO.wrap(buffer, index, length);
+            handleAbort(abort);
+            break;
         default:
             handleUnexpected(buffer, index, length);
             break;
@@ -163,6 +171,10 @@ final class ClientConnectReplyStream implements MessageConsumer
             final EndFW end = this.factory.endRO.wrap(buffer, index, index + length);
             handleEnd(end);
             break;
+        case AbortFW.TYPE_ID:
+            final AbortFW abort = this.factory.abortRO.wrap(buffer, index, length);
+            handleAbort(abort);
+            break;
         default:
             handleUnexpected(buffer, index, length);
             break;
@@ -180,6 +192,10 @@ final class ClientConnectReplyStream implements MessageConsumer
         case EndFW.TYPE_ID:
             final EndFW end = this.factory.endRO.wrap(buffer, index, index + length);
             handleEnd(end);
+            break;
+        case AbortFW.TYPE_ID:
+            final AbortFW abort = this.factory.abortRO.wrap(buffer, index, length);
+            handleAbort(abort);
             break;
         default:
             handleUnexpected(buffer, index, length);
@@ -212,6 +228,10 @@ final class ClientConnectReplyStream implements MessageConsumer
             this.factory.endRO.wrap(buffer, index, index + length);
             this.streamState = this::handleStreamAfterEnd;
             break;
+        case AbortFW.TYPE_ID:
+            this.factory.abortRO.wrap(buffer, index, length);
+            this.streamState = this::handleStreamAfterEnd;
+            break;
         default:
             break;
         }
@@ -236,21 +256,27 @@ final class ClientConnectReplyStream implements MessageConsumer
         this.streamState = this::handleStreamAfterReset;
     }
 
-    private void handleInvalidResponse(boolean resetSource)
+    private void handleInvalidResponseAndReset()
     {
         this.decoderState = this::decodeSkipData;
         this.streamState = this::handleStreamAfterReset;
 
-        if (resetSource)
-        {
-            // Drain data from source before resetting to allow its writes to complete
-            int window = factory.maximumHeadersSize;
-            factory.writer.doWindow(connectReplyThrottle, sourceId, window, 0);
-            factory.writer.doReset(connectReplyThrottle, sourceId);
-        }
+        // Drain data from source before resetting to allow its writes to complete
+        int window = factory.maximumHeadersSize;
+        factory.writer.doWindow(connectReplyThrottle, sourceId, window, 0);
+        factory.writer.doReset(connectReplyThrottle, sourceId);
 
         connection.persistent = false;
-        doCleanup(!resetSource);
+        doCleanup(null);
+    }
+
+    private void handleInvalidResponse(CloseAction action)
+    {
+        this.decoderState = this::decodeSkipData;
+        this.streamState = this::handleStreamAfterReset;
+
+        connection.persistent = false;
+        doCleanup(action);
     }
 
     private void handleBegin(
@@ -319,11 +345,41 @@ final class ClientConnectReplyStream implements MessageConsumer
         case HEADERS:
         case DATA:
             // Incomplete response
-            handleInvalidResponse(false);
+            handleInvalidResponse(CloseAction.END);
             break;
         case FINAL:
             connection.persistent = false;
-            doCleanup(!connection.endSent);
+            doCleanup(CloseAction.END);
+        }
+    }
+
+    private void handleAbort(
+        AbortFW abort)
+    {
+        final long streamId = abort.streamId();
+        assert streamId == sourceId;
+
+        if (responseState == ResponseState.BEFORE_HEADERS && acceptReply == null
+                && factory.correlations.get(connection.correlationId) == null)
+        {
+            responseState = ResponseState.FINAL;
+        }
+        if (acceptReply != null)
+        {
+            factory.writer.doAbort(acceptReply, acceptReplyId);
+        }
+
+        switch (responseState)
+        {
+        case BEFORE_HEADERS:
+        case HEADERS:
+        case DATA:
+            // Incomplete response
+            handleInvalidResponse(null);
+            break;
+        case FINAL:
+            connection.persistent = false;
+            doCleanup(null);
         }
     }
 
@@ -350,7 +406,7 @@ final class ClientConnectReplyStream implements MessageConsumer
             // Out of slab memory
             factory.writer.doReset(connectReplyThrottle, sourceId);
             connection.persistent = false;
-            doCleanup(false);
+            doCleanup(null);
         }
         else
         {
@@ -409,7 +465,7 @@ final class ClientConnectReplyStream implements MessageConsumer
                 {
                     factory.writer.doAbort(acceptReply, acceptReplyId);
                 }
-                doCleanup(true);
+                doCleanup(CloseAction.END);
             }
         }
     }
@@ -445,13 +501,13 @@ final class ClientConnectReplyStream implements MessageConsumer
         slotPosition = dataLength;
     }
 
-    private void doCleanup(boolean doEnd)
+    private void doCleanup(CloseAction action)
     {
         decoderState = (b, o, l) -> o;
         streamState = this::handleStreamAfterEnd;
         responseState = ResponseState.FINAL;
         releaseSlotIfNecessary();
-        connectionPool.release(connection, doEnd);
+        connectionPool.release(connection, action);
     }
 
     private int decodeHttpBegin(
@@ -469,12 +525,14 @@ final class ClientConnectReplyStream implements MessageConsumer
             int length = limit - offset;
             if (length >= factory.maximumHeadersSize)
             {
-                handleInvalidResponse(true);
+                handleInvalidResponseAndReset();
             }
         }
         else
         {
-            decodeCompleteHttpBegin(payload, offset, endOfHeadersAt - offset, limit - endOfHeadersAt);
+            final int sizeofHeaders = endOfHeadersAt - offset;
+            connectReplyWindowBytesAdjustment += sizeofHeaders;
+            decodeCompleteHttpBegin(payload, offset, sizeofHeaders);
             result = endOfHeadersAt;
         }
 
@@ -484,8 +542,7 @@ final class ClientConnectReplyStream implements MessageConsumer
     private void decodeCompleteHttpBegin(
         final DirectBuffer payload,
         final int offset,
-        final int length,
-        final int content)
+        final int length)
     {
         // TODO: replace with lightweight approach (start)
         String[] lines = payload.getStringWithoutLengthUtf8(offset, length).split("\r\n");
@@ -495,7 +552,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         Matcher versionMatcher = versionPattern.matcher(start[0]);
         if (!versionMatcher.matches())
         {
-            handleInvalidResponse(true);
+            handleInvalidResponseAndReset();
         }
         else
         {
@@ -524,7 +581,7 @@ final class ClientConnectReplyStream implements MessageConsumer
             if (upgraded)
             {
                 connection.persistent = false;
-                connectionPool.release(connection, false);
+                connectionPool.release(connection);
                 this.decoderState = this::decodeHttpDataAfterUpgrade;
                 throttleState = this::handleThrottleAfterBegin;
                 windowHandler = this::handleWindow;
@@ -536,8 +593,6 @@ final class ClientConnectReplyStream implements MessageConsumer
                 throttleState = this::handleThrottleAfterBegin;
                 windowHandler = this::handleBoundedWindow;
                 this.responseState = ResponseState.DATA;
-
-                connectReplyWindowBytesDeltaRemaining = Math.max(contentRemaining - content, 0);
             }
             else if (isChunkedTransfer)
             {
@@ -547,8 +602,7 @@ final class ClientConnectReplyStream implements MessageConsumer
                 this.responseState = ResponseState.DATA;
 
                 // 0\r\n\r\n
-                connectReplyWindowBytesAdjustment += 5;
-                connectReplyWindowBytesAdjustment -= content;
+                connectReplyWindowBytesMinimum += 5;
             }
             else
             {
@@ -586,7 +640,7 @@ final class ClientConnectReplyStream implements MessageConsumer
                 // TODO: support other transfer encodings
                 if (contentLengthFound || !"chunked".equals(value))
                 {
-                    handleInvalidResponse(true);
+                    handleInvalidResponseAndReset();
                 }
                 else
                 {
@@ -598,7 +652,7 @@ final class ClientConnectReplyStream implements MessageConsumer
             {
                 if (contentLengthFound || isChunkedTransfer)
                 {
-                    handleInvalidResponse(true);
+                    handleInvalidResponseAndReset();
                 }
                 else
                 {
@@ -667,7 +721,7 @@ final class ClientConnectReplyStream implements MessageConsumer
             }
             catch (NumberFormatException ex)
             {
-                handleInvalidResponse(true);
+                handleInvalidResponseAndReset();
             }
 
             if (chunkSizeRemaining == 0)
@@ -676,8 +730,9 @@ final class ClientConnectReplyStream implements MessageConsumer
             }
             else
             {
-                connectReplyWindowBytesAdjustment += chunkSizeLength + CRLF_BYTES.length + CRLF_BYTES.length;
-                connectReplyWindowBytesDeltaRemaining += chunkSizeRemaining;
+                final int chunkHeaderLength = chunkHeaderLimit - offset;
+                connectReplyWindowBytesAdjustment += chunkHeaderLength + CRLF_BYTES.length;
+                contentRemaining += chunkSizeRemaining;
 
                 decoderState = this::decodeHttpChunkData;
                 result = chunkHeaderLimit;
@@ -700,7 +755,7 @@ final class ClientConnectReplyStream implements MessageConsumer
             if (payload.getByte(offset) != '\r'
                 || payload.getByte(offset + 1) != '\n')
             {
-                handleInvalidResponse(true);
+                handleInvalidResponseAndReset();
             }
             else
             {
@@ -728,6 +783,7 @@ final class ClientConnectReplyStream implements MessageConsumer
             factory.writer.doHttpData(acceptReply, acceptReplyId, payload, offset, writableBytes);
             acceptReplyWindowBytes -= writableBytes;
             chunkSizeRemaining -= writableBytes;
+            contentRemaining -= writableBytes;
         }
 
         if (chunkSizeRemaining == 0)
@@ -773,7 +829,7 @@ final class ClientConnectReplyStream implements MessageConsumer
     {
         // TODO: consider chunks, trailers
         factory.writer.doHttpEnd(acceptReply, acceptReplyId);
-        connectionPool.release(connection, true);
+        connectionPool.release(connection, CloseAction.END);
         return limit;
     }
 
@@ -783,15 +839,24 @@ final class ClientConnectReplyStream implements MessageConsumer
         this.decoderState = this::decodeHttpBegin;
         this.responseState = ResponseState.BEFORE_HEADERS;
 
-        final int connectReplyWindowBytesDelta =
-                factory.maximumHeadersSize - connectReplyWindowBytes + connectReplyWindowBytesAdjustment;
+        final int connectReplyWindowBytesDelta = factory.maximumHeadersSize - connectReplyWindowBytes;
 
-        connectReplyWindowBytes += connectReplyWindowBytesDelta;
+        if (connectReplyWindowBytesDelta < 0)
+        {
+            throw new IllegalStateException("over-provisioned window");
+        }
+
+        if (connectReplyWindowBytesDelta > 0)
+        {
+            factory.writer.doWindow(connectReplyThrottle, sourceId, connectReplyWindowBytesDelta, 0);
+        }
 
         // TODO: Support HTTP/1.1 Pipelined Responses (may be buffered already)
-        connectReplyWindowBytesAdjustment = 0;
-
-        factory.writer.doWindow(connectReplyThrottle, sourceId, connectReplyWindowBytesDelta, 0);
+        this.connectReplyWindowBytes = factory.maximumHeadersSize;
+        this.connectReplyWindowBytesAdjustment = -factory.maximumHeadersSize;
+        this.connectReplyWindowBytesMinimum = 0;
+        this.connectReplyWindowFrames = factory.maximumHeadersSize;
+        this.contentRemaining = 0;
     }
 
     private void httpResponseComplete()
@@ -809,7 +874,7 @@ final class ClientConnectReplyStream implements MessageConsumer
             this.responseState = ResponseState.FINAL;
         }
 
-        connectionPool.release(connection, true);
+        connectionPool.release(connection, CloseAction.END);
     }
 
     private void resolveTarget()
@@ -883,21 +948,21 @@ final class ClientConnectReplyStream implements MessageConsumer
             decodeBufferedData();
         }
 
-        if (connectReplyWindowBytesDeltaRemaining > 0)
+        final int sourceWindowBytesDeltaAdjustment = Math.max(connectReplyWindowBytesMinimum - connectReplyWindowBytes, 0);
+        final int sourceWindowBytesDeltaLimit = Math.max(contentRemaining + connectReplyWindowBytesAdjustment, 0);
+
+        final int sourceWindowBytesDelta =
+                Math.min(targetWindowBytesDelta, sourceWindowBytesDeltaLimit) + sourceWindowBytesDeltaAdjustment;
+
+        final int sourceWindowBytesPositiveDelta = Math.max(sourceWindowBytesDelta, 0);
+
+        connectReplyWindowBytes += sourceWindowBytesPositiveDelta;
+        connectReplyWindowBytesAdjustment = Math.min(sourceWindowBytesDelta, 0);
+
+        if (sourceWindowBytesPositiveDelta > 0)
         {
-            final int sourceWindowBytesDelta =
-                    Math.min(acceptReplyWindowBytes - connectReplyWindowBytes, connectReplyWindowBytesDeltaRemaining) +
-                    connectReplyWindowBytesAdjustment;
-
-            connectReplyWindowBytes += Math.max(sourceWindowBytesDelta, 0);
-            connectReplyWindowBytesAdjustment = Math.min(sourceWindowBytesDelta, 0);
-
-            if (sourceWindowBytesDelta > 0)
-            {
-                int windowUpdate = Math.max(sourceWindowBytesDelta, 0);
-                factory.writer.doWindow(connectReplyThrottle, sourceId, windowUpdate, 0);
-                connectReplyWindowBytesDeltaRemaining -= Math.max(sourceWindowBytesDelta, 0);
-            }
+            factory.writer.doWindow(connectReplyThrottle, sourceId,
+                                    sourceWindowBytesPositiveDelta, 0);
         }
     }
 
@@ -931,7 +996,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         releaseSlotIfNecessary();
         factory.writer.doReset(connectReplyThrottle, sourceId);
         connection.persistent = false;
-        connectionPool.release(connection, false);
+        connectionPool.release(connection);
     }
 
     private void releaseSlotIfNecessary()
