@@ -81,8 +81,6 @@ final class ClientConnectReplyStream implements MessageConsumer
     private int acceptReplyWindowBytes;
     private int connectReplyWindowBytesAdjustment;
     private int connectReplyWindowBytesMinimum;
-    private int connectReplyWindowFrames;
-    private int connectReplyWindowFramesAdjustment;
     private Consumer<WindowFW> windowHandler;
 
     @Override
@@ -855,7 +853,6 @@ final class ClientConnectReplyStream implements MessageConsumer
         this.connectReplyWindowBytes = factory.maximumHeadersSize;
         this.connectReplyWindowBytesAdjustment = -factory.maximumHeadersSize;
         this.connectReplyWindowBytesMinimum = 0;
-        this.connectReplyWindowFrames = factory.maximumHeadersSize;
         this.contentRemaining = 0;
     }
 
@@ -962,7 +959,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         if (sourceWindowBytesPositiveDelta > 0)
         {
             factory.writer.doWindow(connectReplyThrottle, sourceId,
-                                    sourceWindowBytesPositiveDelta, 0);
+                                    sourceWindowBytesPositiveDelta, window.padding());
         }
     }
 
@@ -986,7 +983,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         if (sourceWindowBytesDelta > 0)
         {
             int windowUpdate = Math.max(sourceWindowBytesDelta, 0);
-            factory.writer.doWindow(connectReplyThrottle, sourceId, windowUpdate, 0);
+            factory.writer.doWindow(connectReplyThrottle, sourceId, windowUpdate, window.padding());
         }
     }
 
