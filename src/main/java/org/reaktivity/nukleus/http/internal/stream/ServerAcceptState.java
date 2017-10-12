@@ -52,8 +52,9 @@ final class ServerAcceptState
     public String toString()
     {
         return String.format(
-                "%s[streamId=%016x, target=%s, window=%d, persistent=%b, pendingRequests=%d, endRequested=%b]",
-                getClass().getSimpleName(), replyStreamId, acceptReplyName, budget, persistent, pendingRequests, endRequested);
+                "%s[streamId=%016x, target=%s, window=%d, padding=%d persistent=%b, pendingRequests=%d, endRequested=%b]",
+                getClass().getSimpleName(), replyStreamId, acceptReplyName, budget, padding, persistent,
+                pendingRequests, endRequested);
     }
 
     public void restoreInitialThrottle()

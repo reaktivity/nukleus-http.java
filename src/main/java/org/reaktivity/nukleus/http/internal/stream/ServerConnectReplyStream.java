@@ -432,7 +432,7 @@ public final class ServerConnectReplyStream implements MessageConsumer
                 throttleState = this::throttleNextWindow;
                 if (acceptState.budget > 0)
                 {
-                    doSourceWindow(acceptState.budget - acceptState.padding, acceptState.padding);
+                    doSourceWindow(acceptState.budget, acceptState.padding);
                 }
             }
         }
