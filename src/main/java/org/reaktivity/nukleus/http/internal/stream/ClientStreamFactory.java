@@ -146,8 +146,9 @@ public final class ClientStreamFactory implements StreamFactory
     {
         final long acceptRef = begin.sourceRef();
         final String acceptName = begin.source().asString();
+        final long authorization = begin.authorization();
 
-        final OctetsFW extension = beginRO.extension();
+        final OctetsFW extension = begin.extension();
 
         // TODO: avoid object creation
         Map<String, String> headers = EMPTY_HEADERS;
@@ -159,7 +160,7 @@ public final class ClientStreamFactory implements StreamFactory
             headers = headers0;
         }
 
-        final RouteFW route = resolveTarget(acceptRef, headers);
+        final RouteFW route = resolveTarget(acceptRef, authorization, headers);
 
         MessageConsumer newStream = null;
 
@@ -189,6 +190,7 @@ public final class ClientStreamFactory implements StreamFactory
 
     private RouteFW resolveTarget(
         long sourceRef,
+        long authorization,
         Map<String, String> headers)
     {
         final MessagePredicate filter = (t, b, o, l) ->
@@ -205,7 +207,7 @@ public final class ClientStreamFactory implements StreamFactory
             return route.sourceRef() == sourceRef && headersMatch;
         };
 
-        return router.resolve(filter, (msgTypeId, buffer, index, length) ->
+        return router.resolve(authorization, filter, (msgTypeId, buffer, index, length) ->
             routeRO.wrap(buffer, index, index + length));
     }
 

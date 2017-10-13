@@ -61,6 +61,7 @@ final class ServerAcceptStream implements MessageConsumer
     private final long acceptRef;
     private final String acceptName;
     private final long acceptCorrelationId;
+    private final long authorization;
 
     private MessageConsumer streamState;
     private MessageConsumer throttleState;
@@ -90,7 +91,8 @@ final class ServerAcceptStream implements MessageConsumer
     }
 
     ServerAcceptStream(ServerStreamFactory factory, MessageConsumer acceptThrottle,
-                       long acceptId, long acceptRef, String acceptName, long acceptCorrelationId)
+                       long acceptId, long acceptRef, String acceptName, long acceptCorrelationId,
+                       long authorization)
     {
         this.factory = factory;
         this.streamState = this::streamBeforeBegin;
@@ -99,6 +101,7 @@ final class ServerAcceptStream implements MessageConsumer
         this.acceptId = acceptId;
         this.acceptRef = acceptRef;
         this.acceptCorrelationId = acceptCorrelationId;
+        this.authorization = authorization;
         this.acceptName = acceptName;
         this.temporarySlot = new UnsafeBuffer(ByteBuffer.allocateDirect(factory.bufferPool.slotCapacity()));
         this.maximumHeadersSize = factory.bufferPool.slotCapacity();
@@ -621,7 +624,7 @@ final class ServerAcceptStream implements MessageConsumer
             }
             else
             {
-                final RouteFW route = resolveTarget(acceptRef, headers);
+                final RouteFW route = resolveTarget(acceptRef, authorization, headers);
                 if (route != null)
                 {
 
@@ -945,6 +948,7 @@ final class ServerAcceptStream implements MessageConsumer
 
     private RouteFW resolveTarget(
         long sourceRef,
+        long authorization,
         Map<String, String> headers)
     {
         final MessagePredicate filter = (t, b, o, l) ->
@@ -961,7 +965,7 @@ final class ServerAcceptStream implements MessageConsumer
             return route.sourceRef() == sourceRef && headersMatch;
         };
 
-        return factory.router.resolve(filter, (msgTypeId, buffer, index, length) ->
+        return factory.router.resolve(authorization, filter, (msgTypeId, buffer, index, length) ->
             factory.routeRO.wrap(buffer, index, index + length));
     }
 

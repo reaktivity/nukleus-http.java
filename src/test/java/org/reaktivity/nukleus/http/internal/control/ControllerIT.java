@@ -63,7 +63,7 @@ public class ControllerIT
         k3po.start();
 
         controller.controller(HttpController.class)
-                  .routeServer("source", 0L, "target", targetRef, headers)
+                  .routeServer("source", 0L, "target", targetRef, 0L, headers)
                   .get();
 
         k3po.finish();
@@ -82,7 +82,7 @@ public class ControllerIT
         k3po.start();
 
         controller.controller(HttpController.class)
-                  .routeClient("source", 0L, "target", targetRef, headers)
+                  .routeClient("source", 0L, "target", targetRef, 0L, headers)
                   .get();
 
         k3po.finish();
@@ -102,13 +102,13 @@ public class ControllerIT
         k3po.start();
 
         long sourceRef = controller.controller(HttpController.class)
-                  .routeServer("source", 0L, "target", targetRef, headers)
+                  .routeServer("source", 0L, "target", targetRef, 0L, headers)
                   .get();
 
         k3po.notifyBarrier("ROUTED_SERVER");
 
         controller.controller(HttpController.class)
-                  .unrouteServer("source", sourceRef, "target", targetRef, headers)
+                  .unrouteServer("source", sourceRef, "target", targetRef, 0L, headers)
                   .get();
 
         k3po.finish();
@@ -128,13 +128,13 @@ public class ControllerIT
         k3po.start();
 
         long sourceRef = controller.controller(HttpController.class)
-                  .routeClient("source", 0L, "target", targetRef, headers)
+                  .routeClient("source", 0L, "target", targetRef, 0L, headers)
                   .get();
 
         k3po.notifyBarrier("ROUTED_CLIENT");
 
         controller.controller(HttpController.class)
-                  .unrouteClient("source", sourceRef, "target", targetRef, headers)
+                  .unrouteClient("source", sourceRef, "target", targetRef, 0L, headers)
                   .get();
 
         k3po.finish();

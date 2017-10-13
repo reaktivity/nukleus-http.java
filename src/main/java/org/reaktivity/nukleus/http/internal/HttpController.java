@@ -98,9 +98,10 @@ public final class HttpController implements Controller
         long sourceRef,
         String target,
         long targetRef,
+        long authorization,
         Map<String, String> headers)
     {
-        return route(Role.SERVER, source, sourceRef, target, targetRef, headers);
+        return route(Role.SERVER, source, sourceRef, target, targetRef, authorization, headers);
     }
 
     public CompletableFuture<Long> routeClient(
@@ -108,9 +109,10 @@ public final class HttpController implements Controller
         long sourceRef,
         String target,
         long targetRef,
+        long authorization,
         Map<String, String> headers)
     {
-        return route(Role.CLIENT, source, sourceRef, target, targetRef, headers);
+        return route(Role.CLIENT, source, sourceRef, target, targetRef, authorization, headers);
     }
 
     public CompletableFuture<Void> unrouteServer(
@@ -118,9 +120,10 @@ public final class HttpController implements Controller
         long sourceRef,
         String target,
         long targetRef,
+        long authorization,
         Map<String, String> headers)
     {
-        return unroute(Role.SERVER, source, sourceRef, target, targetRef, headers);
+        return unroute(Role.SERVER, source, sourceRef, target, targetRef, authorization, headers);
     }
 
     public CompletableFuture<Void> unrouteClient(
@@ -128,9 +131,10 @@ public final class HttpController implements Controller
         long sourceRef,
         String target,
         long targetRef,
+        long authorization,
         Map<String, String> headers)
     {
-        return unroute(Role.CLIENT, source, sourceRef, target, targetRef, headers);
+        return unroute(Role.CLIENT, source, sourceRef, target, targetRef, authorization, headers);
     }
 
     public long count(String name)
@@ -168,6 +172,7 @@ public final class HttpController implements Controller
         long sourceRef,
         String target,
         long targetRef,
+        long authorization,
         Map<String, String> headers)
     {
         long correlationId = controllerSpi.nextCorrelationId();
@@ -179,6 +184,7 @@ public final class HttpController implements Controller
                                  .sourceRef(sourceRef)
                                  .target(target)
                                  .targetRef(targetRef)
+                                 .authorization(authorization)
                                  .extension(extension(headers))
                                  .build();
 
@@ -191,6 +197,7 @@ public final class HttpController implements Controller
         long sourceRef,
         String target,
         long targetRef,
+        long authorization,
         Map<String, String> headers)
     {
         long correlationId = controllerSpi.nextCorrelationId();
@@ -202,6 +209,7 @@ public final class HttpController implements Controller
                                  .sourceRef(sourceRef)
                                  .target(target)
                                  .targetRef(targetRef)
+                                 .authorization(authorization)
                                  .extension(extension(headers))
                                  .build();
 
