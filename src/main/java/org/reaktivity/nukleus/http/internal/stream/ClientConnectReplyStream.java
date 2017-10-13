@@ -83,6 +83,8 @@ final class ClientConnectReplyStream implements MessageConsumer
     private int connectReplyWindowBudgetMinimum;
     private Consumer<WindowFW> windowHandler;
 
+    private int targetWindowPadding;
+
     @Override
     public String toString()
     {
@@ -303,7 +305,7 @@ final class ClientConnectReplyStream implements MessageConsumer
     private void handleDataWhenNotBuffering(
         DataFW data)
     {
-        connectReplyWindowBudget -= data.length();
+        connectReplyWindowBudget -= data.length() + targetWindowPadding;
 
         if (connectReplyWindowBudget < 0)
         {
@@ -417,7 +419,7 @@ final class ClientConnectReplyStream implements MessageConsumer
     private void handleDataWhenBuffering(
         DataFW data)
     {
-        connectReplyWindowBudget -= data.length();
+        connectReplyWindowBudget -= data.length() + targetWindowPadding;
 
         if (connectReplyWindowBudget < 0)
         {
@@ -937,6 +939,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         WindowFW window)
     {
         final int targetWindowCredit = window.credit();
+        targetWindowPadding = window.padding();
 
         acceptReplyWindowBudget += targetWindowCredit;
 
@@ -959,7 +962,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         if (sourceWindowPositiveCredit > 0)
         {
             factory.writer.doWindow(connectReplyThrottle, sourceId,
-                                    sourceWindowPositiveCredit, window.padding());
+                                    sourceWindowPositiveCredit, targetWindowPadding);
         }
     }
 
@@ -967,6 +970,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         WindowFW window)
     {
         final int targetWindowCredit = window.credit();
+        targetWindowPadding = window.padding();
 
         acceptReplyWindowBudget += targetWindowCredit;
 
