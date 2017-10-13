@@ -83,7 +83,7 @@ final class ClientConnectReplyStream implements MessageConsumer
     private int connectReplyWindowBudgetMinimum;
     private Consumer<WindowFW> windowHandler;
 
-    private int targetWindowPadding;
+    private int acceptReplyWindowPadding;
 
     @Override
     public String toString()
@@ -305,7 +305,7 @@ final class ClientConnectReplyStream implements MessageConsumer
     private void handleDataWhenNotBuffering(
         DataFW data)
     {
-        connectReplyWindowBudget -= data.length() + targetWindowPadding;
+        connectReplyWindowBudget -= data.length() + acceptReplyWindowPadding;
 
         if (connectReplyWindowBudget < 0)
         {
@@ -419,7 +419,7 @@ final class ClientConnectReplyStream implements MessageConsumer
     private void handleDataWhenBuffering(
         DataFW data)
     {
-        connectReplyWindowBudget -= data.length() + targetWindowPadding;
+        connectReplyWindowBudget -= data.length() + acceptReplyWindowPadding;
 
         if (connectReplyWindowBudget < 0)
         {
@@ -678,8 +678,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         final int length = limit - offset;
 
         final int remainingBytes = Math.min(length, contentRemaining);
-        final int targetWindow = acceptReplyWindowBudget;
-        final int writableBytes = Math.min(targetWindow, remainingBytes);
+        final int writableBytes = Math.min(acceptReplyWindowBudget, remainingBytes);
 
         if (writableBytes > 0)
         {
@@ -775,8 +774,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         final int length = limit - offset;
 
         final int remainingBytes = Math.min(length, chunkSizeRemaining);
-        final int targetWindow = acceptReplyWindowBudget;
-        final int writableBytes = Math.min(targetWindow, remainingBytes);
+        final int writableBytes = Math.min(acceptReplyWindowBudget, remainingBytes);
 
         if (writableBytes > 0)
         {
@@ -848,7 +846,7 @@ final class ClientConnectReplyStream implements MessageConsumer
 
         if (connectReplyWindowCredit > 0)
         {
-            factory.writer.doWindow(connectReplyThrottle, sourceId, connectReplyWindowCredit, 0);
+            factory.writer.doWindow(connectReplyThrottle, sourceId, connectReplyWindowCredit, acceptReplyWindowPadding);
         }
 
         // TODO: Support HTTP/1.1 Pipelined Responses (may be buffered already)
@@ -938,56 +936,56 @@ final class ClientConnectReplyStream implements MessageConsumer
     private void handleBoundedWindow(
         WindowFW window)
     {
-        final int targetWindowCredit = window.credit();
-        targetWindowPadding = window.padding();
+        final int acceptReplyWindowCredit = window.credit();
+        acceptReplyWindowPadding = window.padding();
 
-        acceptReplyWindowBudget += targetWindowCredit;
+        acceptReplyWindowBudget += acceptReplyWindowCredit;
 
         if (slotIndex != NO_SLOT)
         {
             decodeBufferedData();
         }
 
-        final int sourceWindowCreditAdjustment = Math.max(connectReplyWindowBudgetMinimum - connectReplyWindowBudget, 0);
-        final int sourceWindowCreditLimit = Math.max(contentRemaining + connectReplyWindowBudgetAdjustment, 0);
+        final int connectReplyWindowCreditAdjustment = Math.max(connectReplyWindowBudgetMinimum - connectReplyWindowBudget, 0);
+        final int connectReplyWindowCreditLimit = Math.max(contentRemaining + connectReplyWindowBudgetAdjustment, 0);
 
-        final int sourceWindowCredit =
-                Math.min(targetWindowCredit, sourceWindowCreditLimit) + sourceWindowCreditAdjustment;
+        final int connectReplyWindowCredit =
+                Math.min(acceptReplyWindowCredit, connectReplyWindowCreditLimit) + connectReplyWindowCreditAdjustment;
 
-        final int sourceWindowPositiveCredit = Math.max(sourceWindowCredit, 0);
+        final int connectReplyWindowPositiveCredit = Math.max(connectReplyWindowCredit, 0);
 
-        connectReplyWindowBudget += sourceWindowPositiveCredit;
-        connectReplyWindowBudgetAdjustment = Math.min(sourceWindowCredit, 0);
+        connectReplyWindowBudget += connectReplyWindowPositiveCredit;
+        connectReplyWindowBudgetAdjustment = Math.min(connectReplyWindowCredit, 0);
 
-        if (sourceWindowPositiveCredit > 0)
+        if (connectReplyWindowPositiveCredit > 0)
         {
             factory.writer.doWindow(connectReplyThrottle, sourceId,
-                                    sourceWindowPositiveCredit, targetWindowPadding);
+                                    connectReplyWindowPositiveCredit, acceptReplyWindowPadding);
         }
     }
 
     private void handleWindow(
         WindowFW window)
     {
-        final int targetWindowCredit = window.credit();
-        targetWindowPadding = window.padding();
+        final int acceptReplyWindowCredit = window.credit();
+        acceptReplyWindowPadding = window.padding();
 
-        acceptReplyWindowBudget += targetWindowCredit;
+        acceptReplyWindowBudget += acceptReplyWindowCredit;
 
         if (slotIndex != NO_SLOT)
         {
             decodeBufferedData();
         }
 
-        final int sourceWindowCredit = targetWindowCredit + connectReplyWindowBudgetAdjustment;
+        final int connectReplyWindowCredit = acceptReplyWindowCredit + connectReplyWindowBudgetAdjustment;
 
-        connectReplyWindowBudget += Math.max(sourceWindowCredit, 0);
-        connectReplyWindowBudgetAdjustment = Math.min(sourceWindowCredit, 0);
+        connectReplyWindowBudget += Math.max(connectReplyWindowCredit, 0);
+        connectReplyWindowBudgetAdjustment = Math.min(connectReplyWindowCredit, 0);
 
-        if (sourceWindowCredit > 0)
+        if (connectReplyWindowCredit > 0)
         {
-            int windowUpdate = Math.max(sourceWindowCredit, 0);
-            factory.writer.doWindow(connectReplyThrottle, sourceId, windowUpdate, window.padding());
+            int windowCredit = Math.max(connectReplyWindowCredit, 0);
+            factory.writer.doWindow(connectReplyThrottle, sourceId, windowCredit, window.padding());
         }
     }
 
