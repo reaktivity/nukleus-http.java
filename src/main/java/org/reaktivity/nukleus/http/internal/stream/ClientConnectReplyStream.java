@@ -80,7 +80,6 @@ final class ClientConnectReplyStream implements MessageConsumer
     private int connectReplyWindowBudget;
     private int acceptReplyWindowBudget;
     private int connectReplyWindowBudgetAdjustment;
-    private int connectReplyWindowBudgetMinimum;
     private Consumer<WindowFW> windowHandler;
 
     private int acceptReplyWindowPadding;
@@ -600,9 +599,6 @@ final class ClientConnectReplyStream implements MessageConsumer
                 throttleState = this::handleThrottleAfterBegin;
                 windowHandler = this::handleBoundedWindow;
                 this.responseState = ResponseState.DATA;
-
-                // 0\r\n\r\n
-                connectReplyWindowBudgetMinimum += 5;
             }
             else
             {
@@ -836,6 +832,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         this.streamState = this::handleStreamWhenNotBuffering;
         this.decoderState = this::decodeHttpBegin;
         this.responseState = ResponseState.BEFORE_HEADERS;
+        this.acceptReplyWindowPadding = 0;
 
         final int connectReplyWindowCredit = factory.maximumHeadersSize - connectReplyWindowBudget;
 
@@ -852,7 +849,6 @@ final class ClientConnectReplyStream implements MessageConsumer
         // TODO: Support HTTP/1.1 Pipelined Responses (may be buffered already)
         this.connectReplyWindowBudget = factory.maximumHeadersSize;
         this.connectReplyWindowBudgetAdjustment = -factory.maximumHeadersSize;
-        this.connectReplyWindowBudgetMinimum = 0;
         this.contentRemaining = 0;
     }
 
@@ -946,16 +942,9 @@ final class ClientConnectReplyStream implements MessageConsumer
             decodeBufferedData();
         }
 
-        final int connectReplyWindowCreditAdjustment = Math.max(connectReplyWindowBudgetMinimum - connectReplyWindowBudget, 0);
-        final int connectReplyWindowCreditLimit = Math.max(contentRemaining + connectReplyWindowBudgetAdjustment, 0);
-
-        final int connectReplyWindowCredit =
-                Math.min(acceptReplyWindowCredit, connectReplyWindowCreditLimit) + connectReplyWindowCreditAdjustment;
-
-        final int connectReplyWindowPositiveCredit = Math.max(connectReplyWindowCredit, 0);
+        final int connectReplyWindowPositiveCredit = Math.max(factory.bufferPool.slotCapacity() - connectReplyWindowBudget, 0);
 
         connectReplyWindowBudget += connectReplyWindowPositiveCredit;
-        connectReplyWindowBudgetAdjustment = Math.min(connectReplyWindowCredit, 0);
 
         if (connectReplyWindowPositiveCredit > 0)
         {
