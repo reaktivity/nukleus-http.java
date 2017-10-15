@@ -832,7 +832,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         this.streamState = this::handleStreamWhenNotBuffering;
         this.decoderState = this::decodeHttpBegin;
         this.responseState = ResponseState.BEFORE_HEADERS;
-        this.acceptReplyWindowPadding = 0;
+        this.acceptReplyWindowPadding = 0;      // TODO send half to avoid initial race
 
         final int connectReplyWindowCredit = factory.maximumHeadersSize - connectReplyWindowBudget;
 
@@ -937,12 +937,18 @@ final class ClientConnectReplyStream implements MessageConsumer
 
         acceptReplyWindowBudget += acceptReplyWindowCredit;
 
+        int bufferedDataLength = 0;
         if (slotIndex != NO_SLOT)
         {
             decodeBufferedData();
+            if (slotIndex != NO_SLOT)
+            {
+                bufferedDataLength = slotPosition - slotOffset;
+            }
         }
 
-        final int connectReplyWindowPositiveCredit = Math.max(factory.bufferPool.slotCapacity() - connectReplyWindowBudget, 0);
+        final int connectReplyWindowPositiveCredit =
+                Math.max(factory.bufferPool.slotCapacity() - connectReplyWindowBudget - bufferedDataLength, 0);
 
         connectReplyWindowBudget += connectReplyWindowPositiveCredit;
 
