@@ -795,8 +795,7 @@ final class ClientConnectReplyStream implements MessageConsumer
     {
         final int length = limit - offset;
 
-        final int targetWindow = acceptReplyWindowBudget;
-        final int writableBytes = Math.min(targetWindow, length);
+        final int writableBytes = Math.min(acceptReplyWindowBudget, length);
 
         if (writableBytes > 0)
         {

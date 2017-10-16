@@ -415,7 +415,7 @@ public final class ServerConnectReplyStream implements MessageConsumer
         int writableBytes = Math.min(bytesDeferred, acceptState.budget);
         MutableDirectBuffer slot = factory.bufferPool.buffer(slotIndex);
         factory.writer.doData(acceptState.acceptReply, acceptState.replyStreamId, slot, slotOffset, writableBytes);
-        acceptState.budget -= writableBytes;
+        acceptState.budget -= writableBytes + acceptState.padding;
         slotOffset += writableBytes;
         bytesDeferred -= writableBytes;
         if (bytesDeferred == 0)
