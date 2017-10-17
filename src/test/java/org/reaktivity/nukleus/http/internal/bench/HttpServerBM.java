@@ -130,6 +130,7 @@ public class HttpServerBM
 
         private MessageConsumer sourceOutputEstHandler;
         int availableSourceInputWindow = 0;
+        int padding;
         public int writeFails;
         public int readFails;
 
@@ -253,7 +254,8 @@ public class HttpServerBM
             {
             case WindowFW.TYPE_ID:
                 windowRO.wrap(buffer, index, index + length);
-                availableSourceInputWindow += windowRO.update();
+                availableSourceInputWindow += windowRO.credit();
+                padding = windowRO.padding();
                 break;
             case ResetFW.TYPE_ID:
                 System.out.println("ERROR: reset detected in sourceInputThrottle");
@@ -301,11 +303,11 @@ public class HttpServerBM
 
         private void doWindow(
             final long streamId,
-            final int update)
+            final int credit)
         {
             final WindowFW window = windowRW.wrap(throttleBuffer, 0, throttleBuffer.capacity())
                     .streamId(streamId)
-                    .update(update)
+                    .credit(credit)
                     .build();
             sourceOutputEst.throttle.test(window.typeId(), window.buffer(), window.offset(), window.sizeof());
         }
