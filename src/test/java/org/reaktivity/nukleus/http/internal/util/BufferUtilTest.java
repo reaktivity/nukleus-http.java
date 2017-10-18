@@ -21,7 +21,6 @@ import static org.junit.Assert.assertEquals;
 import org.agrona.DirectBuffer;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.junit.Test;
-import org.reaktivity.nukleus.auth.jwt.internal.util.BufferUtil;
 
 public class BufferUtilTest
 {
