@@ -49,10 +49,20 @@ public class FlowControlPaddingIT
 
     @Test
     @Specification({
-        "${route}/server/controller",
-        "${client}/flow.control/response.headers.with.padding/client",
-        "${server}/flow.control/response.headers.with.padding/server"})
+            "${route}/server/controller",
+            "${client}/flow.control/response.headers.with.padding/client",
+            "${server}/flow.control/response.headers.with.padding/server"})
     public void shouldProcessResponseHeadersFragmentedByPadding() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+            "${route}/server/controller",
+            "${client}/flow.control/response.with.padding/client",
+            "${server}/flow.control/response.with.padding/server"})
+    public void shouldProcessResponseWithPadding() throws Exception
     {
         k3po.finish();
     }
