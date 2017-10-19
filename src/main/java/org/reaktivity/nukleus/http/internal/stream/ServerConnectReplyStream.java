@@ -412,27 +412,31 @@ public final class ServerConnectReplyStream implements MessageConsumer
     private void useTargetWindowToWriteResponseHeaders()
     {
         int bytesDeferred = slotPosition - slotOffset;
-        int writableBytes = Math.min(bytesDeferred, acceptState.budget);
-        MutableDirectBuffer slot = factory.bufferPool.buffer(slotIndex);
-        factory.writer.doData(acceptState.acceptReply, acceptState.replyStreamId, slot, slotOffset, writableBytes);
-        acceptState.budget -= writableBytes + acceptState.padding;
-        slotOffset += writableBytes;
-        bytesDeferred -= writableBytes;
-        if (bytesDeferred == 0)
+        int writableBytes = Math.min(bytesDeferred, acceptState.budget - acceptState.padding);
+
+        if (writableBytes > 0)
         {
-            factory.bufferPool.release(slotIndex);
-            slotIndex = NO_SLOT;
-            if (endDeferred)
+            MutableDirectBuffer slot = factory.bufferPool.buffer(slotIndex);
+            factory.writer.doData(acceptState.acceptReply, acceptState.replyStreamId, slot, slotOffset, writableBytes);
+            acceptState.budget -= writableBytes + acceptState.padding;
+            slotOffset += writableBytes;
+            bytesDeferred -= writableBytes;
+            if (bytesDeferred == 0)
             {
-                doEnd();
-            }
-            else
-            {
-                streamState = this::streamAfterBeginOrData;
-                throttleState = this::throttleNextWindow;
-                if (acceptState.budget > 0)
+                factory.bufferPool.release(slotIndex);
+                slotIndex = NO_SLOT;
+                if (endDeferred)
                 {
-                    doSourceWindow(acceptState.budget, acceptState.padding);
+                    doEnd();
+                }
+                else
+                {
+                    streamState = this::streamAfterBeginOrData;
+                    throttleState = this::throttleNextWindow;
+                    if (acceptState.budget > 0)
+                    {
+                        doSourceWindow(acceptState.budget, acceptState.padding);
+                    }
                 }
             }
         }
