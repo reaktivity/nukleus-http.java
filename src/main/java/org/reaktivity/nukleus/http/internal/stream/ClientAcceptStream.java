@@ -171,7 +171,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         case DataFW.TYPE_ID:
             DataFW data = this.factory.dataRO.wrap(buffer, index, index + length);
             final long streamId = data.streamId();
-            factory.writer.doWindow(acceptThrottle, streamId, data.length(), data.length());
+            factory.writer.doWindow(acceptThrottle, streamId, data.length(), 0);
             break;
         case EndFW.TYPE_ID:
             factory.endRO.wrap(buffer, index, index + length);
@@ -318,7 +318,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         {
             final OctetsFW payload = this.factory.dataRO.payload();
             factory.writer.doData(target, connection.connectStreamId, payload);
-            connection.window -= payload.sizeof();
+            connection.budget -= payload.sizeof();
         }
     }
 
@@ -387,7 +387,8 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         {
         case WindowFW.TYPE_ID:
             this.factory.windowRO.wrap(buffer, index, index + length);
-            connection.window += this.factory.windowRO.update();
+            connection.budget += this.factory.windowRO.credit();
+            connection.padding = this.factory.windowRO.padding();
             useWindowToWriteRequestHeaders();
             break;
         case ResetFW.TYPE_ID:
@@ -409,9 +410,11 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         {
         case WindowFW.TYPE_ID:
             this.factory.windowRO.wrap(buffer, index, index + length);
-            int update = this.factory.windowRO.update();
-            connection.window += update;
-            doSourceWindow(update);
+            int credit = this.factory.windowRO.credit();
+            int padding = this.factory.windowRO.padding();
+            connection.budget += credit;
+            connection.padding = padding;
+            doSourceWindow(credit, padding);
             break;
         case ResetFW.TYPE_ID:
             processReset(buffer, index, length);
@@ -424,10 +427,10 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
 
     private void useWindowToWriteRequestHeaders()
     {
-        int writableBytes = Math.min(slotPosition - slotOffset, connection.window);
+        int writableBytes = Math.min(slotPosition - slotOffset, connection.budget);
         MutableDirectBuffer slot = this.factory.bufferPool.buffer(slotIndex);
         factory.writer.doData(target, connection.connectStreamId, slot, slotOffset, writableBytes);
-        connection.window -= writableBytes;
+        connection.budget -= writableBytes;
         slotOffset += writableBytes;
         int bytesDeferred = slotPosition - slotOffset;
         if (bytesDeferred == 0)
@@ -442,18 +445,18 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
             {
                 streamState = this::streamAfterBeginOrData;
                 throttleState = this::throttleNextWindow;
-                if (connection.window > 0)
+                if (connection.budget > 0)
                 {
-                    doSourceWindow(connection.window);
+                    doSourceWindow(connection.budget, connection.padding);
                 }
             }
         }
     }
 
-    private void doSourceWindow(int update)
+    private void doSourceWindow(int credit, int padding)
     {
-        sourceWindow += update;
-        factory.writer.doWindow(acceptThrottle, acceptId, update, update);
+        sourceWindow += credit;
+        factory.writer.doWindow(acceptThrottle, acceptId, credit, padding);
     }
 
     private void processAbort(
@@ -526,7 +529,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
                 new Correlation<>(acceptCorrelationId, acceptName, state);
         factory.correlations.put(connection.correlationId, correlation);
         factory.router.setThrottle(connectName, connection.connectStreamId, this::handleThrottle);
-        if (connection.window > 0)
+        if (connection.budget > 0)
         {
             useWindowToWriteRequestHeaders();
         }

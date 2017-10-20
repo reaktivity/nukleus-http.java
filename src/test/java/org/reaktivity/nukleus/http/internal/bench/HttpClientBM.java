@@ -305,6 +305,7 @@ public class HttpClientBM
         private long streamId;
         IdleStrategy idleStrategy = new BackoffIdleStrategy(64, 64, NANOSECONDS.toNanos(64L), MICROSECONDS.toNanos(64L));
         private int availableWindow;
+        private int padding;
         int requestCount;
 
         @Setup(Level.Iteration)
@@ -410,7 +411,8 @@ public class HttpClientBM
                 windowRO.wrap(buffer, index, index + length);
                 if (windowRO.streamId() == streamId)
                 {
-                    availableWindow += windowRO.update();
+                    availableWindow += windowRO.credit();
+                    padding = windowRO.padding();
                 }
                 break;
             case ResetFW.TYPE_ID:
@@ -477,11 +479,11 @@ public class HttpClientBM
 
         private void doWindow(
             final long streamId,
-            final int update)
+            final int credit)
         {
             final WindowFW window = windowRW.wrap(throttleBuffer, 0, throttleBuffer.capacity())
                     .streamId(streamId)
-                    .update(update)
+                    .credit(credit)
                     .build();
             sharedState.clientAcceptReplyStreams.throttle.test(window.typeId(), window.buffer(), window.offset(),
                     window.sizeof());
@@ -553,11 +555,11 @@ public class HttpClientBM
 
         private void doWindow(
             final long streamId,
-            final int update)
+            final int credit)
         {
             final WindowFW window = windowRW.wrap(throttleBuffer, 0, throttleBuffer.capacity())
                     .streamId(streamId)
-                    .update(update)
+                    .credit(credit)
                     .build();
             sharedState.clientConnectStreams.throttle.test(window.typeId(), window.buffer(), window.offset(), window.sizeof());
         }
@@ -578,6 +580,7 @@ public class HttpClientBM
 
         private long streamId;
         int availableWindow;
+        int padding;
 
         @Setup(Level.Iteration)
         public void reinit(SharedState state, Control control) throws Exception
@@ -670,7 +673,8 @@ public class HttpClientBM
                 windowRO.wrap(buffer, index, index + length);
                 if (windowRO.streamId() == streamId)
                 {
-                    availableWindow += windowRO.update();
+                    availableWindow += windowRO.credit();
+                    padding = windowRO.padding();
                 }
                 break;
             case ResetFW.TYPE_ID:

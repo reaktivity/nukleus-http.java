@@ -74,11 +74,12 @@ final class ServerAcceptStream implements MessageConsumer
     private MessageConsumer target;
     private long targetId;
     private String targetName;
-    private int window;
+    private int sourceWindowBudget;
     private int contentRemaining;
     private boolean isChunkedTransfer;
     private int chunkSizeRemaining;
-    private int availableTargetWindow;
+    private int targetWindowBudget;
+    private int targetWindowPadding;
     private boolean hasUpgrade;
     private Correlation<ServerAcceptState> correlation;
     private boolean targetBeginIssued;
@@ -87,7 +88,7 @@ final class ServerAcceptStream implements MessageConsumer
     public String toString()
     {
         return String.format("%s[source=%s, sourceId=%016x, window=%d, targetId=%016x]",
-                getClass().getSimpleName(), acceptName, acceptId, window, targetId);
+                getClass().getSimpleName(), acceptName, acceptId, sourceWindowBudget, targetId);
     }
 
     ServerAcceptStream(ServerStreamFactory factory, MessageConsumer acceptThrottle,
@@ -206,7 +207,7 @@ final class ServerAcceptStream implements MessageConsumer
             DataFW data = factory.dataRO.wrap(buffer, index, index + length);
             final long streamId = data.streamId();
 
-            factory.writer.doWindow(acceptThrottle, streamId, data.length(), data.length());
+            factory.writer.doWindow(acceptThrottle, streamId, data.length(), 0);
         }
         else if (msgTypeId == EndFW.TYPE_ID)
         {
@@ -243,7 +244,7 @@ final class ServerAcceptStream implements MessageConsumer
         {
             // Drain data from source before resetting to allow its writes to complete
             throttleState = ServerAcceptStream.this::throttlePropagateWindow;
-            doSourceWindow(maximumHeadersSize);
+            doSourceWindow(maximumHeadersSize, 0);
 
             // We can't write back an HTTP error response because we already forwarded the request to the target
             factory.writer.doReset(acceptThrottle, acceptId);
@@ -256,7 +257,7 @@ final class ServerAcceptStream implements MessageConsumer
         }
     }
 
-    void releaseSlotIfNecessary()
+    private void releaseSlotIfNecessary()
     {
         if (slotIndex != NO_SLOT)
         {
@@ -277,7 +278,7 @@ final class ServerAcceptStream implements MessageConsumer
 
         final DirectBuffer payload = new UnsafeBuffer(payloadText.toString().getBytes(StandardCharsets.UTF_8));
 
-        int writableBytes = Math.min(correlation.state().window, payload.capacity());
+        int writableBytes = Math.min(correlation.state().budget, payload.capacity());
         if (writableBytes > 0)
         {
             factory.writer.doData(target, targetId, payload, 0, writableBytes);
@@ -295,20 +296,22 @@ final class ServerAcceptStream implements MessageConsumer
                     {
                     case WindowFW.TYPE_ID:
                         WindowFW window = factory.windowRO.wrap(buffer, index, index + length);
-                        int update = window.update();
-                        int writableBytes = Math.min(update, payload.capacity() - offset);
+                        int credit = window.credit();
+                        int padding = window.padding();
+                        int writableBytes = Math.min(credit, payload.capacity() - offset);
                         ServerAcceptStream.this.factory.writer.doData(target, targetId, payload, offset, writableBytes);
                         offset += writableBytes;
                         if (offset == payload.capacity())
                         {
                             // Drain data from source before resetting to allow its writes to complete
                             throttleState = ServerAcceptStream.this::throttlePropagateWindow;
-                            doSourceWindow(ServerAcceptStream.this.maximumHeadersSize);
+                            doSourceWindow(ServerAcceptStream.this.maximumHeadersSize, 0);
                             ServerAcceptStream.this.factory.writer.doReset(acceptThrottle, acceptId);
                         }
                         break;
                     case ResetFW.TYPE_ID:
-                        processReset(buffer, index, length);
+                        final ResetFW reset = factory.resetRO.wrap(buffer, index, index + length);
+                        processReset(reset);
                         break;
                     default:
                         // ignore
@@ -321,7 +324,7 @@ final class ServerAcceptStream implements MessageConsumer
         {
             // Drain data from source before resetting to allow its writes to complete
             throttleState = ServerAcceptStream.this::throttlePropagateWindow;
-            doSourceWindow(maximumHeadersSize);
+            doSourceWindow(maximumHeadersSize, 0);
             factory.writer.doReset(acceptThrottle, acceptId);
         }
     }
@@ -342,7 +345,7 @@ final class ServerAcceptStream implements MessageConsumer
         factory.writer.doBegin(acceptReply, replyStreamId, 0L, acceptCorrelationId);
         this.correlation = new Correlation<>(acceptCorrelationId, acceptName, state);
 
-        doSourceWindow(maximumHeadersSize);
+        doSourceWindow(maximumHeadersSize, 0);
     }
 
     private void processData(
@@ -352,9 +355,9 @@ final class ServerAcceptStream implements MessageConsumer
     {
         DataFW data = factory.dataRO.wrap(buffer, index, index + length);
 
-        window -= data.length();
+        sourceWindowBudget -= data.length();
 
-        if (window < 0)
+        if (sourceWindowBudget < 0)
         {
             processUnexpected(buffer, index, length);
         }
@@ -427,9 +430,9 @@ final class ServerAcceptStream implements MessageConsumer
         int length)
     {
         DataFW data = factory.dataRO.wrap(buffer, index, index + length);
-        window -= data.length();
+        sourceWindowBudget -= data.length();
 
-        if (window < 0)
+        if (sourceWindowBudget < 0)
         {
             processUnexpected(buffer, index, length);
         }
@@ -451,12 +454,12 @@ final class ServerAcceptStream implements MessageConsumer
         slot.putBytes(slotPosition, buffer, offset, dataLength);
         slotPosition += dataLength;
         processDeferredData();
-        if (window == 0)
+        if (sourceWindowBudget == 0)
         {
             // Increase source window to ensure we can receive the largest possible amount of data we can factory.slab
             int cachedBytes = slotPosition - slotOffset;
-            ensureSourceWindow(factory.bufferPool.slotCapacity() - cachedBytes);
-            if (window == 0)
+            ensureSourceWindow(factory.bufferPool.slotCapacity() - cachedBytes, targetWindowPadding);
+            if (sourceWindowBudget == 0)
             {
                 throw new IllegalStateException("Decoder failed to detect headers or chunk too long");
             }
@@ -636,10 +639,10 @@ final class ServerAcceptStream implements MessageConsumer
                     factory.correlations.put(newTargetCorrelationId, correlation);
                     correlation.state().pendingRequests++;
 
-                    availableTargetWindow = 0;
+                    targetWindowBudget = 0;
                     switchTarget(newTarget, newTargetId);
                     factory.writer.doHttpBegin(target, newTargetId, targetRef, newTargetCorrelationId,
-                            hs -> headers.forEach((k, v) -> hs.item(i -> i.name(k).value(v))));
+                            hs -> headers.forEach((k, v) -> hs.item(i -> i.representation((byte)0).name(k).value(v))));
                     targetBeginIssued = true;
 
                     hasUpgrade = headers.containsKey("upgrade");
@@ -784,12 +787,12 @@ final class ServerAcceptStream implements MessageConsumer
 
         // TODO: consider chunks
         int writableBytes = Math.min(length, contentRemaining);
-        writableBytes = Math.min(availableTargetWindow, writableBytes);
+        writableBytes = Math.min(targetWindowBudget, writableBytes);
 
         if (writableBytes > 0)
         {
             factory.writer.doHttpData(target, targetId, payload, offset, writableBytes);
-            availableTargetWindow -= writableBytes;
+            targetWindowBudget -= writableBytes;
             contentRemaining -= writableBytes;
         }
         int result = offset + writableBytes;
@@ -876,12 +879,12 @@ final class ServerAcceptStream implements MessageConsumer
 
         // TODO: consider chunks
         int writableBytes = Math.min(length, chunkSizeRemaining);
-        writableBytes = Math.min(availableTargetWindow, writableBytes);
+        writableBytes = Math.min(targetWindowBudget, writableBytes);
 
         if (writableBytes > 0)
         {
             factory.writer.doHttpData(target, targetId, payload, offset, writableBytes);
-            availableTargetWindow -= writableBytes;
+            targetWindowBudget -= writableBytes;
             chunkSizeRemaining -= writableBytes;
         }
         result = offset + writableBytes;
@@ -899,11 +902,11 @@ final class ServerAcceptStream implements MessageConsumer
             final int limit)
     {
         final int length = limit - offset;
-        int writableBytes = Math.min(length, availableTargetWindow);
+        int writableBytes = Math.min(length, targetWindowBudget);
         if (writableBytes > 0)
         {
             factory.writer.doHttpData(target, targetId, payload, offset, writableBytes);
-            availableTargetWindow -= writableBytes;
+            targetWindowBudget -= writableBytes;
         }
         return offset + writableBytes;
     };
@@ -938,7 +941,7 @@ final class ServerAcceptStream implements MessageConsumer
         {
             this.streamState = this::streamAfterBeginOrData;
             this.decoderState = this::decodeBeforeHttpBegin;
-            ensureSourceWindow(maximumHeadersSize);
+            ensureSourceWindow(maximumHeadersSize, 0);
         }
         else
         {
@@ -993,7 +996,8 @@ final class ServerAcceptStream implements MessageConsumer
         switch (msgTypeId)
         {
         case ResetFW.TYPE_ID:
-            processReset(buffer, index, length);
+            final ResetFW reset = factory.resetRO.wrap(buffer, index, index + length);
+            processReset(reset);
             break;
         default:
             // ignore
@@ -1010,10 +1014,12 @@ final class ServerAcceptStream implements MessageConsumer
         switch (msgTypeId)
         {
         case WindowFW.TYPE_ID:
-            processWindowForHttpData(buffer, index, length);
+            WindowFW window = factory.windowRO.wrap(buffer, index, index + length);
+            processWindowForHttpData(window);
             break;
         case ResetFW.TYPE_ID:
-            processReset(buffer, index, length);
+            final ResetFW reset = factory.resetRO.wrap(buffer, index, index + length);
+            processReset(reset);
             break;
         default:
             // ignore
@@ -1030,10 +1036,12 @@ final class ServerAcceptStream implements MessageConsumer
         switch (msgTypeId)
         {
         case WindowFW.TYPE_ID:
-            processWindowForHttpDataAfterUpgrade(buffer, index, length);
+            WindowFW window = factory.windowRO.wrap(buffer, index, index + length);
+            processWindowForHttpDataAfterUpgrade(window);
             break;
         case ResetFW.TYPE_ID:
-            processReset(buffer, index, length);
+            final ResetFW reset = factory.resetRO.wrap(buffer, index, index + length);
+            processReset(reset);
             break;
         default:
             // ignore
@@ -1050,10 +1058,12 @@ final class ServerAcceptStream implements MessageConsumer
         switch (msgTypeId)
         {
         case WindowFW.TYPE_ID:
-            propagateWindow(buffer, index, length);
+            WindowFW window = factory.windowRO.wrap(buffer, index, index + length);
+            propagateWindow(window);
             break;
         case ResetFW.TYPE_ID:
-            processReset(buffer, index, length);
+            final ResetFW reset = factory.resetRO.wrap(buffer, index, index + length);
+            processReset(reset);
             break;
         default:
             // ignore
@@ -1071,11 +1081,12 @@ final class ServerAcceptStream implements MessageConsumer
         {
         case WindowFW.TYPE_ID:
             WindowFW window = factory.windowRO.wrap(buffer, index, index + length);
-            int update = window.update();
-            correlation.state().window += update;
+            correlation.state().budget += window.credit();
+            correlation.state().padding = window.padding();
             break;
         case ResetFW.TYPE_ID:
-            processReset(buffer, index, length);
+            final ResetFW reset = factory.resetRO.wrap(buffer, index, index + length);
+            processReset(reset);
             break;
         default:
             // ignore
@@ -1083,32 +1094,31 @@ final class ServerAcceptStream implements MessageConsumer
         }
     }
 
-    private void processWindowForHttpData(DirectBuffer buffer, int index, int length)
+    private void processWindowForHttpData(
+        WindowFW window)
     {
-        WindowFW window = factory.windowRO.wrap(buffer, index, index + length);
-        int update = window.update();
-
-        availableTargetWindow += update;
+        targetWindowBudget += window.credit();
+        targetWindowPadding = window.padding();
         if (slotIndex != NO_SLOT)
         {
             processDeferredData();
         }
-        ensureSourceWindow(Math.min(availableTargetWindow, factory.bufferPool.slotCapacity()));
+        ensureSourceWindow(Math.min(targetWindowBudget, factory.bufferPool.slotCapacity()), targetWindowPadding);
     }
 
-    private void processWindowForHttpDataAfterUpgrade(DirectBuffer buffer, int index, int length)
+    private void processWindowForHttpDataAfterUpgrade(
+        WindowFW window)
     {
-        WindowFW window = factory.windowRO.wrap(buffer, index, index + length);
-        int update = window.update();
-        availableTargetWindow += update;
+        targetWindowBudget += window.credit();
+        targetWindowPadding = window.padding();
         if (slotIndex != NO_SLOT)
         {
             processDeferredData();
         }
         if (slotIndex == NO_SLOT)
         {
-            ensureSourceWindow(availableTargetWindow);
-            if (this.window == availableTargetWindow)
+            ensureSourceWindow(targetWindowBudget, targetWindowPadding);
+            if (this.sourceWindowBudget == targetWindowBudget)
             {
                 // Windows are now aligned
                 throttleState = this::throttlePropagateWindow;
@@ -1117,37 +1127,32 @@ final class ServerAcceptStream implements MessageConsumer
     }
 
     private void propagateWindow(
-        DirectBuffer buffer,
-        int index,
-        int length)
+        WindowFW window)
     {
-        WindowFW window = factory.windowRO.wrap(buffer, index, index + length);
-        int update = window.update();
-        availableTargetWindow += update;
-        doSourceWindow(update);
+        int credit = window.credit();
+        targetWindowBudget += credit;
+        targetWindowPadding = window.padding();
+        doSourceWindow(credit, targetWindowPadding);
     }
 
-    private void ensureSourceWindow(int requiredWindow)
+    private void ensureSourceWindow(int requiredWindow, int padding)
     {
-        if (requiredWindow > window)
+        if (requiredWindow > sourceWindowBudget)
         {
-            int update = requiredWindow - window;
-            doSourceWindow(update);
+            int credit = requiredWindow - sourceWindowBudget;
+            doSourceWindow(credit, padding);
         }
     }
 
-    private void doSourceWindow(int update)
+    private void doSourceWindow(int credit, int padding)
     {
-        window += update;
-        factory.writer.doWindow(acceptThrottle, acceptId, update, update);
+        sourceWindowBudget += credit;
+        factory.writer.doWindow(acceptThrottle, acceptId, credit, padding);
     }
 
     private void processReset(
-        DirectBuffer buffer,
-        int index,
-        int length)
+        ResetFW reset)
     {
-        factory.resetRO.wrap(buffer, index, index + length);
         releaseSlotIfNecessary();
         factory.writer.doReset(acceptThrottle, acceptId);
     }
