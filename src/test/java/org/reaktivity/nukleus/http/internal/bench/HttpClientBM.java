@@ -162,7 +162,7 @@ public class HttpClientBM
             this.clientAccept = "source";
             this.clientConnect = "target";
             this.clientConnectRef = targetRef;
-            this.clientAcceptRef = controller.routeClient("source", 0L, "target", targetRef, 0L, emptyMap()).get();
+            this.clientAcceptRef = controller.routeClient("source", 0L, "target", targetRef, emptyMap()).get();
 
             this.clientAcceptStreams = controller.supplySource("source", Writer::new);
             this.clientConnectReplyStreams = controller.supplySource("target", Writer::new);
@@ -243,7 +243,7 @@ public class HttpClientBM
 
             try
             {
-                controller.unrouteClient(clientAccept, clientAcceptRef, clientConnect, clientConnectRef, 0L, null).get();
+                controller.unrouteClient(clientAccept, clientAcceptRef, clientConnect, clientConnectRef, null).get();
             }
             catch(Exception e)
             {

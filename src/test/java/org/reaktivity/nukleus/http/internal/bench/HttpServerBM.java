@@ -140,7 +140,7 @@ public class HttpServerBM
             final Random random = new Random();
             final HttpController controller = reaktor.controller(HttpController.class);
 
-            this.sourceInputRef = controller.routeServer("source", 0L, "http", 0L, 0L, emptyMap()).get();
+            this.sourceInputRef = controller.routeServer("source", 0L, "http", 0L, emptyMap()).get();
 
             this.sourceInput = controller.supplySource("source", Writer::new);
 
@@ -213,7 +213,7 @@ public class HttpServerBM
         {
             HttpController controller = reaktor.controller(HttpController.class);
 
-            controller.unrouteServer("source", sourceInputRef, "http", 0L, 0L, null).get();
+            controller.unrouteServer("source", sourceInputRef, "http", 0L, null).get();
 
             this.sourceInput = null;
 
