@@ -27,6 +27,35 @@ public class BufferUtilTest
     private static final byte[] CRLFCRLF = "\r\n\r\n".getBytes(US_ASCII);
 
     @Test
+    public void shouldLocateLimitWhenValueAtEndBuffer()
+    {
+        DirectBuffer buffer2 = new UnsafeBuffer("a nice warm cookie cutter".getBytes(US_ASCII));
+        assertEquals(buffer2.capacity(), BufferUtil.limitOfBytes(buffer2, 0, buffer2.capacity(), "cutter".getBytes()));
+    }
+
+    @Test
+    public void shouldLocateLimitWhenValueInsideBuffer()
+    {
+        DirectBuffer buffer2 = new UnsafeBuffer("a nice warm cookie cutter".getBytes(US_ASCII));
+        assertEquals("a nice".length(), BufferUtil.limitOfBytes(buffer2, 0, buffer2.capacity(), "nice".getBytes()));
+    }
+
+    @Test
+    public void shouldReportLimitMinusOneWhenValueNotFound()
+    {
+        DirectBuffer buffer2 = new UnsafeBuffer("a nice warm cookie cutter".getBytes(US_ASCII));
+        assertEquals(-1, BufferUtil.limitOfBytes(buffer2, 0, buffer2.capacity(), "cutlass".getBytes()));
+    }
+
+    @Test
+    public void shouldReportLimitMinusOneWhenValueLongerThanBuffer()
+    {
+        DirectBuffer buffer2 = new UnsafeBuffer("a nice warm cookie cutter".getBytes(US_ASCII));
+        assertEquals(-1, BufferUtil.limitOfBytes(buffer2, 0, buffer2.capacity(),
+                "a nice warm cookie cutter indeed".getBytes()));
+    }
+
+    @Test
     public void shouldLocateLimitWhenValueInSecondBuffer()
     {
         DirectBuffer buffer1 = new UnsafeBuffer("".getBytes(US_ASCII));
