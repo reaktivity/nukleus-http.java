@@ -689,7 +689,7 @@ final class ClientConnectReplyStream implements MessageConsumer
             httpResponseComplete();
         }
 
-        return offset + writableBytes;
+        return offset + Math.max(writableBytes, 0);
     };
 
     private int decodeHttpChunk(
@@ -786,7 +786,7 @@ final class ClientConnectReplyStream implements MessageConsumer
             decoderState = this::decodeHttpChunkEnd;
         }
 
-        return offset + writableBytes;
+        return offset + Math.max(writableBytes, 0);
     }
 
     private int decodeHttpDataAfterUpgrade(
@@ -804,7 +804,7 @@ final class ClientConnectReplyStream implements MessageConsumer
             acceptReplyWindowBudget -= writableBytes + acceptReplyWindowPadding;
         }
 
-        return offset + writableBytes;
+        return offset + Math.max(writableBytes, 0);
     };
 
     private int decodeSkipData(
