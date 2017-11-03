@@ -84,6 +84,8 @@ final class ClientConnectReplyStream implements MessageConsumer
     private int acceptReplyWindowPadding;
     private int connectReplyWindowPadding;
 
+    private boolean initialConnectReplyWindowDrained;
+
     @Override
     public String toString()
     {
@@ -834,7 +836,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         this.decoderState = this::decodeHttpBegin;
         this.responseState = ResponseState.BEFORE_HEADERS;
         this.acceptReplyWindowPadding = 0;
-        this.connectReplyWindowPadding = 0;      // TODO send half to avoid initial race
+        this.connectReplyWindowPadding = 0;
 
         final int connectReplyWindowCredit = factory.maximumHeadersSize - connectReplyWindowBudget;
 
@@ -846,6 +848,7 @@ final class ClientConnectReplyStream implements MessageConsumer
 
         // TODO: Support HTTP/1.1 Pipelined Responses (may be buffered already)
         this.contentRemaining = 0;
+        this.initialConnectReplyWindowDrained = false;
     }
 
     private void httpResponseComplete()
@@ -936,11 +939,22 @@ final class ClientConnectReplyStream implements MessageConsumer
             decodeBufferedData();
         }
 
-        final int connectReplyWindowCredit = acceptReplyWindowBudget - connectReplyWindowBudget;
-        if (connectReplyWindowCredit > 0)
+        if (!initialConnectReplyWindowDrained && connectReplyWindowBudget == 0)
         {
-            connectReplyWindowBudget += connectReplyWindowCredit;
-            factory.writer.doWindow(connectReplyThrottle, sourceId, connectReplyWindowCredit, connectReplyWindowPadding);
+            initialConnectReplyWindowDrained = true;
+        }
+
+        // Don't send WINDOW( ,connectReplyWindowPadding) until we drained all the initial
+        // connectReplyWindowBudget so that there won't be any mismatch between our side
+        // and sender budgets
+        if (initialConnectReplyWindowDrained)
+        {
+            final int connectReplyWindowCredit = acceptReplyWindowBudget - connectReplyWindowBudget;
+            if (connectReplyWindowCredit > 0)
+            {
+                connectReplyWindowBudget += connectReplyWindowCredit;
+                factory.writer.doWindow(connectReplyThrottle, sourceId, connectReplyWindowCredit, connectReplyWindowPadding);
+            }
         }
     }
 
@@ -955,11 +969,22 @@ final class ClientConnectReplyStream implements MessageConsumer
             decodeBufferedData();
         }
 
-        final int connectReplyWindowCredit = acceptReplyWindowBudget - connectReplyWindowBudget;
-        if (connectReplyWindowCredit > 0)
+        if (!initialConnectReplyWindowDrained && connectReplyWindowBudget == 0)
         {
-            connectReplyWindowBudget += connectReplyWindowCredit;
-            factory.writer.doWindow(connectReplyThrottle, sourceId, connectReplyWindowCredit, connectReplyWindowPadding);
+            initialConnectReplyWindowDrained = true;
+        }
+
+        // Don't send WINDOW( ,connectReplyWindowPadding) until we drained all the initial
+        // connectReplyWindowBudget so that there won't be any mismatch between our side
+        // and sender budgets
+        if (initialConnectReplyWindowDrained)
+        {
+            final int connectReplyWindowCredit = acceptReplyWindowBudget - connectReplyWindowBudget;
+            if (connectReplyWindowCredit > 0)
+            {
+                connectReplyWindowBudget += connectReplyWindowCredit;
+                factory.writer.doWindow(connectReplyThrottle, sourceId, connectReplyWindowCredit, connectReplyWindowPadding);
+            }
         }
     }
 
