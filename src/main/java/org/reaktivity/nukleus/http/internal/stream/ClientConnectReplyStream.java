@@ -330,6 +330,12 @@ final class ClientConnectReplyStream implements MessageConsumer
                 handleDataPayloadWhenDecodeIncomplete(payload);
             }
         }
+        // Deferred accept WINDOW may need to be sent once the initial connectReplyWindowBudget is consumed
+        // It is safe to change connectReplyWindowPadding at that time
+        if (!initialConnectReplyWindowDrained)
+        {
+            sendWindow();
+        }
     }
 
     private void handleEnd(
@@ -435,6 +441,12 @@ final class ClientConnectReplyStream implements MessageConsumer
             handleDataPayloadWhenBuffering(data.payload());
 
             decodeBufferedData();
+        }
+        // Deferred accept WINDOW may need to be sent once the initial connectReplyWindowBudget is consumed
+        // It is safe to change connectReplyWindowPadding at that time
+        if (!initialConnectReplyWindowDrained)
+        {
+            sendWindow();
         }
     }
 
@@ -595,14 +607,14 @@ final class ClientConnectReplyStream implements MessageConsumer
             {
                 decoderState = this::decodeHttpData;
                 throttleState = this::handleThrottleAfterBegin;
-                windowHandler = this::handleBoundedWindow;
+                windowHandler = this::handleWindow;
                 this.responseState = ResponseState.DATA;
             }
             else if (isChunkedTransfer)
             {
                 decoderState = this::decodeHttpChunk;
                 throttleState = this::handleThrottleAfterBegin;
-                windowHandler = this::handleBoundedWindow;
+                windowHandler = this::handleWindow;
                 this.responseState = ResponseState.DATA;
             }
             else
@@ -928,36 +940,6 @@ final class ClientConnectReplyStream implements MessageConsumer
         }
     }
 
-    private void handleBoundedWindow(
-        WindowFW window)
-    {
-        acceptReplyWindowBudget += window.credit();
-        acceptReplyWindowPadding = connectReplyWindowPadding = window.padding();
-
-        if (slotIndex != NO_SLOT)
-        {
-            decodeBufferedData();
-        }
-
-        if (!initialConnectReplyWindowDrained && connectReplyWindowBudget == 0)
-        {
-            initialConnectReplyWindowDrained = true;
-        }
-
-        // Don't send WINDOW( ,connectReplyWindowPadding) until we drained all the initial
-        // connectReplyWindowBudget so that there won't be any mismatch between our side
-        // and sender budgets
-        if (initialConnectReplyWindowDrained)
-        {
-            final int connectReplyWindowCredit = acceptReplyWindowBudget - connectReplyWindowBudget;
-            if (connectReplyWindowCredit > 0)
-            {
-                connectReplyWindowBudget += connectReplyWindowCredit;
-                factory.writer.doWindow(connectReplyThrottle, sourceId, connectReplyWindowCredit, connectReplyWindowPadding);
-            }
-        }
-    }
-
     private void handleWindow(
         WindowFW window)
     {
@@ -969,6 +951,11 @@ final class ClientConnectReplyStream implements MessageConsumer
             decodeBufferedData();
         }
 
+        sendWindow();
+    }
+
+    private void sendWindow()
+    {
         if (!initialConnectReplyWindowDrained && connectReplyWindowBudget == 0)
         {
             initialConnectReplyWindowDrained = true;
