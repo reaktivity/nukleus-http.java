@@ -85,9 +85,30 @@ public class FlowControlLimitsIT
     @Test
     @Specification({
         "${route}/client/controller",
+        "${client}/flow.control/response.chunked.with.extensions.filling.maximum.headers/client",
+        "${server}/flow.control/response.chunked.with.extensions.filling.maximum.headers/server" })
+    public void shouldHandleChunkedResponseWithHeadersPlusFirstChunkMetadataEqualsInitialWindow()
+            throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/client/controller",
         "${client}/flow.control/response.headers.too.long/client.no.response",
         "${server}/flow.control/response.headers.too.long/server.response.reset"})
     public void shouldRejectResponseWithHeadersTooLong() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/client/controller",
+        "${client}/flow.control/response.with.content.exceeding.window/client",
+        "${server}/flow.control/response.with.content.exceeding.window/server"})
+    public void shouldAbortClientAcceptReplyWhenResponseContentViolatesWindow() throws Exception
     {
         k3po.finish();
     }
