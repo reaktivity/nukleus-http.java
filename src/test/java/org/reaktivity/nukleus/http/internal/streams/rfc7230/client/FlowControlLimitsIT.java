@@ -75,6 +75,16 @@ public class FlowControlLimitsIT
     @Test
     @Specification({
         "${route}/client/controller",
+        "${client}/flow.control/response.fragmented.with.padding/client",
+        "${server}/flow.control/response.fragmented.with.padding/server" })
+    public void shouldProcessResponseFragmentedWithPadding() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/client/controller",
         "${client}/transfer.codings/response.transfer.encoding.chunked/client",
         "${server}/transfer.codings/response.transfer.encoding.chunked/server" })
     public void shouldHandleChunkedResponseExceedingInitialWindow() throws Exception
@@ -112,6 +122,5 @@ public class FlowControlLimitsIT
     {
         k3po.finish();
     }
-
 
 }
