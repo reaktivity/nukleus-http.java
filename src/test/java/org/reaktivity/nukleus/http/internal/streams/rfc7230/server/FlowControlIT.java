@@ -148,11 +148,31 @@ public class FlowControlIT
 
     @Test
     @Specification({
+            "${route}/server/controller",
+            "${client}/flow.control/response.headers.with.padding/client",
+            "${server}/flow.control/response.headers.with.padding/server"})
+    public void shouldProcessResponseHeadersFragmentedByPadding() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
         "${route}/server/controller",
         "${client}/message.format/response.with.content.length/client",
         "${server}/message.format/response.with.content.length/server"})
     @ScriptProperty("clientInitialWindow \"9\"")
     public void shouldFlowControlResponseWithContentLength() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+            "${route}/server/controller",
+            "${client}/flow.control/response.with.padding/client",
+            "${server}/flow.control/response.with.padding/server"})
+    public void shouldProcessResponseWithPadding() throws Exception
     {
         k3po.finish();
     }

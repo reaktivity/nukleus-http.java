@@ -79,11 +79,12 @@ final class ClientConnectReplyStream implements MessageConsumer
 
     private int connectReplyWindowBudget;
     private int acceptReplyWindowBudget;
-    private int connectReplyWindowBudgetAdjustment;
     private Consumer<WindowFW> windowHandler;
 
     private int acceptReplyWindowPadding;
     private int connectReplyWindowPadding;
+
+    private boolean connectReplyWindowAligned;
 
     @Override
     public String toString()
@@ -252,6 +253,10 @@ final class ClientConnectReplyStream implements MessageConsumer
         long streamId)
     {
         factory.writer.doReset(connectReplyThrottle, streamId);
+        if (acceptReply != null)
+        {
+            factory.writer.doAbort(acceptReply, acceptReplyId);
+        }
 
         this.streamState = this::handleStreamAfterReset;
     }
@@ -324,6 +329,19 @@ final class ClientConnectReplyStream implements MessageConsumer
                 payload.wrap(payload.buffer(), offset, limit);
                 handleDataPayloadWhenDecodeIncomplete(payload);
             }
+
+            doAlignWindowIfNecessary();
+        }
+    }
+
+    private void doAlignWindowIfNecessary()
+    {
+        if (!connectReplyWindowAligned && connectReplyWindowBudget == 0)
+        {
+            connectReplyWindowAligned = true;
+            // Now it is safe to change connectReplyWindowPadding on both sides
+            // as the windows are aligned. So send deferred window
+            doSendWindowIfAligned();
         }
     }
 
@@ -430,6 +448,8 @@ final class ClientConnectReplyStream implements MessageConsumer
             handleDataPayloadWhenBuffering(data.payload());
 
             decodeBufferedData();
+
+            doAlignWindowIfNecessary();
         }
     }
 
@@ -531,7 +551,6 @@ final class ClientConnectReplyStream implements MessageConsumer
         else
         {
             final int sizeofHeaders = endOfHeadersAt - offset;
-            connectReplyWindowBudgetAdjustment += sizeofHeaders;
             decodeCompleteHttpBegin(payload, offset, sizeofHeaders);
             result = endOfHeadersAt;
         }
@@ -591,14 +610,14 @@ final class ClientConnectReplyStream implements MessageConsumer
             {
                 decoderState = this::decodeHttpData;
                 throttleState = this::handleThrottleAfterBegin;
-                windowHandler = this::handleBoundedWindow;
+                windowHandler = this::handleWindow;
                 this.responseState = ResponseState.DATA;
             }
             else if (isChunkedTransfer)
             {
                 decoderState = this::decodeHttpChunk;
                 throttleState = this::handleThrottleAfterBegin;
-                windowHandler = this::handleBoundedWindow;
+                windowHandler = this::handleWindow;
                 this.responseState = ResponseState.DATA;
             }
             else
@@ -727,7 +746,6 @@ final class ClientConnectReplyStream implements MessageConsumer
             else
             {
                 final int chunkHeaderLength = chunkHeaderLimit - offset;
-                connectReplyWindowBudgetAdjustment += chunkHeaderLength + CRLF_BYTES.length;
                 contentRemaining += chunkSizeRemaining;
 
                 decoderState = this::decodeHttpChunkData;
@@ -833,24 +851,19 @@ final class ClientConnectReplyStream implements MessageConsumer
         this.decoderState = this::decodeHttpBegin;
         this.responseState = ResponseState.BEFORE_HEADERS;
         this.acceptReplyWindowPadding = 0;
-        this.connectReplyWindowPadding = 0;      // TODO send half to avoid initial race
+        this.connectReplyWindowPadding = 0;
 
         final int connectReplyWindowCredit = factory.maximumHeadersSize - connectReplyWindowBudget;
 
-        if (connectReplyWindowCredit < 0)
-        {
-            throw new IllegalStateException("over-provisioned window");
-        }
-
         if (connectReplyWindowCredit > 0)
         {
+            this.connectReplyWindowBudget += connectReplyWindowCredit;
             factory.writer.doWindow(connectReplyThrottle, sourceId, connectReplyWindowCredit, connectReplyWindowPadding);
         }
 
         // TODO: Support HTTP/1.1 Pipelined Responses (may be buffered already)
-        this.connectReplyWindowBudget = factory.maximumHeadersSize;
-        this.connectReplyWindowBudgetAdjustment = -factory.maximumHeadersSize;
         this.contentRemaining = 0;
+        this.connectReplyWindowAligned = false;
     }
 
     private void httpResponseComplete()
@@ -930,57 +943,32 @@ final class ClientConnectReplyStream implements MessageConsumer
         }
     }
 
-    private void handleBoundedWindow(
-        WindowFW window)
-    {
-        final int acceptReplyWindowCredit = window.credit();
-        acceptReplyWindowPadding = connectReplyWindowPadding = window.padding();
-
-        acceptReplyWindowBudget += acceptReplyWindowCredit;
-
-        int bufferedDataLength = 0;
-        if (slotIndex != NO_SLOT)
-        {
-            decodeBufferedData();
-            if (slotIndex != NO_SLOT)
-            {
-                bufferedDataLength = slotPosition - slotOffset;
-            }
-        }
-
-        final int connectReplyWindowPositiveCredit =
-                Math.max(factory.bufferPool.slotCapacity() - connectReplyWindowBudget - bufferedDataLength, 0);
-
-        connectReplyWindowBudget += connectReplyWindowPositiveCredit;
-
-        if (connectReplyWindowPositiveCredit > 0)
-        {
-            factory.writer.doWindow(connectReplyThrottle, sourceId,
-                                    connectReplyWindowPositiveCredit, connectReplyWindowPadding);
-        }
-    }
-
     private void handleWindow(
         WindowFW window)
     {
-        final int acceptReplyWindowCredit = window.credit();
+        acceptReplyWindowBudget += window.credit();
         acceptReplyWindowPadding = connectReplyWindowPadding = window.padding();
-
-        acceptReplyWindowBudget += acceptReplyWindowCredit;
 
         if (slotIndex != NO_SLOT)
         {
             decodeBufferedData();
         }
 
-        final int connectReplyWindowCredit = acceptReplyWindowCredit + connectReplyWindowBudgetAdjustment;
+        doSendWindowIfAligned();
+    }
 
-        connectReplyWindowBudget += Math.max(connectReplyWindowCredit, 0);
-        connectReplyWindowBudgetAdjustment = Math.min(connectReplyWindowCredit, 0);
-
-        if (connectReplyWindowCredit > 0)
+    private void doSendWindowIfAligned()
+    {
+        // Don't send WINDOW( ,connectReplyWindowPadding) until the budgets are aligned
+        // Otherwise padding may be applied at different times on both sides
+        if (connectReplyWindowAligned)
         {
-            factory.writer.doWindow(connectReplyThrottle, sourceId, connectReplyWindowCredit, connectReplyWindowPadding);
+            final int connectReplyWindowCredit = acceptReplyWindowBudget - connectReplyWindowBudget;
+            if (connectReplyWindowCredit > 0)
+            {
+                connectReplyWindowBudget += connectReplyWindowCredit;
+                factory.writer.doWindow(connectReplyThrottle, sourceId, connectReplyWindowCredit, connectReplyWindowPadding);
+            }
         }
     }
 
