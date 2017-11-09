@@ -127,6 +127,16 @@ public class FlowControlIT
     @Test
     @Specification({
         "${route}/client/controller",
+        "${client}/flow.control/response.with.padding//client",
+        "${server}/flow.control/response.with.padding/server" })
+    public void shouldProcessResponseWithPadding() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/client/controller",
         "${client}/transfer.codings/response.transfer.encoding.chunked/client",
         "${server}/transfer.codings/response.transfer.encoding.chunked/server" })
     @ScriptProperty("clientInitialWindow \"9\"")
