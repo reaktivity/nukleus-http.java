@@ -166,7 +166,8 @@ public final class ServerConnectReplyStream implements MessageConsumer
         {
             DataFW data = factory.dataRO.wrap(buffer, index, index + length);
             final long streamId = data.streamId();
-            factory.writer.doWindow(connectReplyThrottle, streamId, length, 0);
+            connectReplyWindowBudget += length;
+            factory.writer.doWindow(connectReplyThrottle, streamId, length, connectReplyWindowPadding);
         }
         else if (msgTypeId == EndFW.TYPE_ID)
         {
@@ -243,6 +244,7 @@ public final class ServerConnectReplyStream implements MessageConsumer
                     slot.putBytes(0,  RESPONSE_HEADERS_TOO_LONG_RESPONSE);
                     acceptState.acceptReplyWindowBudget -=
                             RESPONSE_HEADERS_TOO_LONG_RESPONSE.length + acceptState.acceptReplyWindowPadding;
+                    assert acceptState.acceptReplyWindowBudget >= 0;
                     factory.writer.doData(acceptState.acceptReply, acceptState.replyStreamId,
                                   slot, 0, RESPONSE_HEADERS_TOO_LONG_RESPONSE.length);
                     factory.writer.doReset(connectReplyThrottle, connectReplyId);
@@ -284,6 +286,7 @@ public final class ServerConnectReplyStream implements MessageConsumer
         {
             final OctetsFW payload = data.payload();
             acceptState.acceptReplyWindowBudget -= payload.sizeof() + acceptState.acceptReplyWindowPadding;
+            assert acceptState.acceptReplyWindowBudget >= 0;
             factory.writer.doData(acceptState.acceptReply, acceptState.replyStreamId, payload);
         }
     }
@@ -423,6 +426,7 @@ public final class ServerConnectReplyStream implements MessageConsumer
             MutableDirectBuffer slot = factory.bufferPool.buffer(slotIndex);
             factory.writer.doData(acceptState.acceptReply, acceptState.replyStreamId, slot, slotOffset, writableBytes);
             acceptState.acceptReplyWindowBudget -= writableBytes + acceptState.acceptReplyWindowPadding;
+            assert acceptState.acceptReplyWindowBudget >= 0;
             slotOffset += writableBytes;
             bytesDeferred -= writableBytes;
             if (bytesDeferred == 0)
