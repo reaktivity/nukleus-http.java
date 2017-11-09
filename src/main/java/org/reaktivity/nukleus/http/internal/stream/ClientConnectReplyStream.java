@@ -84,7 +84,7 @@ final class ClientConnectReplyStream implements MessageConsumer
     private int acceptReplyWindowPadding;
     private int connectReplyWindowPadding;
 
-    private boolean initialConnectReplyWindowDrained;
+    private boolean connectReplyWindowAligned;
 
     @Override
     public String toString()
@@ -329,12 +329,19 @@ final class ClientConnectReplyStream implements MessageConsumer
                 payload.wrap(payload.buffer(), offset, limit);
                 handleDataPayloadWhenDecodeIncomplete(payload);
             }
+
+            doAlignWindowIfNecessary();
         }
-        // Deferred accept WINDOW may need to be sent once the initial connectReplyWindowBudget is consumed
-        // It is safe to change connectReplyWindowPadding at that time
-        if (!initialConnectReplyWindowDrained)
+    }
+
+    private void doAlignWindowIfNecessary()
+    {
+        if (!connectReplyWindowAligned && connectReplyWindowBudget == 0)
         {
-            sendWindow();
+            connectReplyWindowAligned = true;
+            // Now it is safe to change connectReplyWindowPadding on both sides
+            // as the windows are aligned. So send deferred window
+            doSendWindowIfAligned();
         }
     }
 
@@ -441,12 +448,8 @@ final class ClientConnectReplyStream implements MessageConsumer
             handleDataPayloadWhenBuffering(data.payload());
 
             decodeBufferedData();
-        }
-        // Deferred accept WINDOW may need to be sent once the initial connectReplyWindowBudget is consumed
-        // It is safe to change connectReplyWindowPadding at that time
-        if (!initialConnectReplyWindowDrained)
-        {
-            sendWindow();
+
+            doAlignWindowIfNecessary();
         }
     }
 
@@ -860,7 +863,7 @@ final class ClientConnectReplyStream implements MessageConsumer
 
         // TODO: Support HTTP/1.1 Pipelined Responses (may be buffered already)
         this.contentRemaining = 0;
-        this.initialConnectReplyWindowDrained = false;
+        this.connectReplyWindowAligned = false;
     }
 
     private void httpResponseComplete()
@@ -951,20 +954,14 @@ final class ClientConnectReplyStream implements MessageConsumer
             decodeBufferedData();
         }
 
-        sendWindow();
+        doSendWindowIfAligned();
     }
 
-    private void sendWindow()
+    private void doSendWindowIfAligned()
     {
-        if (!initialConnectReplyWindowDrained && connectReplyWindowBudget == 0)
-        {
-            initialConnectReplyWindowDrained = true;
-        }
-
-        // Don't send WINDOW( ,connectReplyWindowPadding) until we drained all the initial
-        // connectReplyWindowBudget so that there won't be any mismatch between our side
-        // and sender budgets
-        if (initialConnectReplyWindowDrained)
+        // Don't send WINDOW( ,connectReplyWindowPadding) until the budgets are aligned
+        // Otherwise padding may be applied at different times on both sides
+        if (connectReplyWindowAligned)
         {
             final int connectReplyWindowCredit = acceptReplyWindowBudget - connectReplyWindowBudget;
             if (connectReplyWindowCredit > 0)
