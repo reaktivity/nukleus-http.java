@@ -166,8 +166,8 @@ public final class ServerConnectReplyStream implements MessageConsumer
         {
             DataFW data = factory.dataRO.wrap(buffer, index, index + length);
             final long streamId = data.streamId();
-            connectReplyWindowBudget += length;
-            factory.writer.doWindow(connectReplyThrottle, streamId, length, connectReplyWindowPadding);
+            connectReplyWindowBudget += data.length();
+            factory.writer.doWindow(connectReplyThrottle, streamId, data.length(), connectReplyWindowPadding);
         }
         else if (msgTypeId == EndFW.TYPE_ID)
         {
@@ -452,11 +452,11 @@ public final class ServerConnectReplyStream implements MessageConsumer
         acceptState.acceptReplyWindowBudget += window.credit();
         acceptState.acceptReplyWindowPadding = connectReplyWindowPadding = window.padding();
 
-        int conectReplyWindowCredit = acceptState.acceptReplyWindowBudget - connectReplyWindowBudget;
-        if (conectReplyWindowCredit > 0)
+        int connectReplyWindowCredit = acceptState.acceptReplyWindowBudget - connectReplyWindowBudget;
+        if (connectReplyWindowCredit > 0)
         {
-            connectReplyWindowBudget += conectReplyWindowCredit;
-            factory.writer.doWindow(connectReplyThrottle, connectReplyId, conectReplyWindowCredit, connectReplyWindowPadding);
+            connectReplyWindowBudget += connectReplyWindowCredit;
+            factory.writer.doWindow(connectReplyThrottle, connectReplyId, connectReplyWindowCredit, connectReplyWindowPadding);
         }
     }
 
