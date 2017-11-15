@@ -450,12 +450,13 @@ public final class ServerConnectReplyStream implements MessageConsumer
         WindowFW window)
     {
         acceptState.acceptReplyWindowBudget += window.credit();
-        acceptState.acceptReplyWindowPadding = connectReplyWindowPadding = window.padding();
+        acceptState.acceptReplyWindowPadding = window.padding();
 
         int connectReplyWindowCredit = acceptState.acceptReplyWindowBudget - connectReplyWindowBudget;
         if (connectReplyWindowCredit > 0)
         {
             connectReplyWindowBudget += connectReplyWindowCredit;
+            connectReplyWindowPadding = Math.max(connectReplyWindowPadding, acceptState.acceptReplyWindowPadding);
             factory.writer.doWindow(connectReplyThrottle, connectReplyId, connectReplyWindowCredit, connectReplyWindowPadding);
         }
     }
