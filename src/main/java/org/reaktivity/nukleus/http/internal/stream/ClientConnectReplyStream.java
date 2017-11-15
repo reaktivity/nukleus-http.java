@@ -851,7 +851,6 @@ final class ClientConnectReplyStream implements MessageConsumer
         this.decoderState = this::decodeHttpBegin;
         this.responseState = ResponseState.BEFORE_HEADERS;
         this.acceptReplyWindowPadding = 0;
-        this.connectReplyWindowPadding = 0;
 
         final int connectReplyWindowCredit = factory.maximumHeadersSize - connectReplyWindowBudget;
 
@@ -947,7 +946,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         WindowFW window)
     {
         acceptReplyWindowBudget += window.credit();
-        acceptReplyWindowPadding = connectReplyWindowPadding = window.padding();
+        acceptReplyWindowPadding = window.padding();
 
         if (slotIndex != NO_SLOT)
         {
@@ -967,6 +966,9 @@ final class ClientConnectReplyStream implements MessageConsumer
             if (connectReplyWindowCredit > 0)
             {
                 connectReplyWindowBudget += connectReplyWindowCredit;
+                // connectReply is used across multiple acceptReply streams
+                // so do not reduce the existing padding
+                connectReplyWindowPadding = Math.max(connectReplyWindowPadding, acceptReplyWindowPadding);
                 factory.writer.doWindow(connectReplyThrottle, sourceId, connectReplyWindowCredit, connectReplyWindowPadding);
             }
         }
