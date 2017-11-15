@@ -953,6 +953,10 @@ final class ClientConnectReplyStream implements MessageConsumer
             decodeBufferedData();
         }
 
+        if (connectReplyWindowPadding >= acceptReplyWindowPadding)
+        {
+            connectReplyWindowAligned = true;
+        }
         doSendWindowIfAligned();
     }
 
