@@ -31,8 +31,8 @@ final class ServerAcceptState
     final MessageConsumer acceptReply;
     private final MessageConsumer initialThrottle;
     final Consumer<MessageConsumer> setThrottle;
-    int budget;
-    int padding;
+    int acceptReplyWindowBudget;
+    int acceptReplyWindowPadding;
     int pendingRequests;
     boolean endRequested;
     boolean persistent = true;
@@ -53,8 +53,8 @@ final class ServerAcceptState
     {
         return String.format(
                 "%s[streamId=%016x, target=%s, window=%d, padding=%d persistent=%b, pendingRequests=%d, endRequested=%b]",
-                getClass().getSimpleName(), replyStreamId, acceptReplyName, budget, padding, persistent,
-                pendingRequests, endRequested);
+                getClass().getSimpleName(), replyStreamId, acceptReplyName, acceptReplyWindowBudget,
+                acceptReplyWindowPadding, persistent, pendingRequests, endRequested);
     }
 
     public void restoreInitialThrottle()

@@ -278,9 +278,12 @@ final class ServerAcceptStream implements MessageConsumer
 
         final DirectBuffer payload = new UnsafeBuffer(payloadText.toString().getBytes(StandardCharsets.UTF_8));
 
-        int writableBytes = Math.min(correlation.state().budget, payload.capacity());
+        ServerAcceptState acceptState = correlation.state();
+        int writableBytes = Math.max(Math.min(
+                acceptState.acceptReplyWindowBudget - acceptState.acceptReplyWindowPadding, payload.capacity()), 0);
         if (writableBytes > 0)
         {
+            acceptState.acceptReplyWindowBudget -= writableBytes + acceptState.acceptReplyWindowPadding;
             factory.writer.doData(target, targetId, payload, 0, writableBytes);
         }
         if (writableBytes < payload.capacity())
@@ -296,11 +299,17 @@ final class ServerAcceptStream implements MessageConsumer
                     {
                     case WindowFW.TYPE_ID:
                         WindowFW window = factory.windowRO.wrap(buffer, index, index + length);
-                        int credit = window.credit();
-                        int padding = window.padding();
-                        int writableBytes = Math.min(credit, payload.capacity() - offset);
-                        ServerAcceptStream.this.factory.writer.doData(target, targetId, payload, offset, writableBytes);
-                        offset += writableBytes;
+                        acceptState.acceptReplyWindowBudget += window.credit();
+                        acceptState.acceptReplyWindowPadding = window.padding();
+                        int writableBytes = Math.max(
+                            Math.min(acceptState.acceptReplyWindowBudget - acceptState.acceptReplyWindowPadding,
+                                     payload.capacity() - offset), 0);
+                        if (writableBytes > 0)
+                        {
+                            acceptState.acceptReplyWindowBudget -= writableBytes + acceptState.acceptReplyWindowPadding;
+                            ServerAcceptStream.this.factory.writer.doData(target, targetId, payload, offset, writableBytes);
+                            offset += writableBytes;
+                        }
                         if (offset == payload.capacity())
                         {
                             // Drain data from source before resetting to allow its writes to complete
@@ -1081,8 +1090,8 @@ final class ServerAcceptStream implements MessageConsumer
         {
         case WindowFW.TYPE_ID:
             WindowFW window = factory.windowRO.wrap(buffer, index, index + length);
-            correlation.state().budget += window.credit();
-            correlation.state().padding = window.padding();
+            correlation.state().acceptReplyWindowBudget += window.credit();
+            correlation.state().acceptReplyWindowPadding = window.padding();
             break;
         case ResetFW.TYPE_ID:
             final ResetFW reset = factory.resetRO.wrap(buffer, index, index + length);
