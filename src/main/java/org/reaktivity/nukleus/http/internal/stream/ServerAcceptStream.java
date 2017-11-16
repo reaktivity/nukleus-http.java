@@ -279,8 +279,8 @@ final class ServerAcceptStream implements MessageConsumer
         final DirectBuffer payload = new UnsafeBuffer(payloadText.toString().getBytes(StandardCharsets.UTF_8));
 
         ServerAcceptState acceptState = correlation.state();
-        int writableBytes = Math.min(
-                acceptState.acceptReplyWindowBudget - acceptState.acceptReplyWindowPadding, payload.capacity());
+        int writableBytes = Math.max(Math.min(
+                acceptState.acceptReplyWindowBudget - acceptState.acceptReplyWindowPadding, payload.capacity()), 0);
         if (writableBytes > 0)
         {
             acceptState.acceptReplyWindowBudget -= writableBytes + acceptState.acceptReplyWindowPadding;
@@ -299,11 +299,17 @@ final class ServerAcceptStream implements MessageConsumer
                     {
                     case WindowFW.TYPE_ID:
                         WindowFW window = factory.windowRO.wrap(buffer, index, index + length);
-                        int credit = window.credit();
-                        int padding = window.padding();
-                        int writableBytes = Math.min(credit, payload.capacity() - offset);
-                        ServerAcceptStream.this.factory.writer.doData(target, targetId, payload, offset, writableBytes);
-                        offset += writableBytes;
+                        acceptState.acceptReplyWindowBudget += window.credit();
+                        acceptState.acceptReplyWindowPadding = window.padding();
+                        int writableBytes = Math.max(
+                            Math.min(acceptState.acceptReplyWindowBudget - acceptState.acceptReplyWindowPadding,
+                                     payload.capacity() - offset), 0);
+                        if (writableBytes > 0)
+                        {
+                            acceptState.acceptReplyWindowBudget -= writableBytes + acceptState.acceptReplyWindowPadding;
+                            ServerAcceptStream.this.factory.writer.doData(target, targetId, payload, offset, writableBytes);
+                            offset += writableBytes;
+                        }
                         if (offset == payload.capacity())
                         {
                             // Drain data from source before resetting to allow its writes to complete
