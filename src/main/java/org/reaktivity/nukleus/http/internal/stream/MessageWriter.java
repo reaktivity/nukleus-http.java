@@ -85,7 +85,7 @@ final class MessageWriter
         DataFW data = dataRW.wrap(writeBuffer, 0, writeBuffer.capacity())
                 .streamId(streamId)
                 .groupId(0)
-                .claimed(0)
+                .padding(0)
                 .payload(p -> p.set(payload, offset, length))
                 .extension(e -> e.reset())
                 .build();
@@ -101,7 +101,7 @@ final class MessageWriter
         DataFW data = dataRW.wrap(writeBuffer, 0, writeBuffer.capacity())
                 .streamId(streamId)
                 .groupId(0)
-                .claimed(0)
+                .padding(0)
                 .payload(p -> p.set(payload))
                 .extension(e -> e.reset())
                 .build();
@@ -158,7 +158,7 @@ final class MessageWriter
         DataFW data = dataRW.wrap(writeBuffer, 0, writeBuffer.capacity())
                 .streamId(targetId)
                 .groupId(0)
-                .claimed(0)
+                .padding(0)
                 .payload(p -> p.set(payload, offset, length))
                 .extension(e -> e.reset())
                 .build();
