@@ -284,7 +284,7 @@ final class ServerAcceptStream implements MessageConsumer
         if (writableBytes > 0)
         {
             acceptState.acceptReplyWindowBudget -= writableBytes + acceptState.acceptReplyWindowPadding;
-            factory.writer.doData(target, targetId, payload, 0, writableBytes);
+            factory.writer.doData(target, targetId, acceptState.acceptReplyWindowPadding, payload, 0, writableBytes);
         }
         if (writableBytes < payload.capacity())
         {
@@ -307,7 +307,8 @@ final class ServerAcceptStream implements MessageConsumer
                         if (writableBytes > 0)
                         {
                             acceptState.acceptReplyWindowBudget -= writableBytes + acceptState.acceptReplyWindowPadding;
-                            ServerAcceptStream.this.factory.writer.doData(target, targetId, payload, offset, writableBytes);
+                            ServerAcceptStream.this.factory.writer.doData(target, targetId, acceptState.acceptReplyWindowPadding,
+                                    payload, offset, writableBytes);
                             offset += writableBytes;
                         }
                         if (offset == payload.capacity())
@@ -364,7 +365,7 @@ final class ServerAcceptStream implements MessageConsumer
     {
         DataFW data = factory.dataRO.wrap(buffer, index, index + length);
 
-        sourceWindowBudget -= data.length();
+        sourceWindowBudget -= data.length() + data.padding();
 
         if (sourceWindowBudget < 0)
         {
@@ -439,7 +440,7 @@ final class ServerAcceptStream implements MessageConsumer
         int length)
     {
         DataFW data = factory.dataRO.wrap(buffer, index, index + length);
-        sourceWindowBudget -= data.length();
+        sourceWindowBudget -= data.length() + data.padding();
 
         if (sourceWindowBudget < 0)
         {
@@ -796,21 +797,21 @@ final class ServerAcceptStream implements MessageConsumer
 
         // TODO: consider chunks
         int writableBytes = Math.min(length, contentRemaining);
-        writableBytes = Math.min(targetWindowBudget, writableBytes);
+        writableBytes = Math.min(targetWindowBudget - targetWindowPadding, writableBytes);
 
         if (writableBytes > 0)
         {
-            factory.writer.doHttpData(target, targetId, payload, offset, writableBytes);
-            targetWindowBudget -= writableBytes;
+            factory.writer.doHttpData(target, targetId, targetWindowPadding, payload, offset, writableBytes);
+            targetWindowBudget -= writableBytes + targetWindowPadding;
             contentRemaining -= writableBytes;
         }
-        int result = offset + writableBytes;
 
         if (contentRemaining == 0)
         {
             httpRequestComplete();
         }
-        return result;
+
+        return offset + Math.max(writableBytes, 0);
     };
 
     private int decodeHttpChunk(
@@ -883,26 +884,24 @@ final class ServerAcceptStream implements MessageConsumer
             final int offset,
             final int limit)
     {
-        int result = offset;
         final int length = limit - offset;
 
         // TODO: consider chunks
         int writableBytes = Math.min(length, chunkSizeRemaining);
-        writableBytes = Math.min(targetWindowBudget, writableBytes);
+        writableBytes = Math.min(targetWindowBudget - targetWindowPadding, writableBytes);
 
         if (writableBytes > 0)
         {
-            factory.writer.doHttpData(target, targetId, payload, offset, writableBytes);
-            targetWindowBudget -= writableBytes;
+            factory.writer.doHttpData(target, targetId, targetWindowPadding, payload, offset, writableBytes);
+            targetWindowBudget -= writableBytes + targetWindowPadding;
             chunkSizeRemaining -= writableBytes;
         }
-        result = offset + writableBytes;
 
         if (chunkSizeRemaining == 0)
         {
             decoderState = this::decodeHttpChunkEnd;
         }
-        return result;
+        return offset + Math.max(writableBytes, 0);
     }
 
     private int decodeHttpDataAfterUpgrade(
@@ -911,13 +910,13 @@ final class ServerAcceptStream implements MessageConsumer
             final int limit)
     {
         final int length = limit - offset;
-        int writableBytes = Math.min(length, targetWindowBudget);
+        int writableBytes = Math.min(length, targetWindowBudget - targetWindowPadding);
         if (writableBytes > 0)
         {
-            factory.writer.doHttpData(target, targetId, payload, offset, writableBytes);
-            targetWindowBudget -= writableBytes;
+            factory.writer.doHttpData(target, targetId, targetWindowPadding, payload, offset, writableBytes);
+            targetWindowBudget -= writableBytes + targetWindowPadding;
         }
-        return offset + writableBytes;
+        return offset + Math.max(writableBytes, 0);
     };
 
     private int decodeSkipData(

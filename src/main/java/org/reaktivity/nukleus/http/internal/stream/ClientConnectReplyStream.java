@@ -82,9 +82,6 @@ final class ClientConnectReplyStream implements MessageConsumer
     private Consumer<WindowFW> windowHandler;
 
     private int acceptReplyWindowPadding;
-    private int connectReplyWindowPadding;
-
-    private boolean connectReplyWindowAligned;
 
     @Override
     public String toString()
@@ -310,7 +307,7 @@ final class ClientConnectReplyStream implements MessageConsumer
     private void handleDataWhenNotBuffering(
         DataFW data)
     {
-        connectReplyWindowBudget -= data.length() + connectReplyWindowPadding;
+        connectReplyWindowBudget -= data.length() + data.padding();
 
         if (connectReplyWindowBudget < 0)
         {
@@ -329,19 +326,6 @@ final class ClientConnectReplyStream implements MessageConsumer
                 payload.wrap(payload.buffer(), offset, limit);
                 handleDataPayloadWhenDecodeIncomplete(payload);
             }
-
-            doAlignWindowIfNecessary();
-        }
-    }
-
-    private void doAlignWindowIfNecessary()
-    {
-        if (!connectReplyWindowAligned && connectReplyWindowBudget == 0)
-        {
-            connectReplyWindowAligned = true;
-            // Now it is safe to change connectReplyWindowPadding on both sides
-            // as the windows are aligned. So send deferred window
-            doSendWindowIfAligned();
         }
     }
 
@@ -437,7 +421,7 @@ final class ClientConnectReplyStream implements MessageConsumer
     private void handleDataWhenBuffering(
         DataFW data)
     {
-        connectReplyWindowBudget -= data.length() + connectReplyWindowPadding;
+        connectReplyWindowBudget -= data.length() + data.padding();
 
         if (connectReplyWindowBudget < 0)
         {
@@ -448,8 +432,6 @@ final class ClientConnectReplyStream implements MessageConsumer
             handleDataPayloadWhenBuffering(data.payload());
 
             decodeBufferedData();
-
-            doAlignWindowIfNecessary();
         }
     }
 
@@ -698,7 +680,7 @@ final class ClientConnectReplyStream implements MessageConsumer
 
         if (writableBytes > 0)
         {
-            factory.writer.doHttpData(acceptReply, acceptReplyId, payload, offset, writableBytes);
+            factory.writer.doHttpData(acceptReply, acceptReplyId, acceptReplyWindowPadding, payload, offset, writableBytes);
             acceptReplyWindowBudget -= writableBytes + acceptReplyWindowPadding;
             contentRemaining -= writableBytes;
         }
@@ -793,7 +775,7 @@ final class ClientConnectReplyStream implements MessageConsumer
 
         if (writableBytes > 0)
         {
-            factory.writer.doHttpData(acceptReply, acceptReplyId, payload, offset, writableBytes);
+            factory.writer.doHttpData(acceptReply, acceptReplyId, acceptReplyWindowPadding, payload, offset, writableBytes);
             acceptReplyWindowBudget -= writableBytes + acceptReplyWindowPadding;
             chunkSizeRemaining -= writableBytes;
             contentRemaining -= writableBytes;
@@ -818,7 +800,7 @@ final class ClientConnectReplyStream implements MessageConsumer
 
         if (writableBytes > 0)
         {
-            factory.writer.doData(acceptReply, acceptReplyId, payload, offset, writableBytes);
+            factory.writer.doData(acceptReply, acceptReplyId, acceptReplyWindowPadding, payload, offset, writableBytes);
             acceptReplyWindowBudget -= writableBytes + acceptReplyWindowPadding;
         }
 
@@ -857,12 +839,11 @@ final class ClientConnectReplyStream implements MessageConsumer
         if (connectReplyWindowCredit > 0)
         {
             this.connectReplyWindowBudget += connectReplyWindowCredit;
-            factory.writer.doWindow(connectReplyThrottle, sourceId, connectReplyWindowCredit, connectReplyWindowPadding);
+            factory.writer.doWindow(connectReplyThrottle, sourceId, connectReplyWindowCredit, 0);
         }
 
         // TODO: Support HTTP/1.1 Pipelined Responses (may be buffered already)
         this.contentRemaining = 0;
-        this.connectReplyWindowAligned = false;
     }
 
     private void httpResponseComplete()
@@ -953,28 +934,12 @@ final class ClientConnectReplyStream implements MessageConsumer
             decodeBufferedData();
         }
 
-        if (connectReplyWindowPadding >= acceptReplyWindowPadding)
+        final int connectReplyWindowCredit = acceptReplyWindowBudget - connectReplyWindowBudget;
+        if (connectReplyWindowCredit > 0)
         {
-            connectReplyWindowAligned = true;
-        }
-        doSendWindowIfAligned();
-    }
-
-    private void doSendWindowIfAligned()
-    {
-        // Don't send WINDOW( ,connectReplyWindowPadding) until the budgets are aligned
-        // Otherwise padding may be applied at different times on both sides
-        if (connectReplyWindowAligned)
-        {
-            final int connectReplyWindowCredit = acceptReplyWindowBudget - connectReplyWindowBudget;
-            if (connectReplyWindowCredit > 0)
-            {
-                connectReplyWindowBudget += connectReplyWindowCredit;
-                // connectReply is used across multiple acceptReply streams
-                // so do not reduce the existing padding
-                connectReplyWindowPadding = Math.max(connectReplyWindowPadding, acceptReplyWindowPadding);
-                factory.writer.doWindow(connectReplyThrottle, sourceId, connectReplyWindowCredit, connectReplyWindowPadding);
-            }
+            connectReplyWindowBudget += connectReplyWindowCredit;
+            int connectReplyWindowPadding = acceptReplyWindowPadding;
+            factory.writer.doWindow(connectReplyThrottle, sourceId, connectReplyWindowCredit, connectReplyWindowPadding);
         }
     }
 
