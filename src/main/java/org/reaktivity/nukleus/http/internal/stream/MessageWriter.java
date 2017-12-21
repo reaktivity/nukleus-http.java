@@ -78,6 +78,7 @@ final class MessageWriter
     void doData(
         MessageConsumer stream,
         long streamId,
+        int padding,
         DirectBuffer payload,
         int offset,
         int length)
@@ -85,7 +86,7 @@ final class MessageWriter
         DataFW data = dataRW.wrap(writeBuffer, 0, writeBuffer.capacity())
                 .streamId(streamId)
                 .groupId(0)
-                .padding(0)
+                .padding(padding)
                 .payload(p -> p.set(payload, offset, length))
                 .extension(e -> e.reset())
                 .build();
@@ -96,12 +97,13 @@ final class MessageWriter
     public void doData(
         MessageConsumer stream,
         long streamId,
+        int padding,
         OctetsFW payload)
     {
         DataFW data = dataRW.wrap(writeBuffer, 0, writeBuffer.capacity())
                 .streamId(streamId)
                 .groupId(0)
-                .padding(0)
+                .padding(padding)
                 .payload(p -> p.set(payload))
                 .extension(e -> e.reset())
                 .build();
@@ -151,6 +153,7 @@ final class MessageWriter
     void doHttpData(
         MessageConsumer stream,
         long targetId,
+        int padding,
         DirectBuffer payload,
         int offset,
         int length)
@@ -158,7 +161,7 @@ final class MessageWriter
         DataFW data = dataRW.wrap(writeBuffer, 0, writeBuffer.capacity())
                 .streamId(targetId)
                 .groupId(0)
-                .padding(0)
+                .padding(padding)
                 .payload(p -> p.set(payload, offset, length))
                 .extension(e -> e.reset())
                 .build();
