@@ -834,12 +834,12 @@ final class ClientConnectReplyStream implements MessageConsumer
         this.responseState = ResponseState.BEFORE_HEADERS;
         this.acceptReplyPadding = 0;
 
-        final int connectReplyWindowCredit = factory.maximumHeadersSize - connectReplyBudget;
+        final int connectReplyCredit = factory.maximumHeadersSize - connectReplyBudget;
 
-        if (connectReplyWindowCredit > 0)
+        if (connectReplyCredit > 0)
         {
-            this.connectReplyBudget += connectReplyWindowCredit;
-            factory.writer.doWindow(connectReplyThrottle, sourceId, connectReplyWindowCredit, 0);
+            this.connectReplyBudget += connectReplyCredit;
+            factory.writer.doWindow(connectReplyThrottle, sourceId, connectReplyCredit, 0);
         }
 
         // TODO: Support HTTP/1.1 Pipelined Responses (may be buffered already)
@@ -934,12 +934,12 @@ final class ClientConnectReplyStream implements MessageConsumer
             decodeBufferedData();
         }
 
-        final int connectReplyWindowCredit = acceptReplyBudget - connectReplyBudget;
-        if (connectReplyWindowCredit > 0)
+        final int connectReplyCredit = acceptReplyBudget - connectReplyBudget;
+        if (connectReplyCredit > 0)
         {
-            connectReplyBudget += connectReplyWindowCredit;
+            connectReplyBudget += connectReplyCredit;
             int connectReplyPadding = acceptReplyPadding;
-            factory.writer.doWindow(connectReplyThrottle, sourceId, connectReplyWindowCredit, connectReplyPadding);
+            factory.writer.doWindow(connectReplyThrottle, sourceId, connectReplyCredit, connectReplyPadding);
         }
     }
 
