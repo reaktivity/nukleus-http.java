@@ -57,7 +57,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
     private Connection connection;
     private ConnectionRequest nextConnectionRequest;
     private ConnectionPool connectionPool;
-    private int sourceWindow;
+    private int sourceBudget;
     private int slotIndex;
     private int slotPosition;
     private int slotOffset;
@@ -309,15 +309,15 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
     {
         DataFW data = factory.dataRO.wrap(buffer, index, index + length);
 
-        sourceWindow -= data.length();
-        if (sourceWindow < 0)
+        sourceBudget -= data.length() + data.padding();
+        if (sourceBudget < 0)
         {
             processUnexpected(buffer, index, length);
         }
         else
         {
             final OctetsFW payload = this.factory.dataRO.payload();
-            factory.writer.doData(target, connection.connectStreamId, payload);
+            factory.writer.doData(target, connection.connectStreamId, connection.padding, payload);
             connection.budget -= payload.sizeof();
         }
     }
@@ -429,7 +429,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
     {
         int writableBytes = Math.min(slotPosition - slotOffset, connection.budget);
         MutableDirectBuffer slot = this.factory.bufferPool.buffer(slotIndex);
-        factory.writer.doData(target, connection.connectStreamId, slot, slotOffset, writableBytes);
+        factory.writer.doData(target, connection.connectStreamId, connection.padding, slot, slotOffset, writableBytes);
         connection.budget -= writableBytes;
         slotOffset += writableBytes;
         int bytesDeferred = slotPosition - slotOffset;
@@ -455,7 +455,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
 
     private void doSourceWindow(int credit, int padding)
     {
-        sourceWindow += credit;
+        sourceBudget += credit;
         factory.writer.doWindow(acceptThrottle, acceptId, credit, padding);
     }
 

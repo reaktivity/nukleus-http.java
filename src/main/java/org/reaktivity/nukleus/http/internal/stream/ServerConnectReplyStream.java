@@ -57,8 +57,7 @@ public final class ServerConnectReplyStream implements MessageConsumer
     private int slotOffset;
     private boolean endDeferred;
 
-    private int connectReplyWindowBudget;
-    private int connectReplyWindowPadding;
+    private int connectReplyBudget;
 
     public ServerConnectReplyStream(
         ServerStreamFactory factory,
@@ -166,8 +165,8 @@ public final class ServerConnectReplyStream implements MessageConsumer
         {
             DataFW data = factory.dataRO.wrap(buffer, index, index + length);
             final long streamId = data.streamId();
-            connectReplyWindowBudget += data.length();
-            factory.writer.doWindow(connectReplyThrottle, streamId, data.length(), connectReplyWindowPadding);
+            connectReplyBudget += data.length();
+            factory.writer.doWindow(connectReplyThrottle, streamId, data.length() + data.padding(), 0);
         }
         else if (msgTypeId == EndFW.TYPE_ID)
         {
@@ -242,11 +241,11 @@ public final class ServerConnectReplyStream implements MessageConsumer
                 if (payloadChars.length() > slot.capacity())
                 {
                     slot.putBytes(0,  RESPONSE_HEADERS_TOO_LONG_RESPONSE);
-                    acceptState.acceptReplyWindowBudget -=
-                            RESPONSE_HEADERS_TOO_LONG_RESPONSE.length + acceptState.acceptReplyWindowPadding;
-                    assert acceptState.acceptReplyWindowBudget >= 0;
+                    acceptState.acceptReplyBudget -=
+                            RESPONSE_HEADERS_TOO_LONG_RESPONSE.length + acceptState.acceptReplyPadding;
+                    assert acceptState.acceptReplyBudget >= 0;
                     factory.writer.doData(acceptState.acceptReply, acceptState.replyStreamId,
-                                  slot, 0, RESPONSE_HEADERS_TOO_LONG_RESPONSE.length);
+                            acceptState.acceptReplyPadding, slot, 0, RESPONSE_HEADERS_TOO_LONG_RESPONSE.length);
                     factory.writer.doReset(connectReplyThrottle, connectReplyId);
                 }
                 else
@@ -257,7 +256,7 @@ public final class ServerConnectReplyStream implements MessageConsumer
                     slotOffset = 0;
                     this.streamState = this::streamBeforeHeadersWritten;
                     this.throttleState = this::throttleBeforeHeadersWritten;
-                    if (acceptState.acceptReplyWindowBudget > 0)
+                    if (acceptState.acceptReplyBudget > 0)
                     {
                         useTargetWindowToWriteResponseHeaders();
                     }
@@ -276,18 +275,19 @@ public final class ServerConnectReplyStream implements MessageConsumer
         int length)
     {
         DataFW data = factory.dataRO.wrap(buffer, index, index + length);
-        connectReplyWindowBudget -= data.length() + connectReplyWindowPadding;
+        connectReplyBudget -= data.length() + data.padding();
 
-        if (connectReplyWindowBudget < 0)
+        if (connectReplyBudget < 0)
         {
             processUnexpected(buffer, index, length);
         }
         else
         {
             final OctetsFW payload = data.payload();
-            acceptState.acceptReplyWindowBudget -= payload.sizeof() + acceptState.acceptReplyWindowPadding;
-            assert acceptState.acceptReplyWindowBudget >= 0;
-            factory.writer.doData(acceptState.acceptReply, acceptState.replyStreamId, payload);
+            acceptState.acceptReplyBudget -= payload.sizeof() + acceptState.acceptReplyPadding;
+            assert acceptState.acceptReplyBudget >= 0;
+            factory.writer.doData(acceptState.acceptReply, acceptState.replyStreamId,
+                    acceptState.acceptReplyPadding, payload);
         }
     }
 
@@ -357,8 +357,8 @@ public final class ServerConnectReplyStream implements MessageConsumer
         {
         case WindowFW.TYPE_ID:
             WindowFW window = factory.windowRO.wrap(buffer, index, index + length);
-            acceptState.acceptReplyWindowBudget += window.credit();
-            connectReplyWindowPadding = acceptState.acceptReplyWindowPadding = window.padding();
+            acceptState.acceptReplyBudget += window.credit();
+            acceptState.acceptReplyPadding = window.padding();
             useTargetWindowToWriteResponseHeaders();
             break;
         case ResetFW.TYPE_ID:
@@ -381,8 +381,8 @@ public final class ServerConnectReplyStream implements MessageConsumer
         {
         case WindowFW.TYPE_ID:
             WindowFW window = factory.windowRO.wrap(buffer, index, index + length);
-            acceptState.acceptReplyWindowBudget += window.credit();
-            connectReplyWindowPadding = acceptState.acceptReplyWindowPadding = window.padding();
+            acceptState.acceptReplyBudget += window.credit();
+            acceptState.acceptReplyPadding = window.padding();
             break;
         case ResetFW.TYPE_ID:
             ResetFW reset = factory.resetRO.wrap(buffer, index, index + length);
@@ -419,14 +419,15 @@ public final class ServerConnectReplyStream implements MessageConsumer
     private void useTargetWindowToWriteResponseHeaders()
     {
         int bytesDeferred = slotPosition - slotOffset;
-        int writableBytes = Math.min(bytesDeferred, acceptState.acceptReplyWindowBudget - acceptState.acceptReplyWindowPadding);
+        int writableBytes = Math.min(bytesDeferred, acceptState.acceptReplyBudget - acceptState.acceptReplyPadding);
 
         if (writableBytes > 0)
         {
             MutableDirectBuffer slot = factory.bufferPool.buffer(slotIndex);
-            factory.writer.doData(acceptState.acceptReply, acceptState.replyStreamId, slot, slotOffset, writableBytes);
-            acceptState.acceptReplyWindowBudget -= writableBytes + acceptState.acceptReplyWindowPadding;
-            assert acceptState.acceptReplyWindowBudget >= 0;
+            factory.writer.doData(acceptState.acceptReply, acceptState.replyStreamId, acceptState.acceptReplyPadding,
+                    slot, slotOffset, writableBytes);
+            acceptState.acceptReplyBudget -= writableBytes + acceptState.acceptReplyPadding;
+            assert acceptState.acceptReplyBudget >= 0;
             slotOffset += writableBytes;
             bytesDeferred -= writableBytes;
             if (bytesDeferred == 0)
@@ -449,15 +450,15 @@ public final class ServerConnectReplyStream implements MessageConsumer
     private void processWindow(
         WindowFW window)
     {
-        acceptState.acceptReplyWindowBudget += window.credit();
-        acceptState.acceptReplyWindowPadding = window.padding();
+        acceptState.acceptReplyBudget += window.credit();
+        acceptState.acceptReplyPadding = window.padding();
 
-        int connectReplyWindowCredit = acceptState.acceptReplyWindowBudget - connectReplyWindowBudget;
-        if (connectReplyWindowCredit > 0)
+        int connectReplyCredit = acceptState.acceptReplyBudget - connectReplyBudget;
+        if (connectReplyCredit > 0)
         {
-            connectReplyWindowBudget += connectReplyWindowCredit;
-            connectReplyWindowPadding = Math.max(connectReplyWindowPadding, acceptState.acceptReplyWindowPadding);
-            factory.writer.doWindow(connectReplyThrottle, connectReplyId, connectReplyWindowCredit, connectReplyWindowPadding);
+            connectReplyBudget += connectReplyCredit;
+            int connectReplyPadding = acceptState.acceptReplyPadding;
+            factory.writer.doWindow(connectReplyThrottle, connectReplyId, connectReplyCredit, connectReplyPadding);
         }
     }
 
