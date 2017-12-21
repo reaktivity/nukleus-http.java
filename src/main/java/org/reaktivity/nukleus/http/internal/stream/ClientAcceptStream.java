@@ -57,7 +57,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
     private Connection connection;
     private ConnectionRequest nextConnectionRequest;
     private ConnectionPool connectionPool;
-    private int sourceWindow;
+    private int sourceBudget;
     private int slotIndex;
     private int slotPosition;
     private int slotOffset;
@@ -309,8 +309,8 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
     {
         DataFW data = factory.dataRO.wrap(buffer, index, index + length);
 
-        sourceWindow -= data.length() + data.padding();
-        if (sourceWindow < 0)
+        sourceBudget -= data.length() + data.padding();
+        if (sourceBudget < 0)
         {
             processUnexpected(buffer, index, length);
         }
@@ -455,7 +455,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
 
     private void doSourceWindow(int credit, int padding)
     {
-        sourceWindow += credit;
+        sourceBudget += credit;
         factory.writer.doWindow(acceptThrottle, acceptId, credit, padding);
     }
 
