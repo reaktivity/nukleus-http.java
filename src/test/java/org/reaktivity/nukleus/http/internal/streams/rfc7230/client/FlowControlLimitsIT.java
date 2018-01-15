@@ -123,4 +123,14 @@ public class FlowControlLimitsIT
         k3po.finish();
     }
 
+    @Test
+    @Specification({
+        "${route}/client/controller",
+        "${client}/flow.control/response.with.unknown.transfer.encoding/client",
+        "${server}/flow.control/response.with.unknown.transfer.encoding/server"})
+    public void shouldAbortClientAcceptReplyWhenResponseUnknownTransferEncoding() throws Exception
+    {
+        k3po.finish();
+    }
+
 }
