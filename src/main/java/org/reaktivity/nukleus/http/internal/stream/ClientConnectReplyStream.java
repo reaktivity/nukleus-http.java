@@ -557,65 +557,70 @@ final class ClientConnectReplyStream implements MessageConsumer
         }
         else
         {
-            final Map<String, String> headers = decodeHttpHeaders(start, lines);
+            final Map<String, String> headers = new LinkedHashMap<>();
+            boolean validResponse = decodeHttpHeaders(start, lines, headers);
             // TODO: replace with lightweight approach (end)
 
-            resolveTarget();
-
-            factory.writer.doHttpBegin(acceptReply, acceptReplyId, 0L, acceptCorrelationId,
-                    hs -> headers.forEach((k, v) -> hs.item(i -> i.representation((byte) 0).name(k).value(v))));
-            factory.router.setThrottle(acceptReplyName, acceptReplyId, this::handleThrottle);
-
-            boolean upgraded = "101".equals(headers.get(":status"));
-            String connectionOptions = headers.get("connection");
-            if (connectionOptions != null)
+            if (validResponse)
             {
-                Arrays.asList(connectionOptions.toLowerCase().split(",")).stream().forEach((element) ->
+                resolveTarget();
+
+                factory.writer.doHttpBegin(acceptReply, acceptReplyId, 0L, acceptCorrelationId,
+                        hs -> headers.forEach((k, v) -> hs.item(i -> i.representation((byte) 0).name(k).value(v))));
+                factory.router.setThrottle(acceptReplyName, acceptReplyId, this::handleThrottle);
+
+                boolean upgraded = "101".equals(headers.get(":status"));
+                String connectionOptions = headers.get("connection");
+                if (connectionOptions != null)
                 {
-                    if (element.equals("close"))
+                    Arrays.asList(connectionOptions.toLowerCase().split(",")).stream().forEach((element) ->
                     {
-                        connection.persistent = false;
-                    }
-                });
-            }
+                        if (element.equals("close"))
+                        {
+                            connection.persistent = false;
+                        }
+                    });
+                }
 
-            if (upgraded)
-            {
-                connection.persistent = false;
-                connectionPool.release(connection);
-                this.decoderState = this::decodeHttpDataAfterUpgrade;
-                throttleState = this::handleThrottleAfterBegin;
-                windowHandler = this::handleWindow;
-                this.responseState = ResponseState.DATA;
-            }
-            else if (contentRemaining > 0)
-            {
-                decoderState = this::decodeHttpData;
-                throttleState = this::handleThrottleAfterBegin;
-                windowHandler = this::handleWindow;
-                this.responseState = ResponseState.DATA;
-            }
-            else if (isChunkedTransfer)
-            {
-                decoderState = this::decodeHttpChunk;
-                throttleState = this::handleThrottleAfterBegin;
-                windowHandler = this::handleWindow;
-                this.responseState = ResponseState.DATA;
-            }
-            else
-            {
-                // no content
-                httpResponseComplete();
-                windowHandler = this::handleWindow;
+                if (upgraded)
+                {
+                    connection.persistent = false;
+                    connectionPool.release(connection);
+                    this.decoderState = this::decodeHttpDataAfterUpgrade;
+                    throttleState = this::handleThrottleAfterBegin;
+                    windowHandler = this::handleWindow;
+                    this.responseState = ResponseState.DATA;
+                }
+                else if (contentRemaining > 0)
+                {
+                    decoderState = this::decodeHttpData;
+                    throttleState = this::handleThrottleAfterBegin;
+                    windowHandler = this::handleWindow;
+                    this.responseState = ResponseState.DATA;
+                }
+                else if (isChunkedTransfer)
+                {
+                    decoderState = this::decodeHttpChunk;
+                    throttleState = this::handleThrottleAfterBegin;
+                    windowHandler = this::handleWindow;
+                    this.responseState = ResponseState.DATA;
+                }
+                else
+                {
+                    // no content
+                    httpResponseComplete();
+                    windowHandler = this::handleWindow;
+                }
             }
         }
     }
 
-    private Map<String, String> decodeHttpHeaders(
+    private boolean decodeHttpHeaders(
         String[] start,
-        String[] lines)
+        String[] lines,
+        Map<String, String> headers)
     {
-        Map<String, String> headers = new LinkedHashMap<>();
+        boolean valid = true;
         headers.put(":status", start[1]);
 
         Pattern headerPattern = Pattern.compile("([^\\s:]+)\\s*:\\s*(.*)");
@@ -639,6 +644,7 @@ final class ClientConnectReplyStream implements MessageConsumer
                 if (contentLengthFound || !"chunked".equals(value))
                 {
                     handleInvalidResponseAndReset();
+                    valid = false;
                 }
                 else
                 {
@@ -651,6 +657,7 @@ final class ClientConnectReplyStream implements MessageConsumer
                 if (contentLengthFound || isChunkedTransfer)
                 {
                     handleInvalidResponseAndReset();
+                    valid = false;
                 }
                 else
                 {
@@ -665,7 +672,7 @@ final class ClientConnectReplyStream implements MessageConsumer
             }
         }
 
-        return headers;
+        return valid;
     }
 
     private int decodeHttpData(
@@ -727,7 +734,6 @@ final class ClientConnectReplyStream implements MessageConsumer
             }
             else
             {
-                final int chunkHeaderLength = chunkHeaderLimit - offset;
                 contentRemaining += chunkSizeRemaining;
 
                 decoderState = this::decodeHttpChunkData;
