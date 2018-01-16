@@ -16,6 +16,7 @@
 package org.reaktivity.nukleus.http.internal.stream;
 
 import static java.util.Objects.requireNonNull;
+import static org.reaktivity.nukleus.http.internal.util.HttpUtil.HTTP_STATUS_OK;
 
 import java.nio.charset.StandardCharsets;
 import java.util.function.LongSupplier;
@@ -165,7 +166,7 @@ public final class ServerStreamFactory implements StreamFactory
 
         void reset()
         {
-            status = 200;
+            status = HTTP_STATUS_OK;
             message = "OK";
         }
     }

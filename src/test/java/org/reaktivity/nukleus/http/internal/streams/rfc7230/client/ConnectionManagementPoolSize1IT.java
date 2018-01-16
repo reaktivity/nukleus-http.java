@@ -90,9 +90,9 @@ public class ConnectionManagementPoolSize1IT
     @Test
     @Specification({
         "${route}/client/controller",
-        "${client}/request.and.503.response/client",
+        "${client}/request.and.502.response/client",
         "${server}/request.incomplete.response.headers.and.abort/server" })
-    public void shouldGive503ResponseAndFreeConnectionWhenConnectReplyStreamIsAbortedBeforeResponseHeadersComplete()
+    public void shouldGive502ResponseAndFreeConnectionWhenConnectReplyStreamIsAbortedBeforeResponseHeadersComplete()
             throws Exception
     {
         k3po.finish();
@@ -101,9 +101,9 @@ public class ConnectionManagementPoolSize1IT
     @Test
     @Specification({
         "${route}/client/controller",
-        "${client}/request.and.503.response/client",
+        "${client}/request.and.502.response/client",
         "${server}/request.incomplete.response.headers.and.end/server" })
-    public void shouldGive503ResponseAndFreeConnectionWhenConnectReplyStreamEndsBeforeResponseHeadersComplete() throws Exception
+    public void shouldGive502ResponseAndFreeConnectionWhenConnectReplyStreamEndsBeforeResponseHeadersComplete() throws Exception
     {
         k3po.finish();
     }
@@ -112,9 +112,9 @@ public class ConnectionManagementPoolSize1IT
     @Test
     @Specification({
         "${route}/client/controller",
-        "${client}/request.and.503.response/client",
+        "${client}/request.and.502.response/client",
         "${server}/request.incomplete.response.headers.and.reset/server" })
-    public void shouldGive503ResponseAndFreeConnectionWhenConnectStreamIsResetBeforeResponseHeadersComplete() throws Exception
+    public void shouldGive502ResponseAndFreeConnectionWhenConnectStreamIsResetBeforeResponseHeadersComplete() throws Exception
     {
         k3po.finish();
     }
@@ -122,9 +122,9 @@ public class ConnectionManagementPoolSize1IT
     @Test
     @Specification({
         "${route}/client/controller",
-        "${client}/request.and.503.response/client",
+        "${client}/request.and.502.response/client",
         "${server}/request.no.response.and.end/server" })
-    public void shouldGive503ResponseAndFreeConnectionWhenConnectReplyStreamEndsBeforeResponseReceived() throws Exception
+    public void shouldGive502ResponseAndFreeConnectionWhenConnectReplyStreamEndsBeforeResponseReceived() throws Exception
     {
         k3po.finish();
     }
@@ -133,9 +133,9 @@ public class ConnectionManagementPoolSize1IT
     @Test
     @Specification({
         "${route}/client/controller",
-        "${client}/request.and.503.response/client",
+        "${client}/request.and.502.response/client",
         "${server}/request.no.response.and.reset/server" })
-    public void shouldGive503ResponseAndFreeConnectionWhenConnectStreamIsResetBeforeResponseReceived() throws Exception
+    public void shouldGive502ResponseAndFreeConnectionWhenConnectStreamIsResetBeforeResponseReceived() throws Exception
     {
         k3po.finish();
     }

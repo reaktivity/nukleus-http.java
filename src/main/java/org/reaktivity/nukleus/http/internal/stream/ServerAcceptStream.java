@@ -18,6 +18,12 @@ package org.reaktivity.nukleus.http.internal.stream;
 import static java.lang.Integer.parseInt;
 import static org.reaktivity.nukleus.buffer.BufferPool.NO_SLOT;
 import static org.reaktivity.nukleus.http.internal.util.BufferUtil.limitOfBytes;
+import static org.reaktivity.nukleus.http.internal.util.HttpUtil.HTTP_STATUS_BAD_REQUEST;
+import static org.reaktivity.nukleus.http.internal.util.HttpUtil.HTTP_STATUS_NOT_FOUND;
+import static org.reaktivity.nukleus.http.internal.util.HttpUtil.HTTP_STATUS_NOT_IMPLEMENTED;
+import static org.reaktivity.nukleus.http.internal.util.HttpUtil.HTTP_STATUS_OK;
+import static org.reaktivity.nukleus.http.internal.util.HttpUtil.HTTP_STATUS_SERVICE_UNAVAILABLE;
+import static org.reaktivity.nukleus.http.internal.util.HttpUtil.HTTP_STATUS_VERSION_NOT_SUPPORTED;
 
 import java.net.URI;
 import java.nio.ByteBuffer;
@@ -387,7 +393,7 @@ final class ServerAcceptStream implements MessageConsumer
                 if (slotIndex == NO_SLOT)
                 {
                     // Out of factory.slab memory
-                    processInvalidRequest(503, "Service Unavailable");
+                    processInvalidRequest(HTTP_STATUS_SERVICE_UNAVAILABLE, "Service Unavailable");
                 }
                 else
                 {
@@ -539,7 +545,7 @@ final class ServerAcceptStream implements MessageConsumer
             }
             else  if (firstSpace == -1 && length > ServerStreamFactory.MAXIMUM_METHOD_BYTES)
             {
-                processInvalidRequest(400, "Bad Request");
+                processInvalidRequest(HTTP_STATUS_BAD_REQUEST, "Bad Request");
             }
             if (length >= maximumHeadersSize)
             {
@@ -595,7 +601,7 @@ final class ServerAcceptStream implements MessageConsumer
 
         if (start.length != 3)
         {
-            processInvalidRequest(400, "Bad Request");
+            processInvalidRequest(HTTP_STATUS_BAD_REQUEST, "Bad Request");
             return;
         }
 
@@ -607,16 +613,16 @@ final class ServerAcceptStream implements MessageConsumer
             Matcher validVersionMatcher = validVersionPattern.matcher(start[2]);
             if (validVersionMatcher.matches())
             {
-                processInvalidRequest(505, "HTTP Version Not Supported");
+                processInvalidRequest(HTTP_STATUS_VERSION_NOT_SUPPORTED, "HTTP Version Not Supported");
             }
             else
             {
-                processInvalidRequest(400, "Bad Request");
+                processInvalidRequest(HTTP_STATUS_BAD_REQUEST, "Bad Request");
             }
         }
         else if (null == StandardMethods.parse(start[0]))
         {
-            processInvalidRequest(501, "Not Implemented");
+            processInvalidRequest(HTTP_STATUS_NOT_IMPLEMENTED, "Not Implemented");
         }
         else
         {
@@ -627,13 +633,13 @@ final class ServerAcceptStream implements MessageConsumer
 
             // TODO: replace with lightweight approach (end)
 
-            if (httpStatus.status != 200)
+            if (httpStatus.status != HTTP_STATUS_OK)
             {
                 processInvalidRequest(httpStatus.status, httpStatus.message);
             }
             else if (headers.get(":authority") == null || requestURI.getUserInfo() != null)
             {
-                processInvalidRequest(400, "Bad Request");
+                processInvalidRequest(HTTP_STATUS_BAD_REQUEST, "Bad Request");
             }
             else
             {
@@ -692,7 +698,7 @@ final class ServerAcceptStream implements MessageConsumer
                 }
                 else
                 {
-                    processInvalidRequest(404, "Not Found");
+                    processInvalidRequest(HTTP_STATUS_NOT_FOUND, "Not Found");
                 }
             }
         }
@@ -839,7 +845,7 @@ final class ServerAcceptStream implements MessageConsumer
             }
             catch (NumberFormatException ex)
             {
-                processInvalidRequest(400,  "Bad Request");
+                processInvalidRequest(HTTP_STATUS_BAD_REQUEST,  "Bad Request");
             }
 
             if (chunkSizeRemaining == 0)
@@ -868,7 +874,7 @@ final class ServerAcceptStream implements MessageConsumer
             if (payload.getByte(offset) != '\r'
                 || payload.getByte(offset + 1) != '\n')
             {
-                processInvalidRequest(400,  "Bad Request");
+                processInvalidRequest(HTTP_STATUS_BAD_REQUEST,  "Bad Request");
             }
             else
             {
@@ -970,6 +976,7 @@ final class ServerAcceptStream implements MessageConsumer
             if (extension.sizeof() > 0)
             {
                 final HttpRouteExFW routeEx = extension.get(factory.routeExRO::wrap);
+                // TODO: the following test needs correcting, will always returns true
                 headersMatch = routeEx.headers().anyMatch(
                         h -> !Objects.equals(h.value(), headers.get(h.name())));
             }

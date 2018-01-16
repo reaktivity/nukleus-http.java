@@ -201,6 +201,7 @@ public final class ClientStreamFactory implements StreamFactory
             if (extension.sizeof() > 0)
             {
                 final HttpRouteExFW routeEx = extension.get(routeExRO::wrap);
+                // TODO: the following test always returns true, and looks incorrect.
                 headersMatch = routeEx.headers().anyMatch(
                         h -> !Objects.equals(h.value(), headers.get(h.name())));
             }

@@ -15,6 +15,8 @@
  */
 package org.reaktivity.nukleus.http.internal.stream;
 
+import static org.reaktivity.nukleus.http.internal.util.HttpUtil.HTTP_STATUS_BAD_GATEWAY;
+
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.function.Consumer;
@@ -110,12 +112,13 @@ final class ConnectionPool
         if (correlation != null)
         {
             // We did not yet send response headers (high level begin) to the client accept reply stream.
-            // This implies we got an incomplete response. We report this as service unavailable (503).
+            // This implies we got an incomplete or invalid response. We report this as Bad Gateway (502).
             MessageConsumer acceptReply = factory.router.supplyTarget(correlation.source());
             long targetId = factory.supplyStreamId.getAsLong();
             long sourceCorrelationId = correlation.id();
             factory.writer.doHttpBegin(acceptReply, targetId, 0L, sourceCorrelationId,
-                    hs -> hs.item(h -> h.representation((byte) 0).name(":status").value("503")));
+                    hs -> hs.item(h -> h.representation((byte) 0).name(":status")
+                            .value(Integer.toString(HTTP_STATUS_BAD_GATEWAY))));
             factory.writer.doHttpEnd(acceptReply, targetId);
         }
         if (connection.persistent)

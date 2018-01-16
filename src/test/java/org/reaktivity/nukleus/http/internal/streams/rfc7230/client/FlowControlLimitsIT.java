@@ -106,7 +106,7 @@ public class FlowControlLimitsIT
     @Test
     @Specification({
         "${route}/client/controller",
-        "${client}/flow.control/response.headers.too.long/client.no.response",
+        "${client}/flow.control/response.headers.too.long/client.502.response",
         "${server}/flow.control/response.headers.too.long/server.response.reset"})
     public void shouldRejectResponseWithHeadersTooLong() throws Exception
     {

@@ -20,6 +20,14 @@ import static java.lang.Character.toUpperCase;
 public final class HttpUtil
 {
 
+    public static final int HTTP_STATUS_OK = 200;
+    public static final int HTTP_STATUS_BAD_REQUEST = 400;
+    public static final int HTTP_STATUS_NOT_FOUND = 404;
+    public static final int HTTP_STATUS_NOT_IMPLEMENTED = 501;
+    public static final int HTTP_STATUS_BAD_GATEWAY = 502;
+    public static final int HTTP_STATUS_SERVICE_UNAVAILABLE = 503;
+    public static final int HTTP_STATUS_VERSION_NOT_SUPPORTED = 505;
+
     public static void appendHeader(StringBuilder payload, String name, String value)
     {
         int pos = name.indexOf('-');
