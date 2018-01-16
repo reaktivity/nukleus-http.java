@@ -457,8 +457,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         slotOffset = offset;
         if (slotOffset == slotPosition)
         {
-            factory.bufferPool.release(slotIndex);
-            slotIndex = NO_SLOT;
+            releaseSlotIfNecessary();
             streamState = this::handleStreamWhenNotBuffering;
             if (endDeferred)
             {
