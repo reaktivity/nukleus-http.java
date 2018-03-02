@@ -144,7 +144,7 @@ final class ClientConnectReplyStream implements MessageConsumer
             handleEndWhenBuffering(buffer, index, length);
             break;
         case AbortFW.TYPE_ID:
-            final AbortFW abort = this.factory.abortRO.wrap(buffer, index, length);
+            final AbortFW abort = this.factory.abortRO.wrap(buffer, index, index + length);
             handleAbort(abort);
             break;
         default:
@@ -170,7 +170,7 @@ final class ClientConnectReplyStream implements MessageConsumer
             handleEnd(end);
             break;
         case AbortFW.TYPE_ID:
-            final AbortFW abort = this.factory.abortRO.wrap(buffer, index, length);
+            final AbortFW abort = this.factory.abortRO.wrap(buffer, index, index + length);
             handleAbort(abort);
             break;
         default:
@@ -192,7 +192,7 @@ final class ClientConnectReplyStream implements MessageConsumer
             handleEnd(end);
             break;
         case AbortFW.TYPE_ID:
-            final AbortFW abort = this.factory.abortRO.wrap(buffer, index, length);
+            final AbortFW abort = this.factory.abortRO.wrap(buffer, index, index + length);
             handleAbort(abort);
             break;
         default:
