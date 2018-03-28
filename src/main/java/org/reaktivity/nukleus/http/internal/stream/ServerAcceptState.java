@@ -31,6 +31,8 @@ final class ServerAcceptState
     final MessageConsumer acceptReply;
     private final MessageConsumer initialThrottle;
     final Consumer<MessageConsumer> setThrottle;
+    Runnable responseCleanup;
+    Runnable requestCleanup;
     int acceptReplyBudget;
     int acceptReplyPadding;
     int pendingRequests;
@@ -75,6 +77,10 @@ final class ServerAcceptState
         }
     }
 
+    public void doAbort(MessageWriter writer)
+    {
+        writer.doAbort(acceptReply, replyStreamId);
+    }
 }
 
 
