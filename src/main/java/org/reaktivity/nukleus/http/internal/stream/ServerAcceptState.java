@@ -39,8 +39,14 @@ final class ServerAcceptState
     boolean endRequested;
     boolean persistent = true;
 
-    ServerAcceptState(String acceptReplyName, long replyStreamId, MessageConsumer acceptReply, MessageWriter writer,
-            MessageConsumer initialThrottle, RouteManager router, Consumer<Runnable> acceptReplyCleanup)
+    ServerAcceptState(
+        String acceptReplyName,
+        long replyStreamId,
+        MessageConsumer acceptReply,
+        MessageWriter writer,
+        MessageConsumer initialThrottle,
+        RouteManager router,
+        Consumer<Runnable> acceptReplyCleanup)
     {
         this.replyStreamId = replyStreamId;
         this.acceptReply = acceptReply;
