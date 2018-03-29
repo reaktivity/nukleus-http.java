@@ -31,7 +31,7 @@ final class ServerAcceptState
     final MessageConsumer acceptReply;
     private final MessageConsumer initialThrottle;
     final Consumer<MessageConsumer> setThrottle;
-    final Consumer<Runnable> acceptReplyCleanup;
+    final Consumer<Runnable> setCleanupConnectReply;
 
     int acceptReplyBudget;
     int acceptReplyPadding;
@@ -46,14 +46,14 @@ final class ServerAcceptState
         MessageWriter writer,
         MessageConsumer initialThrottle,
         RouteManager router,
-        Consumer<Runnable> acceptReplyCleanup)
+        Consumer<Runnable> setCleanupConnectReply)
     {
         this.replyStreamId = replyStreamId;
         this.acceptReply = acceptReply;
         this.initialThrottle = initialThrottle;
         this.acceptReplyName = acceptReplyName;
         this.setThrottle = (t) -> router.setThrottle(acceptReplyName, replyStreamId, t);
-        this.acceptReplyCleanup = acceptReplyCleanup;
+        this.setCleanupConnectReply = setCleanupConnectReply;
         setThrottle.accept(initialThrottle);
     }
 

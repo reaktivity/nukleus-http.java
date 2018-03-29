@@ -84,7 +84,9 @@ final class ServerAcceptStream implements MessageConsumer
     private boolean hasUpgrade;
     private Correlation<ServerAcceptState> correlation;
     private boolean targetBeginIssued;
-    private Runnable connectionReplyCleanup = () -> {};
+    private Runnable cleanupConnectReply = () -> {};
+    private long replyStreamId;
+    private MessageConsumer acceptReply;
 
     @Override
     public String toString()
@@ -167,7 +169,7 @@ final class ServerAcceptStream implements MessageConsumer
             processEnd(buffer, index, length);
             break;
         case AbortFW.TYPE_ID:
-            processAbort();
+            processAbort(buffer, index, length);
             break;
         default:
             processUnexpected(buffer, index, length);
@@ -355,15 +357,17 @@ final class ServerAcceptStream implements MessageConsumer
         long replyStreamId = factory.supplyStreamId.getAsLong();
         final MessageConsumer acceptReply = factory.router.supplyTarget(acceptName);
         ServerAcceptState state = new ServerAcceptState(acceptName, replyStreamId, acceptReply, factory.writer,
-                 this::loopBackThrottle, factory.router, this::consume);
+                 this::loopBackThrottle, factory.router, this::setCleanupConnectReply);
         factory.writer.doBegin(acceptReply, replyStreamId, 0L, acceptCorrelationId);
         this.correlation = new Correlation<>(acceptCorrelationId, acceptName, state);
         doSourceWindow(maximumHeadersSize, 0);
+        this.acceptReply = acceptReply;
+        this.replyStreamId = replyStreamId;
     }
 
-    void consume(Runnable cleanup)
+    void setCleanupConnectReply(Runnable cleanupConnectReply)
     {
-        this.connectionReplyCleanup = cleanup;
+        this.cleanupConnectReply = cleanupConnectReply;
     }
 
     private void processData(
@@ -429,17 +433,20 @@ final class ServerAcceptStream implements MessageConsumer
         doEnd();
     }
 
-    private void processAbort()
+    private void processAbort(
+            DirectBuffer buffer,
+            int index,
+            int length)
     {
         factory.correlations.remove(acceptCorrelationId);
         if (targetBeginIssued)
         {
             factory.writer.doAbort(target, targetId);
-            connectionReplyCleanup.run();
+            cleanupConnectReply.run();
         }
         else
         {
-            correlation.state().doAbort(factory.writer);
+            factory.writer.doAbort(acceptReply, replyStreamId);
         }
         releaseSlotIfNecessary();
     }
@@ -546,7 +553,7 @@ final class ServerAcceptStream implements MessageConsumer
         final int endOfHeadersAt = limitOfBytes(payload, offset, limit, ServerStreamFactory.CRLFCRLF_BYTES);
         if (endOfHeadersAt == -1)
         {
-            // Incomplete request, signal we can't consume the data
+            // Incomplete request, signal we can't setCleanupConnectReply the data
             result = offset;
 
             int length = limit - offset;

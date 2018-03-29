@@ -142,7 +142,7 @@ public final class ServerConnectReplyStream implements MessageConsumer
             processEnd(buffer, index, length);
             break;
         case AbortFW.TYPE_ID:
-            processAbort();
+            processAbort(buffer, index, length);
             break;
         default:
             processUnexpected(buffer, index, length);
@@ -178,12 +178,15 @@ public final class ServerConnectReplyStream implements MessageConsumer
         }
     }
 
-    private void processAbort()
+    private void processAbort(
+        DirectBuffer buffer,
+        int index,
+        int length)
     {
-        connectReplyCleanup();
+        doCleanup();
     }
 
-    private void connectReplyCleanup()
+    private void doCleanup()
     {
 
         factory.writer.doReset(connectReplyThrottle, connectReplyId);
@@ -210,7 +213,7 @@ public final class ServerConnectReplyStream implements MessageConsumer
         if (sourceRef == 0L && correlation != null)
         {
             acceptState = correlation.state();
-            acceptState.acceptReplyCleanup.accept(this::connectReplyCleanup);
+            acceptState.setCleanupConnectReply.accept(this::doCleanup);
 
             Map<String, String> headers = EMPTY_HEADERS;
             if (extension.sizeof() > 0)
