@@ -84,6 +84,7 @@ final class ServerAcceptStream implements MessageConsumer
     private boolean hasUpgrade;
     private Correlation<ServerAcceptState> correlation;
     private boolean targetBeginIssued;
+    private Runnable connectionReplyCleanup = () -> {};
 
     @Override
     public String toString()
@@ -354,12 +355,15 @@ final class ServerAcceptStream implements MessageConsumer
         long replyStreamId = factory.supplyStreamId.getAsLong();
         final MessageConsumer acceptReply = factory.router.supplyTarget(acceptName);
         ServerAcceptState state = new ServerAcceptState(acceptName, replyStreamId, acceptReply, factory.writer,
-                 this::loopBackThrottle, factory.router);
+                 this::loopBackThrottle, factory.router, this::consume);
         factory.writer.doBegin(acceptReply, replyStreamId, 0L, acceptCorrelationId);
         this.correlation = new Correlation<>(acceptCorrelationId, acceptName, state);
-        this.correlation.state().requestCleanup = this::requestCleanup;
-
         doSourceWindow(maximumHeadersSize, 0);
+    }
+
+    void consume(Runnable cleanup)
+    {
+        this.connectionReplyCleanup = cleanup;
     }
 
     private void processData(
@@ -427,27 +431,15 @@ final class ServerAcceptStream implements MessageConsumer
 
     private void processAbort()
     {
+        factory.correlations.remove(acceptCorrelationId);
         if (targetBeginIssued)
         {
-            if (correlation != null && this.correlation.state().responseCleanup != null)
-            {
-                this.correlation.state().responseCleanup.run();
-            }
+            factory.writer.doAbort(target, targetId);
+            connectionReplyCleanup.run();
         }
         else
         {
             correlation.state().doAbort(factory.writer);
-        }
-        this.requestCleanup();
-    }
-
-    private void requestCleanup()
-    {
-        factory.correlations.remove(acceptCorrelationId);
-
-        if (targetBeginIssued)
-        {
-            factory.writer.doAbort(target, targetId);
         }
         releaseSlotIfNecessary();
     }

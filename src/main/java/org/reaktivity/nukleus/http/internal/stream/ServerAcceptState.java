@@ -31,8 +31,8 @@ final class ServerAcceptState
     final MessageConsumer acceptReply;
     private final MessageConsumer initialThrottle;
     final Consumer<MessageConsumer> setThrottle;
-    Runnable responseCleanup;
-    Runnable requestCleanup;
+    final Consumer<Runnable> acceptReplyCleanup;
+
     int acceptReplyBudget;
     int acceptReplyPadding;
     int pendingRequests;
@@ -40,13 +40,14 @@ final class ServerAcceptState
     boolean persistent = true;
 
     ServerAcceptState(String acceptReplyName, long replyStreamId, MessageConsumer acceptReply, MessageWriter writer,
-            MessageConsumer initialThrottle, RouteManager router)
+            MessageConsumer initialThrottle, RouteManager router, Consumer<Runnable> acceptReplyCleanup)
     {
         this.replyStreamId = replyStreamId;
         this.acceptReply = acceptReply;
         this.initialThrottle = initialThrottle;
         this.acceptReplyName = acceptReplyName;
         this.setThrottle = (t) -> router.setThrottle(acceptReplyName, replyStreamId, t);
+        this.acceptReplyCleanup = acceptReplyCleanup;
         setThrottle.accept(initialThrottle);
     }
 

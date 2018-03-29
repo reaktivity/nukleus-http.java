@@ -180,8 +180,16 @@ public final class ServerConnectReplyStream implements MessageConsumer
 
     private void processAbort()
     {
-        acceptState.requestCleanup.run();
-        responseCleanup();
+        connectReplyCleanup();
+    }
+
+    private void connectReplyCleanup()
+    {
+
+        factory.writer.doReset(connectReplyThrottle, connectReplyId);
+        acceptState.doAbort(factory.writer);
+        this.streamState = this::streamAfterRejectOrReset;
+        releaseSlotIfNecessary();
     }
 
     private void processBegin(
@@ -202,7 +210,7 @@ public final class ServerConnectReplyStream implements MessageConsumer
         if (sourceRef == 0L && correlation != null)
         {
             acceptState = correlation.state();
-            acceptState.responseCleanup = this::responseCleanup;
+            acceptState.acceptReplyCleanup.accept(this::connectReplyCleanup);
 
             Map<String, String> headers = EMPTY_HEADERS;
             if (extension.sizeof() > 0)
@@ -338,14 +346,6 @@ public final class ServerConnectReplyStream implements MessageConsumer
         factory.writer.doReset(connectReplyThrottle, streamId);
 
         this.streamState = this::streamAfterRejectOrReset;
-    }
-
-    private void responseCleanup()
-    {
-        factory.writer.doReset(connectReplyThrottle, connectReplyId);
-        acceptState.doAbort(factory.writer);
-        this.streamState = this::streamAfterRejectOrReset;
-        releaseSlotIfNecessary();
     }
 
     private void throttleBeforeBegin(
