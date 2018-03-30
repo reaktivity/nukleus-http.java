@@ -188,7 +188,6 @@ public final class ServerConnectReplyStream implements MessageConsumer
 
     private void doCleanup()
     {
-
         factory.writer.doReset(connectReplyThrottle, connectReplyId);
         acceptState.doAbort(factory.writer);
         this.streamState = this::streamAfterRejectOrReset;

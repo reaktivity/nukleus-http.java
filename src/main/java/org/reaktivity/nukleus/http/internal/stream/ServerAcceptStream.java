@@ -84,7 +84,7 @@ final class ServerAcceptStream implements MessageConsumer
     private boolean hasUpgrade;
     private Correlation<ServerAcceptState> correlation;
     private boolean targetBeginIssued;
-    private Runnable cleanupConnectReply = () -> {};
+    private Runnable cleanupConnectReply;
     private long replyStreamId;
     private MessageConsumer acceptReply;
 
@@ -438,15 +438,15 @@ final class ServerAcceptStream implements MessageConsumer
             int index,
             int length)
     {
-        factory.correlations.remove(acceptCorrelationId);
+        factory.writer.doAbort(acceptReply, replyStreamId);
         if (targetBeginIssued)
         {
             factory.writer.doAbort(target, targetId);
-            cleanupConnectReply.run();
+
         }
-        else
+        if (factory.correlations.remove(acceptCorrelationId) == null)
         {
-            factory.writer.doAbort(acceptReply, replyStreamId);
+            cleanupConnectReply.run();
         }
         releaseSlotIfNecessary();
     }
@@ -553,7 +553,7 @@ final class ServerAcceptStream implements MessageConsumer
         final int endOfHeadersAt = limitOfBytes(payload, offset, limit, ServerStreamFactory.CRLFCRLF_BYTES);
         if (endOfHeadersAt == -1)
         {
-            // Incomplete request, signal we can't setCleanupConnectReply the data
+            // Incomplete request, signal we can't consume the data
             result = offset;
 
             int length = limit - offset;
