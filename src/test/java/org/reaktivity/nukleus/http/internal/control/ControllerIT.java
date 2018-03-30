@@ -45,7 +45,7 @@ public class ControllerIT
         .commandBufferCapacity(1024)
         .responseBufferCapacity(1024)
         .counterValuesBufferCapacity(1024)
-        .controller(HttpController.class::isAssignableFrom);
+        .controller("http"::equals);
 
     @Rule
     public final TestRule chain = outerRule(k3po).around(timeout).around(controller);

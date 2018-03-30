@@ -28,7 +28,6 @@ import org.junit.rules.Timeout;
 import org.kaazing.k3po.junit.annotation.Specification;
 import org.kaazing.k3po.junit.rules.K3poRule;
 import org.reaktivity.nukleus.http.internal.HttpConfiguration;
-import org.reaktivity.nukleus.http.internal.HttpController;
 import org.reaktivity.nukleus.http.internal.test.HttpCountersRule;
 import org.reaktivity.reaktor.test.ReaktorRule;
 
@@ -43,7 +42,7 @@ public class ConnectionManagementPoolSize1IT
 
     private final ReaktorRule reaktor = new ReaktorRule()
         .nukleus("http"::equals)
-        .controller(HttpController.class::isAssignableFrom)
+        .controller("http"::equals)
         .directory("target/nukleus-itests")
         .commandBufferCapacity(1024)
         .responseBufferCapacity(1024)
