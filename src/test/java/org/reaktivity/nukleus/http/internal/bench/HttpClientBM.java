@@ -124,7 +124,7 @@ public class HttpClientBM
             reaktor = Reaktor.builder()
                          .config(configuration)
                          .nukleus("http"::equals)
-                         .controller(HttpController.class::isAssignableFrom)
+                         .controller("http"::equals)
                          .errorHandler(ex -> ex.printStackTrace(System.err))
                          .build();
         }
@@ -146,7 +146,7 @@ public class HttpClientBM
             reaktor = Reaktor.builder()
                     .config(configuration)
                     .nukleus("http"::equals)
-                    .controller(HttpController.class::isAssignableFrom)
+                    .controller("http"::equals)
                     .errorHandler(ex -> ex.printStackTrace(System.err))
                     .build();
             reaktor.start();
