@@ -444,7 +444,8 @@ final class ServerAcceptStream implements MessageConsumer
             factory.writer.doAbort(target, targetId);
 
         }
-        if (factory.correlations.remove(acceptCorrelationId) == null)
+        if (factory.correlations.remove(acceptCorrelationId) == null &&
+                cleanupConnectReply != null)
         {
             cleanupConnectReply.run();
         }
