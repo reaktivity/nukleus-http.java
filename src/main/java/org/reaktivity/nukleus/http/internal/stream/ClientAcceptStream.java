@@ -64,7 +64,6 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
     private boolean endDeferred;
     private boolean persistent = true;
 
-
     ClientAcceptStream(ClientStreamFactory factory, MessageConsumer acceptThrottle,
             long acceptId, long acceptRef, String acceptName, long acceptCorrelationId,
             String connectName, long connectRef, Map<String, String> headers)
@@ -122,7 +121,6 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
             processAbort(buffer, index, length);
             break;
         default:
-            this.factory.bufferPool.release(slotIndex);
             processUnexpected(buffer, index, length);
             break;
         }
@@ -176,10 +174,12 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         case EndFW.TYPE_ID:
             factory.endRO.wrap(buffer, index, index + length);
             this.streamState = this::streamAfterEndOrAbort;
+            releaseSlotIfNecessary();
             break;
         case AbortFW.TYPE_ID:
             factory.abortRO.wrap(buffer, index, index + length);
             this.streamState = this::streamAfterEndOrAbort;
+            releaseSlotIfNecessary();
             break;
         }
     }
@@ -335,6 +335,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
     {
         connectionPool.setDefaultThrottle(connection);
         this.streamState = this::streamAfterEndOrAbort;
+        releaseSlotIfNecessary();
     }
 
     private void processUnexpected(
@@ -349,6 +350,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         factory.writer.doReset(acceptThrottle, streamId);
 
         this.streamState = this::streamAfterReplyOrReset;
+        releaseSlotIfNecessary();
     }
 
     private void handleThrottle(
@@ -373,6 +375,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
             break;
         default:
             // ignore
+            System.out.println("Ignore");
             break;
         }
     }
