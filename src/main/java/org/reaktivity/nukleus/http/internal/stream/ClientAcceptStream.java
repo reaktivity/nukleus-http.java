@@ -375,7 +375,6 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
             break;
         default:
             // ignore
-            System.out.println("Ignore");
             break;
         }
     }
