@@ -31,6 +31,7 @@ import org.reaktivity.nukleus.ControllerSpi;
 import org.reaktivity.nukleus.function.MessageConsumer;
 import org.reaktivity.nukleus.function.MessagePredicate;
 import org.reaktivity.nukleus.http.internal.types.OctetsFW;
+import org.reaktivity.nukleus.http.internal.types.control.FreezeFW;
 import org.reaktivity.nukleus.http.internal.types.control.HttpRouteExFW;
 import org.reaktivity.nukleus.http.internal.types.control.Role;
 import org.reaktivity.nukleus.http.internal.types.control.RouteFW;
@@ -43,13 +44,15 @@ public final class HttpController implements Controller
     // TODO: thread-safe flyweights or command queue from public methods
     private final RouteFW.Builder routeRW = new RouteFW.Builder();
     private final UnrouteFW.Builder unrouteRW = new UnrouteFW.Builder();
+    private final FreezeFW.Builder freezeRW = new FreezeFW.Builder();
 
     private final HttpRouteExFW.Builder routeExRW = new HttpRouteExFW.Builder();
 
     private final ControllerSpi controllerSpi;
     private final AtomicBuffer atomicBuffer;
 
-    public HttpController(ControllerSpi controllerSpi)
+    public HttpController(
+        ControllerSpi controllerSpi)
     {
         this.controllerSpi = controllerSpi;
         this.atomicBuffer = new UnsafeBuffer(allocateDirect(MAX_SEND_LENGTH).order(nativeOrder()));
@@ -131,6 +134,17 @@ public final class HttpController implements Controller
         Map<String, String> headers)
     {
         return unroute(Role.CLIENT, source, sourceRef, target, targetRef, headers);
+    }
+
+    public CompletableFuture<Void> freeze()
+    {
+        long correlationId = controllerSpi.nextCorrelationId();
+
+        FreezeFW freeze = freezeRW.wrap(atomicBuffer, 0, atomicBuffer.capacity())
+                                  .correlationId(correlationId)
+                                  .build();
+
+        return controllerSpi.doFreeze(freeze.typeId(), freeze.buffer(), freeze.offset(), freeze.sizeof());
     }
 
     public long count(String name)
