@@ -325,9 +325,10 @@ public final class ServerConnectReplyStream implements MessageConsumer
     {
         if (acceptState != null && acceptState.endRequested && --acceptState.pendingRequests == 0)
         {
-            factory.writer.doEnd(acceptState.acceptReply, acceptState.replyStreamId);
+            acceptState.doEnd(factory.writer);
             acceptState.restoreInitialThrottle();
             this.streamState = this::streamAfterEnd;
+            releaseSlotIfNecessary();
         }
         else
         {

@@ -704,6 +704,7 @@ final class ServerAcceptStream implements MessageConsumer
                         decoderState = this::decodeHttpDataAfterUpgrade;
                         throttleState = this::throttleForHttpDataAfterUpgrade;
                         correlation.state().persistent = false;
+                        correlation.state().endRequested = true;
                     }
                     else if (contentRemaining > 0)
                     {

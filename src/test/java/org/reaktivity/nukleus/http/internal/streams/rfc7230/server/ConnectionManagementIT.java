@@ -127,6 +127,16 @@ public class ConnectionManagementIT
     @Test
     @Specification({
         "${route}/server/controller",
+        "${client}/send.end.after.upgrade.request/client",
+        "${server}/send.end.after.upgrade.request/server" })
+    public void shouldCloseConnectionO() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/server/controller",
         "${client}/request.and.upgrade.required.response/client",
         "${server}/request.and.upgrade.required.response/server" })
     public void serverThatSendsUpgradeRequiredMustIncludeUpgradeHeader() throws Exception
