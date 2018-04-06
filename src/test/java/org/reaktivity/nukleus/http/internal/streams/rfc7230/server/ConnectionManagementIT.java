@@ -129,7 +129,7 @@ public class ConnectionManagementIT
         "${route}/server/controller",
         "${client}/send.end.after.upgrade.request/client",
         "${server}/send.end.after.upgrade.request/server" })
-    public void shouldSendWhenEndReceivedAndUpgradeRequestCompleted() throws Exception
+    public void shouldSendEndWhenEndReceivedAndUpgradeRequestCompleted() throws Exception
     {
         k3po.finish();
     }
