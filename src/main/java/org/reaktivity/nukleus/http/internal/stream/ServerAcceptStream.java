@@ -811,7 +811,7 @@ final class ServerAcceptStream implements MessageConsumer
 
         if (writableBytes > 0)
         {
-            FrameFW frameFW = factory.frameRO.wrap(payload, offset, length);
+            FrameFW frameFW = factory.frameRO.wrap(payload, offset, offset + length);
             factory.writer.doHttpData(target, targetId, frameFW.trace(), targetPadding, payload, offset, writableBytes);
             targetBudget -= writableBytes + targetPadding;
             contentRemaining -= writableBytes;
@@ -903,7 +903,7 @@ final class ServerAcceptStream implements MessageConsumer
 
         if (writableBytes > 0)
         {
-            FrameFW frameFW = factory.frameRO.wrap(payload, offset, length);
+            FrameFW frameFW = factory.frameRO.wrap(payload, offset, offset + length);
             factory.writer.doHttpData(target, targetId, frameFW.trace(), targetPadding, payload, offset, writableBytes);
             targetBudget -= writableBytes + targetPadding;
             chunkSizeRemaining -= writableBytes;
@@ -947,7 +947,7 @@ final class ServerAcceptStream implements MessageConsumer
             final int limit)
     {
         // TODO: consider chunks, trailers
-        FrameFW frameFW = factory.frameRO.wrap(payload, offset, limit);
+        FrameFW frameFW = factory.frameRO.wrap(payload, offset, offset + limit);
         factory.writer.doHttpEnd(target, targetId, frameFW.trace());
         return limit;
     };

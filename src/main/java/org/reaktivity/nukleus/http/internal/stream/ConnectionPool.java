@@ -224,7 +224,7 @@ final class ConnectionPool
                 release(this);
                 if (connectReplyThrottle != null)
                 {
-                    ResetFW resetFW = factory.resetRO.wrap(buffer, index, length);
+                    ResetFW resetFW = factory.resetRO.wrap(buffer, index, index + length);
                     factory.writer.doReset(connectReplyThrottle, connectReplyStreamId, resetFW.trace());
                 }
                 break;

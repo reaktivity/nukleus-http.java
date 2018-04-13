@@ -36,7 +36,13 @@ import org.reaktivity.nukleus.function.MessageConsumer;
 import org.reaktivity.nukleus.http.internal.stream.ConnectionPool.CloseAction;
 import org.reaktivity.nukleus.http.internal.stream.ConnectionPool.Connection;
 import org.reaktivity.nukleus.http.internal.types.OctetsFW;
-import org.reaktivity.nukleus.http.internal.types.stream.*;
+import org.reaktivity.nukleus.http.internal.types.stream.AbortFW;
+import org.reaktivity.nukleus.http.internal.types.stream.BeginFW;
+import org.reaktivity.nukleus.http.internal.types.stream.DataFW;
+import org.reaktivity.nukleus.http.internal.types.stream.EndFW;
+import org.reaktivity.nukleus.http.internal.types.stream.ResetFW;
+import org.reaktivity.nukleus.http.internal.types.stream.WindowFW;
+import org.reaktivity.nukleus.http.internal.types.stream.FrameFW;
 
 final class ClientConnectReplyStream implements MessageConsumer
 {
@@ -77,7 +83,6 @@ final class ClientConnectReplyStream implements MessageConsumer
     private Consumer<WindowFW> windowHandler;
 
     private int acceptReplyPadding;
-    private long networkReplyTraceId;
 
     @Override
     public String toString()
@@ -421,7 +426,6 @@ final class ClientConnectReplyStream implements MessageConsumer
         DataFW data)
     {
         connectReplyBudget -= data.length() + data.padding();
-        networkReplyTraceId = data.trace();
 
         if (connectReplyBudget < 0)
         {
@@ -562,7 +566,7 @@ final class ClientConnectReplyStream implements MessageConsumer
 
             resolveTarget();
 
-            FrameFW frameFW = factory.frameRO.wrap(payload, offset, length);
+            FrameFW frameFW = factory.frameRO.wrap(payload, offset, offset + length);
             factory.writer.doHttpBegin(acceptReply, acceptReplyId, frameFW.trace(), 0L, acceptCorrelationId,
                     hs -> headers.forEach((k, v) -> hs.item(i -> i.representation((byte) 0).name(k).value(v))));
             factory.router.setThrottle(acceptReplyName, acceptReplyId, this::handleThrottle);
@@ -681,7 +685,7 @@ final class ClientConnectReplyStream implements MessageConsumer
 
         if (writableBytes > 0)
         {
-            FrameFW frameFW = factory.frameRO.wrap(payload, offset, length);
+            FrameFW frameFW = factory.frameRO.wrap(payload, offset, offset + length);
             factory.writer.doHttpData(acceptReply, acceptReplyId,  frameFW.trace(), acceptReplyPadding, payload,
                     offset, writableBytes);
             acceptReplyBudget -= writableBytes + acceptReplyPadding;
@@ -778,7 +782,7 @@ final class ClientConnectReplyStream implements MessageConsumer
 
         if (writableBytes > 0)
         {
-            FrameFW frameFW = factory.frameRO.wrap(payload, offset, limit);
+            FrameFW frameFW = factory.frameRO.wrap(payload, offset, offset + limit);
             long traceId = frameFW.trace();
             factory.writer.doHttpData(acceptReply, acceptReplyId, traceId, acceptReplyPadding, payload, offset, writableBytes);
             acceptReplyBudget -= writableBytes + acceptReplyPadding;
@@ -805,7 +809,8 @@ final class ClientConnectReplyStream implements MessageConsumer
 
         if (writableBytes > 0)
         {
-            factory.writer.doData(acceptReply, acceptReplyId, networkReplyTraceId, acceptReplyPadding,
+            FrameFW frameFW = factory.frameRO.wrap(payload, offset, offset + limit);
+            factory.writer.doData(acceptReply, acceptReplyId, frameFW.trace(), acceptReplyPadding,
                     payload, offset, writableBytes);
             acceptReplyBudget -= writableBytes + acceptReplyPadding;
         }
@@ -828,7 +833,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         int limit)
     {
         // TODO: consider chunks, trailers
-        FrameFW frameFW = factory.frameRO.wrap(payload, offset, limit);
+        FrameFW frameFW = factory.frameRO.wrap(payload, offset, offset + limit);
         factory.writer.doHttpEnd(acceptReply, acceptReplyId, frameFW.trace());
         connectionPool.release(connection, CloseAction.END);
         return limit;
