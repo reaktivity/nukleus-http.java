@@ -32,7 +32,13 @@ import org.reaktivity.nukleus.http.internal.stream.ConnectionPool.CloseAction;
 import org.reaktivity.nukleus.http.internal.stream.ConnectionPool.Connection;
 import org.reaktivity.nukleus.http.internal.stream.ConnectionPool.ConnectionRequest;
 import org.reaktivity.nukleus.http.internal.types.OctetsFW;
-import org.reaktivity.nukleus.http.internal.types.stream.*;
+import org.reaktivity.nukleus.http.internal.types.stream.AbortFW;
+import org.reaktivity.nukleus.http.internal.types.stream.BeginFW;
+import org.reaktivity.nukleus.http.internal.types.stream.DataFW;
+import org.reaktivity.nukleus.http.internal.types.stream.EndFW;
+import org.reaktivity.nukleus.http.internal.types.stream.ResetFW;
+import org.reaktivity.nukleus.http.internal.types.stream.WindowFW;
+import org.reaktivity.nukleus.http.internal.types.stream.FrameFW;
 
 final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection>, MessageConsumer
 {
@@ -206,6 +212,8 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
             }
             else
             {
+                acceptTraceId = factory.frameRO.wrap(buffer, index, index + length).trace();
+
                 slot.putBytes(0, bytes);
                 slotPosition = bytes.length;
                 slotOffset = 0;
