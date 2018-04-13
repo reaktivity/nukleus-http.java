@@ -130,10 +130,11 @@ public final class ServerStreamFactory implements StreamFactory
         if (route != null)
         {
             final long acceptId = begin.streamId();
+            final long acceptTraceId = begin.trace();
             final long acceptCorrelationId = begin.correlationId();
 
             newStream = new ServerAcceptStream(this, acceptThrottle,
-                    acceptId, acceptRef, acceptName, acceptCorrelationId, authorization);
+                    acceptId, acceptTraceId, acceptRef, acceptName, acceptCorrelationId, authorization);
         }
 
         return newStream;
@@ -143,8 +144,9 @@ public final class ServerStreamFactory implements StreamFactory
     {
         final String connectReplyName = begin.source().asString();
         final long connectReplyId = begin.streamId();
+        final long connectReplyTraceId = begin.trace();
 
-        return new ServerConnectReplyStream(this, connectReplyThrottle, connectReplyId,
+        return new ServerConnectReplyStream(this, connectReplyThrottle, connectReplyId, connectReplyTraceId,
                 connectReplyName);
     }
 
