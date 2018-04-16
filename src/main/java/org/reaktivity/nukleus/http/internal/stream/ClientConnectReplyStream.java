@@ -833,7 +833,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         int limit)
     {
         // TODO: consider chunks, trailers
-        FrameFW frameFW = factory.frameRO.wrap(payload, offset, payload.capacity());
+        FrameFW frameFW = factory.frameRO.wrap(payload, offset, limit);
         factory.writer.doHttpEnd(acceptReply, acceptReplyId, frameFW.trace());
         connectionPool.release(connection, CloseAction.END);
         return limit;
