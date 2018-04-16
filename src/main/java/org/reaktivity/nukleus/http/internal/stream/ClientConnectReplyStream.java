@@ -566,7 +566,7 @@ final class ClientConnectReplyStream implements MessageConsumer
 
             resolveTarget();
 
-            FrameFW frameFW = factory.frameRO.wrap(payload, offset, offset + length);
+            FrameFW frameFW = factory.frameRO.wrap(payload, offset, payload.capacity());
             factory.writer.doHttpBegin(acceptReply, acceptReplyId, frameFW.trace(), 0L, acceptCorrelationId,
                     hs -> headers.forEach((k, v) -> hs.item(i -> i.representation((byte) 0).name(k).value(v))));
             factory.router.setThrottle(acceptReplyName, acceptReplyId, this::handleThrottle);
@@ -685,7 +685,7 @@ final class ClientConnectReplyStream implements MessageConsumer
 
         if (writableBytes > 0)
         {
-            FrameFW frameFW = factory.frameRO.wrap(payload, offset, offset + length);
+            FrameFW frameFW = factory.frameRO.wrap(payload, offset, payload.capacity());
             factory.writer.doHttpData(acceptReply, acceptReplyId,  frameFW.trace(), acceptReplyPadding, payload,
                     offset, writableBytes);
             acceptReplyBudget -= writableBytes + acceptReplyPadding;
@@ -782,7 +782,7 @@ final class ClientConnectReplyStream implements MessageConsumer
 
         if (writableBytes > 0)
         {
-            FrameFW frameFW = factory.frameRO.wrap(payload, offset, offset + limit);
+            FrameFW frameFW = factory.frameRO.wrap(payload, offset, payload.capacity());
             long traceId = frameFW.trace();
             factory.writer.doHttpData(acceptReply, acceptReplyId, traceId, acceptReplyPadding, payload, offset, writableBytes);
             acceptReplyBudget -= writableBytes + acceptReplyPadding;
@@ -809,7 +809,7 @@ final class ClientConnectReplyStream implements MessageConsumer
 
         if (writableBytes > 0)
         {
-            FrameFW frameFW = factory.frameRO.wrap(payload, offset, offset + limit);
+            FrameFW frameFW = factory.frameRO.wrap(payload, offset, payload.capacity());
             factory.writer.doData(acceptReply, acceptReplyId, frameFW.trace(), acceptReplyPadding,
                     payload, offset, writableBytes);
             acceptReplyBudget -= writableBytes + acceptReplyPadding;
@@ -833,7 +833,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         int limit)
     {
         // TODO: consider chunks, trailers
-        FrameFW frameFW = factory.frameRO.wrap(payload, offset, offset + limit);
+        FrameFW frameFW = factory.frameRO.wrap(payload, offset, limit);
         factory.writer.doHttpEnd(acceptReply, acceptReplyId, frameFW.trace());
         connectionPool.release(connection, CloseAction.END);
         return limit;
