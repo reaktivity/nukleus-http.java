@@ -438,13 +438,14 @@ final class ServerAcceptStream implements MessageConsumer
             int index,
             int length)
     {
+        Correlation correlation = factory.correlations.remove(acceptCorrelationId);
         factory.writer.doAbort(acceptReply, replyStreamId);
         if (targetBeginIssued)
         {
             factory.writer.doAbort(target, targetId);
 
         }
-        if (factory.correlations.remove(acceptCorrelationId) == null &&
+        if (correlation == null &&
                 cleanupConnectReply != null)
         {
             cleanupConnectReply.run();
