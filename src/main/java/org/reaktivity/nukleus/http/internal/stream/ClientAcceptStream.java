@@ -347,11 +347,9 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         int length)
     {
         FrameFW frame = this.factory.frameRO.wrap(buffer, index, index + length);
-
         final long streamId = frame.streamId();
-        final long traceId = frame.trace();
 
-        factory.writer.doReset(acceptThrottle, streamId, traceId);
+        factory.writer.doReset(acceptThrottle, streamId, 0);
 
         this.streamState = this::streamAfterReplyOrReset;
     }
