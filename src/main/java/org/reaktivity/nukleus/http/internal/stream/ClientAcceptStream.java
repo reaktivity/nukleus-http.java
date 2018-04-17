@@ -64,7 +64,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
     private int slotOffset;
     private boolean endDeferred;
     private boolean persistent = true;
-    private long acceptTraceId;
+    private long traceId;
 
 
     ClientAcceptStream(ClientStreamFactory factory, MessageConsumer acceptThrottle,
@@ -211,7 +211,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
             }
             else
             {
-                acceptTraceId = factory.frameRO.wrap(buffer, index, index + length).trace();
+                traceId = factory.frameRO.wrap(buffer, index, index + length).trace();
                 slot.putBytes(0, bytes);
                 slotPosition = bytes.length;
                 slotOffset = 0;
@@ -434,7 +434,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
     {
         int writableBytes = Math.min(slotPosition - slotOffset, connection.budget);
         MutableDirectBuffer slot = this.factory.bufferPool.buffer(slotIndex);
-        factory.writer.doData(target, connection.connectStreamId, acceptTraceId, connection.padding, slot,
+        factory.writer.doData(target, connection.connectStreamId, traceId, connection.padding, slot,
                 slotOffset, writableBytes);
         connection.budget -= writableBytes;
         slotOffset += writableBytes;
