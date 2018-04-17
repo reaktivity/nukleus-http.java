@@ -83,7 +83,7 @@ final class ServerAcceptStream implements MessageConsumer
     private boolean hasUpgrade;
     private Correlation<ServerAcceptState> correlation;
     private boolean targetBeginIssued;
-    private long acceptTraceId;
+    private long traceId;
 
     @Override
     public String toString()
@@ -93,7 +93,7 @@ final class ServerAcceptStream implements MessageConsumer
     }
 
     ServerAcceptStream(ServerStreamFactory factory, MessageConsumer acceptThrottle,
-                       long acceptId, long acceptTraceId, long acceptRef, String acceptName, long acceptCorrelationId,
+                       long acceptId, long traceId, long acceptRef, String acceptName, long acceptCorrelationId,
                        long authorization)
     {
         this.factory = factory;
@@ -101,7 +101,7 @@ final class ServerAcceptStream implements MessageConsumer
         this.throttleState = this::throttleIgnoreWindow;
         this.acceptThrottle = acceptThrottle;
         this.acceptId = acceptId;
-        this.acceptTraceId = acceptTraceId;
+        this.traceId = traceId;
         this.acceptRef = acceptRef;
         this.acceptCorrelationId = acceptCorrelationId;
         this.authorization = authorization;
@@ -208,9 +208,8 @@ final class ServerAcceptStream implements MessageConsumer
         {
             DataFW data = factory.dataRO.wrap(buffer, index, index + length);
             final long streamId = data.streamId();
-            final long traceId = data.trace();
 
-            factory.writer.doWindow(acceptThrottle, streamId, traceId, data.length(), 0);
+            factory.writer.doWindow(acceptThrottle, streamId, 0, data.length(), 0);
         }
         else if (msgTypeId == EndFW.TYPE_ID)
         {
@@ -226,16 +225,14 @@ final class ServerAcceptStream implements MessageConsumer
     {
         FrameFW frame = factory.frameRO.wrap(buffer, index, index + length);
         long streamId = frame.streamId();
-        long traceId = frame.trace();
 
-        processUnexpected(streamId, traceId);
+        processUnexpected(streamId);
     }
 
     private void processUnexpected(
-        long streamId,
-        long traceId)
+        long streamId)
     {
-        factory.writer.doReset(acceptThrottle, streamId, traceId);
+        factory.writer.doReset(acceptThrottle, streamId, 0);
 
         this.streamState = this::streamAfterReset;
     }
@@ -249,11 +246,11 @@ final class ServerAcceptStream implements MessageConsumer
         {
             // Drain data from source before resetting to allow its writes to complete
             throttleState = ServerAcceptStream.this::throttlePropagateWindow;
-            doSourceWindow(maximumHeadersSize, 0, 0L);
+            doSourceWindow(maximumHeadersSize, 0, 0);
 
             // We can't write back an HTTP error response because we already forwarded the request to the target
-            factory.writer.doReset(acceptThrottle, acceptId, acceptTraceId);
-            factory.writer.doHttpEnd(target, targetId, 0L);
+            factory.writer.doReset(acceptThrottle, acceptId, 0);
+            factory.writer.doHttpEnd(target, targetId, 0);
             doEnd(0L);
         }
         else
@@ -289,7 +286,7 @@ final class ServerAcceptStream implements MessageConsumer
         if (writableBytes > 0)
         {
             acceptState.acceptReplyBudget -= writableBytes + acceptState.acceptReplyPadding;
-            factory.writer.doData(target, targetId, acceptTraceId, acceptState.acceptReplyPadding,
+            factory.writer.doData(target, targetId, 0, acceptState.acceptReplyPadding,
                     payload, 0, writableBytes);
         }
         if (writableBytes < payload.capacity())
@@ -307,14 +304,14 @@ final class ServerAcceptStream implements MessageConsumer
                         WindowFW window = factory.windowRO.wrap(buffer, index, index + length);
                         acceptState.acceptReplyBudget += window.credit();
                         acceptState.acceptReplyPadding = window.padding();
-                        acceptTraceId = window.trace();
+                        traceId = window.trace();
                         int writableBytes = Math.max(
                             Math.min(acceptState.acceptReplyBudget - acceptState.acceptReplyPadding,
                                      payload.capacity() - offset), 0);
                         if (writableBytes > 0)
                         {
                             acceptState.acceptReplyBudget -= writableBytes + acceptState.acceptReplyPadding;
-                            ServerAcceptStream.this.factory.writer.doData(target, targetId, acceptTraceId,
+                            ServerAcceptStream.this.factory.writer.doData(target, targetId, 0,
                                     acceptState.acceptReplyPadding, payload, offset, writableBytes);
                             offset += writableBytes;
                         }
@@ -322,8 +319,8 @@ final class ServerAcceptStream implements MessageConsumer
                         {
                             // Drain data from source before resetting to allow its writes to complete
                             throttleState = ServerAcceptStream.this::throttlePropagateWindow;
-                            doSourceWindow(ServerAcceptStream.this.maximumHeadersSize, 0, 0);
-                            ServerAcceptStream.this.factory.writer.doReset(acceptThrottle, acceptId, acceptTraceId);
+                            doSourceWindow(ServerAcceptStream.this.maximumHeadersSize, 0, window.trace());
+                            ServerAcceptStream.this.factory.writer.doReset(acceptThrottle, acceptId, 0);
                         }
                         break;
                     case ResetFW.TYPE_ID:
@@ -342,7 +339,7 @@ final class ServerAcceptStream implements MessageConsumer
             // Drain data from source before resetting to allow its writes to complete
             throttleState = ServerAcceptStream.this::throttlePropagateWindow;
             doSourceWindow(maximumHeadersSize, 0, 0);
-            factory.writer.doReset(acceptThrottle, acceptId, acceptTraceId);
+            factory.writer.doReset(acceptThrottle, acceptId, 0);
         }
     }
 
@@ -359,10 +356,11 @@ final class ServerAcceptStream implements MessageConsumer
         final MessageConsumer acceptReply = factory.router.supplyTarget(acceptName);
         ServerAcceptState state = new ServerAcceptState(acceptName, replyStreamId, acceptReply, factory.writer,
                  this::loopBackThrottle, factory.router);
-        factory.writer.doBegin(acceptReply, replyStreamId, acceptTraceId, 0L, acceptCorrelationId);
+        FrameFW frameFW = factory.frameRO.wrap(buffer, index, index + length);
+        factory.writer.doBegin(acceptReply, replyStreamId, frameFW.trace(), 0L, acceptCorrelationId);
         this.correlation = new Correlation<>(acceptCorrelationId, acceptName, state);
 
-        doSourceWindow(maximumHeadersSize, 0, 0L);
+        doSourceWindow(maximumHeadersSize, 0, 0);
     }
 
     private void processData(
@@ -371,7 +369,7 @@ final class ServerAcceptStream implements MessageConsumer
         int length)
     {
         DataFW data = factory.dataRO.wrap(buffer, index, index + length);
-        acceptTraceId = data.typeId();
+        traceId = data.typeId();
 
         sourceBudget -= data.length() + data.padding();
 
@@ -1121,7 +1119,7 @@ final class ServerAcceptStream implements MessageConsumer
     {
         targetBudget += window.credit();
         targetPadding = window.padding();
-        acceptTraceId = window.trace();
+        traceId = window.trace();
         if (slotIndex != NO_SLOT)
         {
             processDeferredData();
@@ -1134,7 +1132,7 @@ final class ServerAcceptStream implements MessageConsumer
     {
         targetBudget += window.credit();
         targetPadding = window.padding();
-        acceptTraceId = window.trace();
+        traceId = window.trace();
         if (slotIndex != NO_SLOT)
         {
             processDeferredData();
@@ -1177,9 +1175,9 @@ final class ServerAcceptStream implements MessageConsumer
     private void processReset(
         ResetFW reset)
     {
-        acceptTraceId = reset.trace();
+        traceId = reset.trace();
         releaseSlotIfNecessary();
-        factory.writer.doReset(acceptThrottle, acceptId, acceptTraceId);
+        factory.writer.doReset(acceptThrottle, acceptId, traceId);
     }
 
     private void switchTarget(String newTargetName, long newTargetId)

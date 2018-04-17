@@ -138,10 +138,10 @@ final class ConnectionPool
                 switch(action)
                 {
                 case END:
-                    factory.writer.doEnd(connect, connection.connectStreamId, 0L);
+                    factory.writer.doEnd(connect, connection.connectStreamId, 0);
                     break;
                 case ABORT:
-                    factory.writer.doAbort(connect, connection.connectStreamId, 0L);
+                    factory.writer.doAbort(connect, connection.connectStreamId, 0);
                 }
                 connection.endOrAbortSent = true;
             }

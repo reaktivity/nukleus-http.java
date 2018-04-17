@@ -173,8 +173,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         case DataFW.TYPE_ID:
             DataFW data = this.factory.dataRO.wrap(buffer, index, index + length);
             final long streamId = data.streamId();
-            final long traceId = data.trace();
-            factory.writer.doWindow(acceptThrottle, streamId, traceId, data.length(), 0);
+            factory.writer.doWindow(acceptThrottle, streamId, 0L, data.length(), 0);
             break;
         case EndFW.TYPE_ID:
             factory.endRO.wrap(buffer, index, index + length);
@@ -213,7 +212,6 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
             else
             {
                 acceptTraceId = factory.frameRO.wrap(buffer, index, index + length).trace();
-
                 slot.putBytes(0, bytes);
                 slotPosition = bytes.length;
                 slotOffset = 0;

@@ -69,6 +69,7 @@ final class ClientConnectReplyStream implements MessageConsumer
 
     private MessageConsumer acceptReply;
     private long acceptReplyId;
+    private long traceId;
     private String acceptReplyName;
 
     private long acceptCorrelationId;
@@ -221,7 +222,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         {
         case DataFW.TYPE_ID:
             final DataFW data = this.factory.dataRO.wrap(buffer, index, index + length);
-            factory.writer.doWindow(connectReplyThrottle, data.streamId(), data.trace(), data.length(), 0);
+            factory.writer.doWindow(connectReplyThrottle, data.streamId(), 0, data.length(), 0);
             break;
         case EndFW.TYPE_ID:
             this.factory.endRO.wrap(buffer, index, index + length);
@@ -243,19 +244,17 @@ final class ClientConnectReplyStream implements MessageConsumer
     {
         FrameFW frameFW = this.factory.frameRO.wrap(buffer, index, index + length);
         long streamId = frameFW.streamId();
-        long traceId = frameFW.trace();
 
-        handleUnexpected(streamId, traceId);
+        handleUnexpected(streamId);
     }
 
     private void handleUnexpected(
-        long streamId,
-        long traceId)
+        long streamId)
     {
-        factory.writer.doReset(connectReplyThrottle, streamId, traceId);
+        factory.writer.doReset(connectReplyThrottle, streamId, 0);
         if (acceptReply != null)
         {
-            factory.writer.doAbort(acceptReply, acceptReplyId, traceId);
+            factory.writer.doAbort(acceptReply, acceptReplyId, 0);
         }
 
         this.streamState = this::handleStreamAfterReset;
@@ -290,7 +289,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         this.sourceId = begin.streamId();
         final long sourceRef = begin.sourceRef();
         long connectCorrelationId = begin.correlationId();
-        final long traceId =  begin.trace();
+        traceId = begin.trace();
 
         @SuppressWarnings("unchecked")
         final Correlation<ClientConnectReplyState> correlation =
@@ -304,7 +303,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         }
         else
         {
-            handleUnexpected(sourceId, traceId);
+            handleUnexpected(sourceId);
         }
     }
 
@@ -315,7 +314,7 @@ final class ClientConnectReplyStream implements MessageConsumer
 
         if (connectReplyBudget < 0)
         {
-            handleUnexpected(data.streamId(), data.trace());
+            handleUnexpected(data.streamId());
         }
         else
         {
@@ -429,7 +428,7 @@ final class ClientConnectReplyStream implements MessageConsumer
 
         if (connectReplyBudget < 0)
         {
-            handleUnexpected(data.streamId(), data.trace());
+            handleUnexpected(data.streamId());
         }
         else
         {
