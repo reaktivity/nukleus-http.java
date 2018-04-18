@@ -38,6 +38,7 @@ import org.reaktivity.nukleus.http.internal.types.stream.DataFW;
 import org.reaktivity.nukleus.http.internal.types.stream.EndFW;
 import org.reaktivity.nukleus.http.internal.types.stream.ResetFW;
 import org.reaktivity.nukleus.http.internal.types.stream.WindowFW;
+import org.reaktivity.nukleus.http.internal.types.stream.FrameFW;
 
 final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection>, MessageConsumer
 {
@@ -63,6 +64,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
     private int slotOffset;
     private boolean endDeferred;
     private boolean persistent = true;
+    private long traceId;
 
 
     ClientAcceptStream(ClientStreamFactory factory, MessageConsumer acceptThrottle,
@@ -171,7 +173,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         case DataFW.TYPE_ID:
             DataFW data = this.factory.dataRO.wrap(buffer, index, index + length);
             final long streamId = data.streamId();
-            factory.writer.doWindow(acceptThrottle, streamId, data.length(), 0);
+            factory.writer.doWindow(acceptThrottle, streamId, 0L, data.length(), 0);
             break;
         case EndFW.TYPE_ID:
             factory.endRO.wrap(buffer, index, index + length);
@@ -192,7 +194,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         slotIndex = this.factory.bufferPool.acquire(acceptId);
         if (slotIndex == BufferPool.NO_SLOT)
         {
-            factory.writer.doReset(acceptThrottle, acceptId);
+            factory.writer.doReset(acceptThrottle, acceptId, 0L);
             this.streamState = this::streamAfterReplyOrReset;
         }
         else
@@ -204,11 +206,12 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
             if (bytes.length > slot.capacity())
             {
                 // TODO: diagnostics (reset reason?)
-                factory.writer.doReset(acceptThrottle, acceptId);
+                factory.writer.doReset(acceptThrottle, acceptId, 0L);
                 factory.bufferPool.release(slotIndex);
             }
             else
             {
+                traceId = factory.frameRO.wrap(buffer, index, index + length).trace();
                 slot.putBytes(0, bytes);
                 slotPosition = bytes.length;
                 slotOffset = 0;
@@ -308,6 +311,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         int length)
     {
         DataFW data = factory.dataRO.wrap(buffer, index, index + length);
+        final long traceId = data.trace();
 
         sourceBudget -= data.length() + data.padding();
         if (sourceBudget < 0)
@@ -317,7 +321,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         else
         {
             final OctetsFW payload = this.factory.dataRO.payload();
-            factory.writer.doData(target, connection.connectStreamId, connection.padding, payload);
+            factory.writer.doData(target, connection.connectStreamId, traceId, connection.padding, payload);
             connection.budget -= payload.sizeof();
         }
     }
@@ -342,11 +346,10 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         int index,
         int length)
     {
-        this.factory.frameRO.wrap(buffer, index, index + length);
+        FrameFW frame = this.factory.frameRO.wrap(buffer, index, index + length);
+        final long streamId = frame.streamId();
 
-        final long streamId = this.factory.frameRO.streamId();
-
-        factory.writer.doReset(acceptThrottle, streamId);
+        factory.writer.doReset(acceptThrottle, streamId, 0);
 
         this.streamState = this::streamAfterReplyOrReset;
     }
@@ -409,12 +412,12 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         switch (msgTypeId)
         {
         case WindowFW.TYPE_ID:
-            this.factory.windowRO.wrap(buffer, index, index + length);
+            WindowFW windowFW = this.factory.windowRO.wrap(buffer, index, index + length);
             int credit = this.factory.windowRO.credit();
             int padding = this.factory.windowRO.padding();
             connection.budget += credit;
             connection.padding = padding;
-            doSourceWindow(credit, padding);
+            doSourceWindow(credit, padding, windowFW.trace());
             break;
         case ResetFW.TYPE_ID:
             processReset(buffer, index, length);
@@ -429,7 +432,8 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
     {
         int writableBytes = Math.min(slotPosition - slotOffset, connection.budget);
         MutableDirectBuffer slot = this.factory.bufferPool.buffer(slotIndex);
-        factory.writer.doData(target, connection.connectStreamId, connection.padding, slot, slotOffset, writableBytes);
+        factory.writer.doData(target, connection.connectStreamId, traceId, connection.padding, slot,
+                slotOffset, writableBytes);
         connection.budget -= writableBytes;
         slotOffset += writableBytes;
         int bytesDeferred = slotPosition - slotOffset;
@@ -447,16 +451,16 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
                 throttleState = this::throttleNextWindow;
                 if (connection.budget > 0)
                 {
-                    doSourceWindow(connection.budget, connection.padding);
+                    doSourceWindow(connection.budget, connection.padding, 0L);
                 }
             }
         }
     }
 
-    private void doSourceWindow(int credit, int padding)
+    private void doSourceWindow(int credit, int padding, long traceId)
     {
         sourceBudget += credit;
-        factory.writer.doWindow(acceptThrottle, acceptId, credit, padding);
+        factory.writer.doWindow(acceptThrottle, acceptId, traceId, credit, padding);
     }
 
     private void processAbort(
@@ -485,11 +489,11 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         int index,
         int length)
     {
-        factory.resetRO.wrap(buffer, index, index + length);
+        ResetFW resetFW = factory.resetRO.wrap(buffer, index, index + length);
         releaseSlotIfNecessary();
         connection.persistent = false;
         connectionPool.release(connection);
-        factory.writer.doReset(acceptThrottle, acceptId);
+        factory.writer.doReset(acceptThrottle, acceptId, resetFW.trace());
     }
 
     private void releaseSlotIfNecessary()
