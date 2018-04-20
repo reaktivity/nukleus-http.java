@@ -82,6 +82,7 @@ public final class ClientStreamFactory implements StreamFactory
     final LongSupplier incrementDequeues;
     final BufferPool bufferPool;
     final MessageWriter writer;
+    long supplyTraceId;
 
     final int maximumHeadersSize;
 
@@ -127,6 +128,7 @@ public final class ClientStreamFactory implements StreamFactory
     {
         final BeginFW begin = beginRO.wrap(buffer, index, index + length);
         final long sourceRef = begin.sourceRef();
+        this.supplyTraceId = begin.trace();
 
         MessageConsumer newStream;
 

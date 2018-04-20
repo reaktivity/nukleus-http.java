@@ -61,11 +61,13 @@ final class MessageWriter
     void doBegin(
         MessageConsumer stream,
         long targetId,
+        long traceId,
         long targetRef,
         long correlationId)
     {
         BeginFW begin = beginRW.wrap(writeBuffer, 0, writeBuffer.capacity())
                 .streamId(targetId)
+                .trace(traceId)
                 .source(SOURCE_NAME_BUFFER, 0, SOURCE_NAME_BUFFER.capacity())
                 .sourceRef(targetRef)
                 .correlationId(correlationId)
@@ -78,6 +80,7 @@ final class MessageWriter
     void doData(
         MessageConsumer stream,
         long streamId,
+        long traceId,
         int padding,
         DirectBuffer payload,
         int offset,
@@ -85,6 +88,7 @@ final class MessageWriter
     {
         DataFW data = dataRW.wrap(writeBuffer, 0, writeBuffer.capacity())
                 .streamId(streamId)
+                .trace(traceId)
                 .groupId(0)
                 .padding(padding)
                 .payload(p -> p.set(payload, offset, length))
@@ -97,11 +101,13 @@ final class MessageWriter
     public void doData(
         MessageConsumer stream,
         long streamId,
+        long traceId,
         int padding,
         OctetsFW payload)
     {
         DataFW data = dataRW.wrap(writeBuffer, 0, writeBuffer.capacity())
                 .streamId(streamId)
+                .trace(traceId)
                 .groupId(0)
                 .padding(padding)
                 .payload(p -> p.set(payload))
@@ -113,20 +119,23 @@ final class MessageWriter
 
     void doEnd(
         MessageConsumer stream,
-        long targetId)
+        long targetId,
+        long traceId)
     {
         EndFW end = endRW.wrap(writeBuffer, 0, writeBuffer.capacity())
                 .streamId(targetId)
+                .trace(traceId)
                 .extension(e -> e.reset())
                 .build();
 
         stream.accept(end.typeId(), end.buffer(), end.offset(), end.sizeof());
     }
 
-    void doAbort(MessageConsumer stream, long targetId)
+    void doAbort(MessageConsumer stream, long targetId, long trace)
     {
         AbortFW abort = abortRW.wrap(writeBuffer, 0, writeBuffer.capacity())
                 .streamId(targetId)
+                .trace(trace)
                 .extension(e -> e.reset())
                 .build();
         stream.accept(abort.typeId(), abort.buffer(), abort.offset(), abort.sizeof());
@@ -135,12 +144,14 @@ final class MessageWriter
     void doHttpBegin(
         MessageConsumer stream,
         long targetId,
+        long traceId,
         long targetRef,
         long correlationId,
         Consumer<ListFW.Builder<HttpHeaderFW.Builder, HttpHeaderFW>> mutator)
     {
         BeginFW begin = beginRW.wrap(writeBuffer, 0, writeBuffer.capacity())
                 .streamId(targetId)
+                .trace(traceId)
                 .source(SOURCE_NAME_BUFFER, 0, SOURCE_NAME_BUFFER.capacity())
                 .sourceRef(targetRef)
                 .correlationId(correlationId)
@@ -153,6 +164,7 @@ final class MessageWriter
     void doHttpData(
         MessageConsumer stream,
         long targetId,
+        long traceId,
         int padding,
         DirectBuffer payload,
         int offset,
@@ -160,6 +172,7 @@ final class MessageWriter
     {
         DataFW data = dataRW.wrap(writeBuffer, 0, writeBuffer.capacity())
                 .streamId(targetId)
+                .trace(traceId)
                 .groupId(0)
                 .padding(padding)
                 .payload(p -> p.set(payload, offset, length))
@@ -171,10 +184,12 @@ final class MessageWriter
 
     void doHttpEnd(
         MessageConsumer stream,
-        long targetId)
+        long targetId,
+        long traceId)
     {
         EndFW end = endRW.wrap(writeBuffer, 0, writeBuffer.capacity())
                 .streamId(targetId)
+                .trace(traceId)
                 .extension(e -> e.reset())
                 .build();
 
@@ -184,11 +199,13 @@ final class MessageWriter
     void doWindow(
         final MessageConsumer throttle,
         final long throttleId,
+        final long traceId,
         final int credit,
         final int padding)
     {
         final WindowFW window = windowRW.wrap(writeBuffer, 0, writeBuffer.capacity())
                 .streamId(throttleId)
+                .trace(traceId)
                 .credit(credit)
                 .padding(padding)
                 .groupId(0)
@@ -199,11 +216,13 @@ final class MessageWriter
 
     void doReset(
         final MessageConsumer throttle,
-        final long throttleId)
+        final long throttleId,
+        final long traceId)
     {
         final ResetFW reset = resetRW.wrap(writeBuffer, 0, writeBuffer.capacity())
-               .streamId(throttleId)
-               .build();
+                .streamId(throttleId)
+                .trace(traceId)
+                .build();
 
         throttle.accept(reset.typeId(), reset.buffer(), reset.offset(), reset.sizeof());
     }

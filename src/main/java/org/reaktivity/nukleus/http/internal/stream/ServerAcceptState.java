@@ -71,11 +71,11 @@ final class ServerAcceptState
         setThrottle.accept(initialThrottle);
     }
 
-    public void doEnd(MessageWriter writer)
+    public void doEnd(MessageWriter writer, long traceId)
     {
         if (pendingRequests == 0)
         {
-            writer.doEnd(acceptReply, replyStreamId);
+            writer.doEnd(acceptReply, replyStreamId, traceId);
             // TODO: unset throttle on acceptReply
         }
         else
@@ -84,9 +84,9 @@ final class ServerAcceptState
         }
     }
 
-    public void doAbort(MessageWriter writer)
+    public void doAbort(MessageWriter writer, long traceId)
     {
-        writer.doAbort(acceptReply, replyStreamId);
+        writer.doAbort(acceptReply, replyStreamId, traceId);
     }
 }
 
