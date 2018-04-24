@@ -34,6 +34,7 @@ import org.reaktivity.nukleus.http.internal.types.stream.FrameFW;
 import org.reaktivity.nukleus.http.internal.types.stream.HttpBeginExFW;
 import org.reaktivity.nukleus.http.internal.types.stream.ResetFW;
 import org.reaktivity.nukleus.http.internal.types.stream.WindowFW;
+import org.reaktivity.nukleus.http.internal.types.stream.AbortFW;
 
 public final class ServerConnectReplyStream implements MessageConsumer
 {
@@ -143,6 +144,9 @@ public final class ServerConnectReplyStream implements MessageConsumer
         case EndFW.TYPE_ID:
             processEnd(buffer, index, length);
             break;
+        case AbortFW.TYPE_ID:
+            processAbort(buffer, index, length);
+            break;
         default:
             processUnexpected(buffer, index, length);
             break;
@@ -177,6 +181,22 @@ public final class ServerConnectReplyStream implements MessageConsumer
         }
     }
 
+    private void processAbort(
+        DirectBuffer buffer,
+        int index,
+        int length)
+    {
+        doCleanup();
+    }
+
+    private void doCleanup()
+    {
+        factory.writer.doReset(connectReplyThrottle, connectReplyId, 0);
+        acceptState.doAbort(factory.writer, 0);
+        this.streamState = this::streamAfterRejectOrReset;
+        releaseSlotIfNecessary();
+    }
+
     private void processBegin(
         DirectBuffer buffer,
         int index,
@@ -196,6 +216,7 @@ public final class ServerConnectReplyStream implements MessageConsumer
         if (sourceRef == 0L && correlation != null)
         {
             acceptState = correlation.state();
+            acceptState.setCleanupConnectReply.accept(this::doCleanup);
 
             Map<String, String> headers = EMPTY_HEADERS;
             if (extension.sizeof() > 0)
@@ -312,6 +333,7 @@ public final class ServerConnectReplyStream implements MessageConsumer
             factory.writer.doEnd(acceptState.acceptReply, acceptState.replyStreamId, traceId);
             acceptState.restoreInitialThrottle();
             this.streamState = this::streamAfterEnd;
+            releaseSlotIfNecessary();
         }
         else
         {

@@ -127,6 +127,27 @@ public class ConnectionManagementIT
     @Test
     @Specification({
         "${route}/server/controller",
+        "${client}/send.end.after.upgrade.request.completed/client",
+        "${server}/send.end.after.upgrade.request.completed/server" })
+    public void shouldSendEndWhenEndReceivedAfterUpgradeRequestCompleted() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/server/controller",
+        "${client}/upgrade.request.and.abort/client",
+        "${server}/upgrade.request.and.abort/server" })
+    public void serverGettingAbortShouldPropagateAbortOnAllDirections() throws Exception
+    {
+        k3po.finish();
+    }
+
+
+    @Test
+    @Specification({
+        "${route}/server/controller",
         "${client}/request.and.upgrade.required.response/client",
         "${server}/request.and.upgrade.required.response/server" })
     public void serverThatSendsUpgradeRequiredMustIncludeUpgradeHeader() throws Exception

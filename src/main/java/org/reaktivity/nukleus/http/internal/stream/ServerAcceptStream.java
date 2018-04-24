@@ -46,6 +46,7 @@ import org.reaktivity.nukleus.http.internal.types.stream.EndFW;
 import org.reaktivity.nukleus.http.internal.types.stream.FrameFW;
 import org.reaktivity.nukleus.http.internal.types.stream.ResetFW;
 import org.reaktivity.nukleus.http.internal.types.stream.WindowFW;
+import org.reaktivity.nukleus.http.internal.types.stream.AbortFW;
 
 final class ServerAcceptStream implements MessageConsumer
 {
@@ -83,6 +84,9 @@ final class ServerAcceptStream implements MessageConsumer
     private boolean hasUpgrade;
     private Correlation<ServerAcceptState> correlation;
     private boolean targetBeginIssued;
+    private Runnable cleanupConnectReply;
+    private long replyStreamId;
+    private MessageConsumer acceptReply;
     private long traceId;
 
     @Override
@@ -166,6 +170,9 @@ final class ServerAcceptStream implements MessageConsumer
         case EndFW.TYPE_ID:
             processEnd(buffer, index, length);
             break;
+        case AbortFW.TYPE_ID:
+            processAbort(buffer, index, length);
+            break;
         default:
             processUnexpected(buffer, index, length);
             break;
@@ -233,7 +240,6 @@ final class ServerAcceptStream implements MessageConsumer
         long streamId)
     {
         factory.writer.doReset(acceptThrottle, streamId, 0);
-
         this.streamState = this::streamAfterReset;
     }
 
@@ -355,12 +361,18 @@ final class ServerAcceptStream implements MessageConsumer
         long replyStreamId = factory.supplyStreamId.getAsLong();
         final MessageConsumer acceptReply = factory.router.supplyTarget(acceptName);
         ServerAcceptState state = new ServerAcceptState(acceptName, replyStreamId, acceptReply, factory.writer,
-                 this::loopBackThrottle, factory.router);
+                 this::loopBackThrottle, factory.router, this::setCleanupConnectReply);
         FrameFW frameFW = factory.frameRO.wrap(buffer, index, index + length);
         factory.writer.doBegin(acceptReply, replyStreamId, frameFW.trace(), 0L, acceptCorrelationId);
         this.correlation = new Correlation<>(acceptCorrelationId, acceptName, state);
-
         doSourceWindow(maximumHeadersSize, 0, 0);
+        this.acceptReply = acceptReply;
+        this.replyStreamId = replyStreamId;
+    }
+
+    void setCleanupConnectReply(Runnable cleanupConnectReply)
+    {
+        this.cleanupConnectReply = cleanupConnectReply;
     }
 
     private void processData(
@@ -426,6 +438,24 @@ final class ServerAcceptStream implements MessageConsumer
         final long traceId = end.trace();
         assert streamId == acceptId;
         doEnd(traceId);
+    }
+
+    private void processAbort(
+            DirectBuffer buffer,
+            int index,
+            int length)
+    {
+        Correlation correlation = factory.correlations.remove(acceptCorrelationId);
+        factory.writer.doAbort(acceptReply, replyStreamId, 0);
+        if (targetBeginIssued)
+        {
+            factory.writer.doAbort(target, targetId, 0);
+        }
+        if (correlation == null &&  cleanupConnectReply != null)
+        {
+            cleanupConnectReply.run();
+        }
+        releaseSlotIfNecessary();
     }
 
     private void doEnd(Long traceId)
@@ -681,6 +711,7 @@ final class ServerAcceptStream implements MessageConsumer
                         decoderState = this::decodeHttpDataAfterUpgrade;
                         throttleState = this::throttleForHttpDataAfterUpgrade;
                         correlation.state().persistent = false;
+                        correlation.state().endRequested = true;
                     }
                     else if (contentRemaining > 0)
                     {

@@ -135,6 +135,7 @@ final class MessageWriter
     {
         AbortFW abort = abortRW.wrap(writeBuffer, 0, writeBuffer.capacity())
                 .streamId(targetId)
+                .trace(trace)
                 .extension(e -> e.reset())
                 .build();
         stream.accept(abort.typeId(), abort.buffer(), abort.offset(), abort.sizeof());
