@@ -93,7 +93,7 @@ final class ConnectionPool
         final long streamId = factory.supplyStreamId.getAsLong();
         Connection connection = new Connection(streamId, correlationId);
         MessageConsumer output = factory.router.supplyTarget(connectName);
-        factory.writer.doBegin(output, streamId, connectRef, correlationId);
+        factory.writer.doBegin(output, streamId, factory.supplyTraceId, connectRef, correlationId);
         factory.router.setThrottle(connectName, streamId, connection::handleThrottleDefault);
         connectionsInUse++;
         return connection;
@@ -113,10 +113,12 @@ final class ConnectionPool
             // This implies we got an incomplete response. We report this as service unavailable (503).
             MessageConsumer acceptReply = factory.router.supplyTarget(correlation.source());
             long targetId = factory.supplyStreamId.getAsLong();
+            long traceId = factory.supplyTraceId;
+
             long sourceCorrelationId = correlation.id();
-            factory.writer.doHttpBegin(acceptReply, targetId, 0L, sourceCorrelationId,
+            factory.writer.doHttpBegin(acceptReply, targetId, traceId, 0L, sourceCorrelationId,
                     hs -> hs.item(h -> h.representation((byte) 0).name(":status").value("503")));
-            factory.writer.doHttpEnd(acceptReply, targetId);
+            factory.writer.doHttpEnd(acceptReply, targetId, 0L);
         }
         if (connection.persistent)
         {
@@ -136,10 +138,10 @@ final class ConnectionPool
                 switch(action)
                 {
                 case END:
-                    factory.writer.doEnd(connect, connection.connectStreamId);
+                    factory.writer.doEnd(connect, connection.connectStreamId, 0);
                     break;
                 case ABORT:
-                    factory.writer.doAbort(connect, connection.connectStreamId);
+                    factory.writer.doAbort(connect, connection.connectStreamId, 0);
                 }
                 connection.endOrAbortSent = true;
             }
@@ -222,7 +224,8 @@ final class ConnectionPool
                 release(this);
                 if (connectReplyThrottle != null)
                 {
-                    factory.writer.doReset(connectReplyThrottle, connectReplyStreamId);
+                    ResetFW resetFW = factory.resetRO.wrap(buffer, index, index + length);
+                    factory.writer.doReset(connectReplyThrottle, connectReplyStreamId, resetFW.trace());
                 }
                 break;
             case WindowFW.TYPE_ID:

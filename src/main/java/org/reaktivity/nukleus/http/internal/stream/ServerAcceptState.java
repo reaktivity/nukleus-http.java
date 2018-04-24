@@ -31,20 +31,29 @@ final class ServerAcceptState
     final MessageConsumer acceptReply;
     private final MessageConsumer initialThrottle;
     final Consumer<MessageConsumer> setThrottle;
+    final Consumer<Runnable> setCleanupConnectReply;
+
     int acceptReplyBudget;
     int acceptReplyPadding;
     int pendingRequests;
     boolean endRequested;
     boolean persistent = true;
 
-    ServerAcceptState(String acceptReplyName, long replyStreamId, MessageConsumer acceptReply, MessageWriter writer,
-            MessageConsumer initialThrottle, RouteManager router)
+    ServerAcceptState(
+        String acceptReplyName,
+        long replyStreamId,
+        MessageConsumer acceptReply,
+        MessageWriter writer,
+        MessageConsumer initialThrottle,
+        RouteManager router,
+        Consumer<Runnable> setCleanupConnectReply)
     {
         this.replyStreamId = replyStreamId;
         this.acceptReply = acceptReply;
         this.initialThrottle = initialThrottle;
         this.acceptReplyName = acceptReplyName;
         this.setThrottle = (t) -> router.setThrottle(acceptReplyName, replyStreamId, t);
+        this.setCleanupConnectReply = setCleanupConnectReply;
         setThrottle.accept(initialThrottle);
     }
 
@@ -62,11 +71,11 @@ final class ServerAcceptState
         setThrottle.accept(initialThrottle);
     }
 
-    public void doEnd(MessageWriter writer)
+    public void doEnd(MessageWriter writer, long traceId)
     {
         if (pendingRequests == 0)
         {
-            writer.doEnd(acceptReply, replyStreamId);
+            writer.doEnd(acceptReply, replyStreamId, traceId);
             // TODO: unset throttle on acceptReply
         }
         else
@@ -75,6 +84,10 @@ final class ServerAcceptState
         }
     }
 
+    public void doAbort(MessageWriter writer, long traceId)
+    {
+        writer.doAbort(acceptReply, replyStreamId, traceId);
+    }
 }
 
 
