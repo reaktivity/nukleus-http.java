@@ -322,7 +322,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         {
             final OctetsFW payload = this.factory.dataRO.payload();
             factory.writer.doData(target, connection.connectStreamId, traceId, connection.padding, payload);
-            connection.budget -= payload.sizeof();
+            connection.budget -= payload.sizeof() + connection.padding;
         }
     }
 
@@ -436,7 +436,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         MutableDirectBuffer slot = this.factory.bufferPool.buffer(slotIndex);
         factory.writer.doData(target, connection.connectStreamId, traceId, connection.padding, slot,
                 slotOffset, writableBytes);
-        connection.budget -= writableBytes;
+        connection.budget -= writableBytes + connection.padding;
         slotOffset += writableBytes;
         int bytesDeferred = slotPosition - slotOffset;
         if (bytesDeferred == 0)
