@@ -322,7 +322,8 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         {
             final OctetsFW payload = this.factory.dataRO.payload();
             factory.writer.doData(target, connection.connectStreamId, traceId, connection.padding, payload);
-            connection.budget -= payload.sizeof();
+            connection.budget -= payload.sizeof() + connection.padding;
+            assert connection.budget >= 0;
         }
     }
 
@@ -419,7 +420,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
             int padding = this.factory.windowRO.padding();
             connection.budget += credit;
             connection.padding = padding;
-            doSourceWindow(credit, padding, windowFW.trace());
+            doSourceWindow(padding, windowFW.trace());
             break;
         case ResetFW.TYPE_ID:
             processReset(buffer, index, length);
@@ -432,37 +433,44 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
 
     private void useWindowToWriteRequestHeaders()
     {
-        int writableBytes = Math.min(slotPosition - slotOffset, connection.budget);
-        MutableDirectBuffer slot = this.factory.bufferPool.buffer(slotIndex);
-        factory.writer.doData(target, connection.connectStreamId, traceId, connection.padding, slot,
-                slotOffset, writableBytes);
-        connection.budget -= writableBytes;
-        slotOffset += writableBytes;
-        int bytesDeferred = slotPosition - slotOffset;
-        if (bytesDeferred == 0)
+        int writableBytes = Math.min(slotPosition - slotOffset, connection.budget - connection.padding);
+        if (writableBytes > 0)
         {
-            this.factory.bufferPool.release(slotIndex);
-            slotIndex = BufferPool.NO_SLOT;
-            if (endDeferred)
+            MutableDirectBuffer slot = this.factory.bufferPool.buffer(slotIndex);
+            factory.writer.doData(target, connection.connectStreamId, traceId, connection.padding, slot,
+                    slotOffset, writableBytes);
+            connection.budget -= writableBytes + connection.padding;
+            assert connection.budget >= 0;
+            slotOffset += writableBytes;
+            int bytesDeferred = slotPosition - slotOffset;
+            if (bytesDeferred == 0)
             {
-                doEnd();
-            }
-            else
-            {
-                streamState = this::streamAfterBeginOrData;
-                throttleState = this::throttleNextWindow;
-                if (connection.budget > 0)
+                releaseSlotIfNecessary();
+                if (endDeferred)
                 {
-                    doSourceWindow(connection.budget, connection.padding, 0L);
+                    doEnd();
+                }
+                else
+                {
+                    streamState = this::streamAfterBeginOrData;
+                    throttleState = this::throttleNextWindow;
+                    if (connection.budget > 0)
+                    {
+                        doSourceWindow(connection.padding, 0L);
+                    }
                 }
             }
         }
     }
 
-    private void doSourceWindow(int credit, int padding, long traceId)
+    private void doSourceWindow(int padding, long traceId)
     {
-        sourceBudget += credit;
-        factory.writer.doWindow(acceptThrottle, acceptId, traceId, credit, padding);
+        int credit = connection.budget - sourceBudget;
+        if (credit > 0)
+        {
+            sourceBudget += credit;
+            factory.writer.doWindow(acceptThrottle, acceptId, traceId, credit, padding);
+        }
     }
 
     private void processAbort(

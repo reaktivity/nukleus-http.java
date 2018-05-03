@@ -126,8 +126,18 @@ public class FlowControlIT
 
     @Test
     @Specification({
+            "${route}/client/controller",
+            "${client}/flow.control/request.with.padding/client",
+            "${server}/flow.control/request.with.padding/server" })
+    public void shouldProcessRequestWithPadding() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
         "${route}/client/controller",
-        "${client}/flow.control/response.with.padding//client",
+        "${client}/flow.control/response.with.padding/client",
         "${server}/flow.control/response.with.padding/server" })
     public void shouldProcessResponseWithPadding() throws Exception
     {
