@@ -186,6 +186,16 @@ public class ConnectionManagementPoolSize1IT
     @Test
     @Specification({
         "${route}/client/controller",
+        "${client}/request.response/client",
+        "${server}/request.response.and.abort/server"})
+    public void shouldFreeConnectionWhenAbortReceivedAfterCompleteResponse() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/client/controller",
         "${client}/request.and.response.twice.awaiting.barrier/client",
         "${server}/request.response.and.reset/server"})
     public void shouldEndOutputAndFreeConnectionWhenResetReceivedAfterCompleteResponse() throws Exception
