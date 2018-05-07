@@ -384,7 +384,7 @@ final class ClientConnectReplyStream implements MessageConsumer
             break;
         case FINAL:
             connection.persistent = false;
-            doCleanup(null);
+            doCleanup(CloseAction.ABORT);
         }
     }
 
