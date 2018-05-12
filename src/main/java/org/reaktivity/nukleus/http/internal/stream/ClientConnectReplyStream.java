@@ -380,7 +380,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         case HEADERS:
         case DATA:
             // Incomplete response
-            handleInvalidResponse(null);
+            handleInvalidResponse(CloseAction.ABORT);
             break;
         case FINAL:
             connection.persistent = false;
