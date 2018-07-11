@@ -456,11 +456,10 @@ final class ClientConnectReplyStream implements MessageConsumer
     private void decodeBufferedData()
     {
         MutableDirectBuffer slot = factory.bufferPool.buffer(slotIndex);
-        int offset = decode(slot, slotOffset, slotPosition);
-        slotOffset = offset;
+        slotOffset = decode(slot, slotOffset, slotPosition);
         if (slotOffset == slotPosition)
         {
-            factory.bufferPool.release(slotIndex);
+            releaseSlotIfNecessary();
             slotIndex = NO_SLOT;
             streamState = this::handleStreamWhenNotBuffering;
             if (endDeferred)
@@ -574,7 +573,7 @@ final class ClientConnectReplyStream implements MessageConsumer
             String connectionOptions = headers.get("connection");
             if (connectionOptions != null)
             {
-                Arrays.asList(connectionOptions.toLowerCase().split(",")).stream().forEach((element) ->
+                Arrays.stream(connectionOptions.toLowerCase().split(",")).forEach((element) ->
                 {
                     if (element.equals("close"))
                     {
