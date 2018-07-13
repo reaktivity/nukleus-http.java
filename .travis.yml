@@ -2,6 +2,11 @@ dist: trusty
 language: java
 before_install:
   - rm ~/.m2/settings.xml
+  - git clone https://github.com/jitsni/nukleus-http.spec
+  - cd nukleus-http.spec
+  - git checkout 503.retry.after
+  - mvn clean install -DskipTests
+  - cd ..
 jdk:
   - oraclejdk9
 install: mvn -v
