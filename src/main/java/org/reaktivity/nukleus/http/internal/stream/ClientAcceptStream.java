@@ -219,9 +219,9 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
                 this.throttleState = this::throttleBeforeHeadersWritten;
                 target = factory.router.supplyTarget(connectName);
                 connectionPool = getConnectionPool(connectName, connectRef);
-                boolean acquired = connectionPool.acquire(this);
+                Connection connection = connectionPool.acquire(this);
                 // No backend connection, send 503 with Retry-After
-                if (!acquired)
+                if (connection == null)
                 {
                     MessageConsumer acceptReply = factory.router.supplyTarget(acceptName);
                     long targetId = factory.supplyStreamId.getAsLong();

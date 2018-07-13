@@ -51,7 +51,7 @@ final class ConnectionPool
     /*
      * @return true if a connection is acquired, otherwise false
      */
-    boolean acquire(ConnectionRequest request)
+    Connection acquire(ConnectionRequest request)
     {
         Connection connection = availableConnections.poll();
         if (connection == null && connectionsInUse < factory.maximumConnectionsPerRoute)
@@ -61,10 +61,9 @@ final class ConnectionPool
         if (connection != null)
         {
             request.getConsumer().accept(connection);
-            return true;
         }
 
-        return false;
+        return connection;
     }
 
     private Connection newConnection()
