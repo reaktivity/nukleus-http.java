@@ -16,7 +16,6 @@
 package org.reaktivity.nukleus.http.internal.streams.rfc7230.client;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
-import static org.junit.Assert.assertEquals;
 import static org.junit.rules.RuleChain.outerRule;
 
 import org.junit.Ignore;
@@ -58,7 +57,7 @@ public class ConnectionManagementPoolSize1IT
     @Test
     @Specification({
         "${route}/client/controller",
-        "${client}/concurrent.requests/client",
+        "${client}/multiple.requests.same.connection/client",
         "${server}/multiple.requests.same.connection/server" })
     // With connection pool size limited to one the second concurrent request
     // must wait to use the same single connection
@@ -80,8 +79,8 @@ public class ConnectionManagementPoolSize1IT
     {
         k3po.start();
         k3po.awaitBarrier("REQUEST_ONE_RECEIVED");
-        k3po.awaitBarrier("REQUEST_TWO_RECEIVED");
         k3po.notifyBarrier("WRITE_DATA_REQUEST_ONE");
+        k3po.awaitBarrier("REQUEST_TWO_RECEIVED");
         k3po.notifyBarrier("WRITE_DATA_REQUEST_TWO");
         k3po.finish();
     }
@@ -152,20 +151,6 @@ public class ConnectionManagementPoolSize1IT
     @Test
     @Specification({
         "${route}/client/controller",
-        "${client}/pending.request.second.request.and.abort/client",
-        "${server}/pending.request.second.request.and.abort/server"})
-    public void shouldLeaveTransportUntouchedWhenEnqueuedRequestIsAborted() throws Exception
-    {
-        assertEquals(0, counters.enqueues());
-        assertEquals(0, counters.dequeues());
-        k3po.finish();
-        assertEquals(1, counters.enqueues());
-        assertEquals(1, counters.dequeues());
-    }
-
-    @Test
-    @Specification({
-        "${route}/client/controller",
         "${client}/request.receive.reset/client",
         "${server}/partial.request.receive.reset/server"})
     public void shouldResetRequestAndFreeConnectionWhenLowLevelIsReset() throws Exception
@@ -229,16 +214,6 @@ public class ConnectionManagementPoolSize1IT
     @Test
     @Specification({
         "${route}/client/controller",
-        "${client}/request.and.response.with.incomplete.data/client",
-        "${server}/request.response.headers.incomplete.data.and.reset/server" })
-    public void shouldFreeConnectionWhenConnectStreamIsResetBeforeResponseDataIsComplete() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-        "${route}/client/controller",
         "${client}/response.with.content.length.is.reset/client",
         "${server}/response.with.content.length.is.reset/server" })
     public void shouldResetRequestAndFreeConnectionWhenRequestWithContentLengthIsReset() throws Exception
@@ -246,4 +221,13 @@ public class ConnectionManagementPoolSize1IT
         k3po.finish();
     }
 
+    @Test
+    @Specification({
+        "${route}/client/controller",
+        "${client}/503.with.retry.after/client",
+        "${server}/503.with.retry.after/server" })
+    public void shouldSend503WithRetryAfterForSecondRequest() throws Exception
+    {
+        k3po.finish();
+    }
 }
