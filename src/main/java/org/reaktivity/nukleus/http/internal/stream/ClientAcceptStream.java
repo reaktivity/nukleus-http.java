@@ -207,7 +207,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
             {
                 // TODO: diagnostics (reset reason?)
                 factory.writer.doReset(acceptThrottle, acceptId, 0L);
-                factory.bufferPool.release(slotIndex);
+                releaseSlotIfNecessary();
             }
             else
             {
@@ -219,7 +219,18 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
                 this.throttleState = this::throttleBeforeHeadersWritten;
                 target = factory.router.supplyTarget(connectName);
                 connectionPool = getConnectionPool(connectName, connectRef);
-                connectionPool.acquire(this);
+                Connection connection = connectionPool.acquire(this);
+                // No backend connection, send 503 with Retry-After
+                if (connection == null)
+                {
+                    MessageConsumer acceptReply = factory.router.supplyTarget(acceptName);
+                    long targetId = factory.supplyStreamId.getAsLong();
+                    factory.writer.doHttpBegin(acceptReply, targetId, 0L, 0L, acceptCorrelationId,
+                            hs -> hs.item(h -> h.name(":status").value("503"))
+                                    .item(h -> h.name("retry-after").value("0")));
+                    factory.writer.doHttpEnd(acceptReply, targetId, 0L);
+                    releaseSlotIfNecessary();
+                }
             }
         }
     }
@@ -481,12 +492,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         factory.abortRO.wrap(buffer, index, index + length);
         releaseSlotIfNecessary();
 
-        if (connection == null)
-        {
-            // request still enqueued, remove it from the queue
-            connectionPool.cancel(this);
-        }
-        else
+        if (connection != null)
         {
             factory.correlations.remove(connection.correlationId);
             connection.persistent = false;
@@ -519,18 +525,6 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
     public Consumer<Connection> getConsumer()
     {
         return this;
-    }
-
-    @Override
-    public void next(ConnectionRequest request)
-    {
-        nextConnectionRequest = request;
-    }
-
-    @Override
-    public ConnectionRequest next()
-    {
-        return nextConnectionRequest;
     }
 
     @Override

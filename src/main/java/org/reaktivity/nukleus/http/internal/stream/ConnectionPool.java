@@ -31,25 +31,27 @@ final class ConnectionPool
 {
     public enum CloseAction
     {
-        END, ABORT;
-    };
+        END, ABORT
+    }
     private final Deque<Connection> availableConnections;
     private final String connectName;
     private final long connectRef;
     private final ClientStreamFactory factory;
 
     private int connectionsInUse;
-    private ConnectionRequest nextRequest;
 
     ConnectionPool(ClientStreamFactory factory, String connectName, long connectRef)
     {
         this.factory = factory;
         this.connectName = connectName;
         this.connectRef = connectRef;
-        this.availableConnections = new ArrayDeque<Connection>(factory.maximumConnectionsPerRoute);
+        this.availableConnections = new ArrayDeque<>(factory.maximumConnectionsPerRoute);
     }
 
-    public void acquire(ConnectionRequest request)
+    /*
+     * @return true if a connection is acquired, otherwise false
+     */
+    Connection acquire(ConnectionRequest request)
     {
         Connection connection = availableConnections.poll();
         if (connection == null && connectionsInUse < factory.maximumConnectionsPerRoute)
@@ -60,31 +62,8 @@ final class ConnectionPool
         {
             request.getConsumer().accept(connection);
         }
-        else
-        {
-            enqueue(request);
-        }
-    }
 
-    public void cancel(ConnectionRequest request)
-    {
-        ConnectionRequest candidate = nextRequest;
-        ConnectionRequest prior = null;
-        while (request != candidate)
-        {
-            assert candidate != null;
-            prior = candidate;
-            candidate = candidate.next();
-        }
-        if (prior == null)
-        {
-            nextRequest = null;
-        }
-        else
-        {
-            prior.next(candidate.next());
-        }
-        factory.incrementDequeues.getAsLong();
+        return connection;
     }
 
     private Connection newConnection()
@@ -99,12 +78,12 @@ final class ConnectionPool
         return connection;
     }
 
-    public void release(Connection connection)
+    void release(Connection connection)
     {
         release(connection, null);
     }
 
-    public void release(Connection connection, CloseAction action)
+    void release(Connection connection, CloseAction action)
     {
         final Correlation<?> correlation = factory.correlations.remove(connection.correlationId);
         if (correlation != null)
@@ -127,7 +106,13 @@ final class ConnectionPool
         }
         else
         {
-            connectionsInUse--;
+            // release() gets called multiple times for a connection
+            if (!connection.released)
+            {
+                connection.released = true;
+                connectionsInUse--;
+                assert connectionsInUse >= 0;
+            }
 
             // In case the connection was previously released when it was still persistent
             availableConnections.removeFirstOccurrence(connection);
@@ -146,54 +131,26 @@ final class ConnectionPool
                 connection.endOrAbortSent = true;
             }
         }
-        if (nextRequest != null)
-        {
-            ConnectionRequest current = nextRequest;
-            nextRequest = nextRequest.next();
-            factory.incrementDequeues.getAsLong();
-            acquire(current);
-        }
     }
 
-    public void setDefaultThrottle(Connection connection)
+    void setDefaultThrottle(Connection connection)
     {
         factory.router.setThrottle(connectName, connection.connectStreamId, connection::handleThrottleDefault);
-    }
-
-    private void enqueue(ConnectionRequest request)
-    {
-        if (this.nextRequest == null)
-        {
-            this.nextRequest = request;
-        }
-        else
-        {
-            ConnectionRequest latest = this.nextRequest;
-            while (latest.next() != null)
-            {
-                latest = latest.next();
-            }
-            latest.next(request);
-        }
-        factory.incrementEnqueues.getAsLong();
     }
 
     public interface ConnectionRequest
     {
         Consumer<Connection> getConsumer();
-
-        void next(ConnectionRequest next);
-
-        ConnectionRequest next();
     }
 
-    public class Connection
+    class Connection
     {
         final long connectStreamId;
         final long correlationId;
         int budget;
         int padding;
         boolean persistent = true;
+        boolean released;
         private boolean endOrAbortSent;
 
         private long connectReplyStreamId;
