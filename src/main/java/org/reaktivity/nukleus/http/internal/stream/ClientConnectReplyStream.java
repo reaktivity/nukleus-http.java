@@ -944,7 +944,9 @@ final class ClientConnectReplyStream implements MessageConsumer
             decodeBufferedData();
         }
 
-        final int connectReplyCredit = acceptReplyBudget - connectReplyBudget;
+        int slotRemaining = slotPosition - slotOffset;
+        final int connectReplyCredit = Math.min(acceptReplyBudget, factory.bufferPool.slotCapacity())
+                - connectReplyBudget - slotRemaining;
         if (connectReplyCredit > 0)
         {
             connectReplyBudget += connectReplyCredit;
