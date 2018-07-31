@@ -86,7 +86,7 @@ public final class ClientStreamFactoryBuilder implements StreamFactoryBuilder
     }
 
     @Override
-    public ClientStreamFactoryBuilder setCorrelationIdSupplier(
+    public ClientStreamFactoryBuilder setTargetCorrelationIdSupplier(
         LongSupplier supplyCorrelationId)
     {
         this.supplyCorrelationId = supplyCorrelationId;
