@@ -27,6 +27,7 @@ import org.kaazing.k3po.junit.annotation.Specification;
 import org.kaazing.k3po.junit.rules.K3poRule;
 import org.reaktivity.reaktor.internal.ReaktorConfiguration;
 import org.reaktivity.reaktor.test.ReaktorRule;
+import org.reaktivity.reaktor.test.annotation.Configure;
 
 public class FlowControlLimitsIT
 {
@@ -72,6 +73,8 @@ public class FlowControlLimitsIT
         k3po.finish();
     }
 
+    @Configure(name = ReaktorConfiguration.BUFFER_POOL_CAPACITY_PROPERTY, value = "8192")
+    @Configure(name = ReaktorConfiguration.BUFFER_SLOT_CAPACITY_PROPERTY, value = "8192")
     @Test
     @Specification({
         "${route}/client/controller",
