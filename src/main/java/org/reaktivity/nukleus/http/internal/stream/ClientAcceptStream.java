@@ -65,7 +65,6 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
     private boolean endDeferred;
     private boolean persistent = true;
     private long traceId;
-    private String path;
 
     ClientAcceptStream(ClientStreamFactory factory, MessageConsumer acceptThrottle,
             long acceptId, long acceptRef, String acceptName, long acceptCorrelationId,
@@ -264,7 +263,6 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
                 pseudoHeaders[ClientStreamFactory.AUTHORITY] = value;
                 break;
             case ":path":
-                path = value;
                 pseudoHeaders[ClientStreamFactory.PATH] = value;
                 break;
             case "host":
@@ -532,7 +530,6 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
     @Override
     public void accept(Connection connection)
     {
-        //System.out.printf("connection id=%d request=%s\n", System.identityHashCode(connection), path);
         this.connection = connection;
         connection.persistent = persistent;
         ClientConnectReplyState state = new ClientConnectReplyState(connectionPool, connection);

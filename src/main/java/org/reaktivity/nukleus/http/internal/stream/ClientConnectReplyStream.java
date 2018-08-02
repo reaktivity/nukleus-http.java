@@ -622,7 +622,6 @@ final class ClientConnectReplyStream implements MessageConsumer
     {
         Map<String, String> headers = new LinkedHashMap<>();
         headers.put(":status", start[1]);
-        //System.out.printf("connection id=%d status=%s\n", System.identityHashCode(connection), start[1]);
 
         Pattern headerPattern = Pattern.compile("([^\\s:]+)\\s*:\\s*(.*)");
         boolean contentLengthFound = false;
@@ -959,7 +958,6 @@ final class ClientConnectReplyStream implements MessageConsumer
         releaseSlotIfNecessary();
         factory.writer.doReset(connectReplyThrottle, sourceId, reset.trace());
         connection.persistent = false;
-        System.out.println("Sening CloseAction.ABORT");
         connectionPool.release(connection, CloseAction.ABORT);
     }
 
