@@ -60,6 +60,7 @@ final class ConnectionPool
         }
         if (connection != null)
         {
+            connection.noRequests++;
             request.getConsumer().accept(connection);
         }
 
@@ -95,6 +96,9 @@ final class ConnectionPool
             long traceId = factory.supplyTraceId;
 
             long sourceCorrelationId = correlation.id();
+            System.out.printf("http connection=%d sending 503 res = %x req=%x action = %s\n",
+                    System.identityHashCode(connection),
+                    targetId, connection.connectStreamId, action);
             factory.writer.doHttpBegin(acceptReply, targetId, traceId, 0L, sourceCorrelationId,
                     hs -> hs.item(h -> h.representation((byte) 0).name(":status").value("503")));
             factory.writer.doHttpEnd(acceptReply, targetId, 0L);
@@ -112,6 +116,11 @@ final class ConnectionPool
                 connection.released = true;
                 connectionsInUse--;
                 assert connectionsInUse >= 0;
+
+                long duration = (System.currentTimeMillis() - connection.start) / 1000;
+                System.out.printf("Connection id=%d req=%x res=%x noRequests=%d duration=%d ms action=%s DONE\n",
+                        System.identityHashCode(connection),
+                        connection.connectStreamId, connection.connectReplyStreamId, connection.noRequests, duration, action);
             }
 
             // In case the connection was previously released when it was still persistent
@@ -155,11 +164,14 @@ final class ConnectionPool
 
         private long connectReplyStreamId;
         private MessageConsumer connectReplyThrottle;
+        int noRequests;
+        final long start;
 
         Connection(long outputStreamId, long outputCorrelationId)
         {
             this.connectStreamId = outputStreamId;
             this.correlationId = outputCorrelationId;
+            this.start = System.currentTimeMillis();
         }
 
         void setInput(MessageConsumer connectReplyThrottle, long connectReplyStreamId)

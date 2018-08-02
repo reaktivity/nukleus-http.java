@@ -310,6 +310,7 @@ final class ClientConnectReplyStream implements MessageConsumer
     private void handleDataWhenNotBuffering(
         DataFW data)
     {
+        traceId = data.trace();
         connectReplyBudget -= data.length() + data.padding();
 
         if (connectReplyBudget < 0)
@@ -424,6 +425,7 @@ final class ClientConnectReplyStream implements MessageConsumer
     private void handleDataWhenBuffering(
         DataFW data)
     {
+        traceId = data.trace();
         connectReplyBudget -= data.length() + data.padding();
 
         if (connectReplyBudget < 0)
@@ -620,6 +622,7 @@ final class ClientConnectReplyStream implements MessageConsumer
     {
         Map<String, String> headers = new LinkedHashMap<>();
         headers.put(":status", start[1]);
+        //System.out.printf("connection id=%d status=%s\n", System.identityHashCode(connection), start[1]);
 
         Pattern headerPattern = Pattern.compile("([^\\s:]+)\\s*:\\s*(.*)");
         boolean contentLengthFound = false;
@@ -683,8 +686,7 @@ final class ClientConnectReplyStream implements MessageConsumer
 
         if (writableBytes > 0)
         {
-            FrameFW frameFW = factory.frameRO.wrap(payload, offset, payload.capacity());
-            factory.writer.doHttpData(acceptReply, acceptReplyId,  frameFW.trace(), acceptReplyPadding, payload,
+            factory.writer.doHttpData(acceptReply, acceptReplyId, traceId, acceptReplyPadding, payload,
                     offset, writableBytes);
             acceptReplyBudget -= writableBytes + acceptReplyPadding;
             contentRemaining -= writableBytes;
@@ -780,8 +782,6 @@ final class ClientConnectReplyStream implements MessageConsumer
 
         if (writableBytes > 0)
         {
-            FrameFW frameFW = factory.frameRO.wrap(payload, offset, payload.capacity());
-            long traceId = frameFW.trace();
             factory.writer.doHttpData(acceptReply, acceptReplyId, traceId, acceptReplyPadding, payload, offset, writableBytes);
             acceptReplyBudget -= writableBytes + acceptReplyPadding;
             chunkSizeRemaining -= writableBytes;
@@ -807,8 +807,7 @@ final class ClientConnectReplyStream implements MessageConsumer
 
         if (writableBytes > 0)
         {
-            FrameFW frameFW = factory.frameRO.wrap(payload, offset, payload.capacity());
-            factory.writer.doData(acceptReply, acceptReplyId, frameFW.trace(), acceptReplyPadding,
+            factory.writer.doData(acceptReply, acceptReplyId, traceId, acceptReplyPadding,
                     payload, offset, writableBytes);
             acceptReplyBudget -= writableBytes + acceptReplyPadding;
         }
@@ -831,8 +830,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         int limit)
     {
         // TODO: consider chunks, trailers
-        FrameFW frameFW = factory.frameRO.wrap(payload, offset, limit);
-        factory.writer.doHttpEnd(acceptReply, acceptReplyId, frameFW.trace());
+        factory.writer.doHttpEnd(acceptReply, acceptReplyId, traceId);
         connectionPool.release(connection, CloseAction.END);
         return limit;
     }
@@ -961,7 +959,8 @@ final class ClientConnectReplyStream implements MessageConsumer
         releaseSlotIfNecessary();
         factory.writer.doReset(connectReplyThrottle, sourceId, reset.trace());
         connection.persistent = false;
-        connectionPool.release(connection);
+        System.out.println("Sening CloseAction.ABORT");
+        connectionPool.release(connection, CloseAction.ABORT);
     }
 
     private void releaseSlotIfNecessary()
