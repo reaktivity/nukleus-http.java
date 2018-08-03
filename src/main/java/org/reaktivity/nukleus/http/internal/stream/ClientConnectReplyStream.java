@@ -258,6 +258,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         }
 
         this.streamState = this::handleStreamAfterReset;
+        doCleanup(CloseAction.ABORT);
     }
 
     private void handleInvalidResponseAndReset()
@@ -271,7 +272,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         factory.writer.doReset(connectReplyThrottle, sourceId, 0L);
 
         connection.persistent = false;
-        doCleanup(null);
+        doCleanup(CloseAction.ABORT);
     }
 
     private void handleInvalidResponse(CloseAction action)
@@ -412,7 +413,7 @@ final class ClientConnectReplyStream implements MessageConsumer
             // Out of slab memory
             factory.writer.doReset(connectReplyThrottle, sourceId, 0L);
             connection.persistent = false;
-            doCleanup(null);
+            doCleanup(CloseAction.ABORT);
         }
         else
         {
@@ -513,7 +514,10 @@ final class ClientConnectReplyStream implements MessageConsumer
         streamState = this::handleStreamAfterEnd;
         responseState = ResponseState.FINAL;
         releaseSlotIfNecessary();
-        connectionPool.release(connection, action);
+        if (connection != null)
+        {
+            connectionPool.release(connection, action);
+        }
     }
 
     private int decodeHttpBegin(
