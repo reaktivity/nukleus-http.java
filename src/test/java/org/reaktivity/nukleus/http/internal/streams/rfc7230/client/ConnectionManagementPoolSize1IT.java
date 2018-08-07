@@ -211,6 +211,7 @@ public class ConnectionManagementPoolSize1IT
         k3po.finish();
     }
 
+    @Ignore("ABORT vs RESET read order not yet guaranteed to match write order")
     @Test
     @Specification({
         "${route}/client/controller",
