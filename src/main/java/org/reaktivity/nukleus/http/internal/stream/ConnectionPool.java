@@ -60,6 +60,7 @@ final class ConnectionPool
         }
         if (connection != null)
         {
+            connection.noRequests++;
             request.getConsumer().accept(connection);
         }
 
@@ -155,6 +156,7 @@ final class ConnectionPool
 
         private long connectReplyStreamId;
         private MessageConsumer connectReplyThrottle;
+        int noRequests;
 
         Connection(long outputStreamId, long outputCorrelationId)
         {
