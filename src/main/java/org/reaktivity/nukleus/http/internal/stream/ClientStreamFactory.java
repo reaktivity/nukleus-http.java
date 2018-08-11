@@ -24,6 +24,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Function;
 import java.util.function.LongSupplier;
 
 import org.agrona.DirectBuffer;
@@ -90,6 +91,11 @@ public final class ClientStreamFactory implements StreamFactory
     final int maximumConnectionsPerRoute;
 
     final UnsafeBuffer temporarySlot;
+    final LongSupplier countRequests;
+    final LongSupplier countRequestsRejected;
+    final LongSupplier countRequestsAbandoned;
+    final LongSupplier countResponses;
+    final LongSupplier countResponsesAbandoned;
 
     public ClientStreamFactory(
         HttpConfiguration configuration,
@@ -98,7 +104,8 @@ public final class ClientStreamFactory implements StreamFactory
         BufferPool bufferPool,
         LongSupplier supplyStreamId,
         LongSupplier supplyCorrelationId,
-        Long2ObjectHashMap<Correlation<?>> correlations)
+        Long2ObjectHashMap<Correlation<?>> correlations,
+        Function<String, LongSupplier> supplyCounter)
     {
         this.router = requireNonNull(router);
         this.writer = new MessageWriter(requireNonNull(writeBuffer));
@@ -110,6 +117,11 @@ public final class ClientStreamFactory implements StreamFactory
         this.maximumConnectionsPerRoute = configuration.maximumConnectionsPerRoute();
         this.maximumHeadersSize = bufferPool.slotCapacity();
         this.temporarySlot = new UnsafeBuffer(ByteBuffer.allocateDirect(bufferPool.slotCapacity()));
+        this.countRequests = supplyCounter.apply("requests");
+        this.countRequestsRejected = supplyCounter.apply("requests.rejected");
+        this.countRequestsAbandoned = supplyCounter.apply("requests.abandoned");
+        this.countResponses = supplyCounter.apply("responses");
+        this.countResponsesAbandoned = supplyCounter.apply("responses.abandoned");
     }
 
     @Override

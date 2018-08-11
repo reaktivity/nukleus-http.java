@@ -191,6 +191,9 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         int index,
         int length)
     {
+        // count all requests
+        factory.countRequests.getAsLong();
+
         slotIndex = this.factory.bufferPool.acquire(acceptId);
         if (slotIndex == BufferPool.NO_SLOT)
         {
@@ -230,6 +233,9 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
                                     .item(h -> h.name("retry-after").value("0")));
                     factory.writer.doHttpEnd(acceptReply, targetId, 0L);
                     releaseSlotIfNecessary();
+
+                    // count rejected requests (no connection)
+                    factory.countRequestsRejected.getAsLong();
                 }
             }
         }

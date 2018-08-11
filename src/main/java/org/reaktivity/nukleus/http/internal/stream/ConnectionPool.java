@@ -16,7 +16,9 @@
 package org.reaktivity.nukleus.http.internal.stream;
 
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Deque;
+import java.util.List;
 import java.util.function.Consumer;
 
 import org.agrona.DirectBuffer;
@@ -34,6 +36,7 @@ final class ConnectionPool
         END, ABORT
     }
     private final Deque<Connection> availableConnections;
+    private final List<Connection> acquiredConnections;
     private final String connectName;
     private final long connectRef;
     private final ClientStreamFactory factory;
@@ -46,6 +49,7 @@ final class ConnectionPool
         this.connectName = connectName;
         this.connectRef = connectRef;
         this.availableConnections = new ArrayDeque<>(factory.maximumConnectionsPerRoute);
+        this.acquiredConnections = new ArrayList<>();
     }
 
     /*
@@ -63,6 +67,8 @@ final class ConnectionPool
             connection.noRequests++;
             request.getConsumer().accept(connection);
         }
+
+        acquiredConnections.add(connection);
 
         return connection;
     }
@@ -95,6 +101,9 @@ final class ConnectionPool
             long targetId = factory.supplyStreamId.getAsLong();
             long traceId = factory.supplyTraceId;
 
+            // count abandoned requests
+            factory.countRequestsAbandoned.getAsLong();
+
             long sourceCorrelationId = correlation.id();
             factory.writer.doHttpBegin(acceptReply, targetId, traceId, 0L, sourceCorrelationId,
                     hs -> hs.item(h -> h.representation((byte) 0).name(":status").value("503")));
@@ -104,6 +113,7 @@ final class ConnectionPool
         {
             setDefaultThrottle(connection);
             availableConnections.add(connection);
+            acquiredConnections.remove(connection);
         }
         else
         {
@@ -117,6 +127,7 @@ final class ConnectionPool
 
             // In case the connection was previously released when it was still persistent
             availableConnections.removeFirstOccurrence(connection);
+            acquiredConnections.remove(connection); // first occurrence
 
             if (action != null && !connection.endOrAbortSent)
             {
