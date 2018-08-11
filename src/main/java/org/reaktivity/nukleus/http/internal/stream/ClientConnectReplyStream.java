@@ -371,9 +371,13 @@ final class ClientConnectReplyStream implements MessageConsumer
         {
             responseState = ResponseState.FINAL;
         }
+
         if (acceptReply != null)
         {
             factory.writer.doAbort(acceptReply, acceptReplyId, abort.trace());
+
+            // count abandoned responses
+            factory.countResponsesAbandoned.getAsLong();
         }
 
         switch (responseState)
@@ -574,6 +578,9 @@ final class ClientConnectReplyStream implements MessageConsumer
             factory.writer.doHttpBegin(acceptReply, acceptReplyId, frameFW.trace(), 0L, acceptCorrelationId,
                     hs -> headers.forEach((k, v) -> hs.item(i -> i.representation((byte) 0).name(k).value(v))));
             factory.router.setThrottle(acceptReplyName, acceptReplyId, this::handleThrottle);
+
+            // count all responses
+            factory.countResponses.getAsLong();
 
             boolean upgraded = "101".equals(headers.get(":status"));
             String connectionOptions = headers.get("connection");

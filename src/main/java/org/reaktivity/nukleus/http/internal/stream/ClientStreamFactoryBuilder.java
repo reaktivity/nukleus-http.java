@@ -15,6 +15,7 @@
  */
 package org.reaktivity.nukleus.http.internal.stream;
 
+import java.util.function.Function;
 import java.util.function.IntUnaryOperator;
 import java.util.function.LongFunction;
 import java.util.function.LongSupplier;
@@ -39,6 +40,7 @@ public final class ClientStreamFactoryBuilder implements StreamFactoryBuilder
     private LongSupplier supplyStreamId;
     private LongSupplier supplyCorrelationId;
     private Supplier<BufferPool> supplyBufferPool;
+    private Function<String, LongSupplier> supplyCounter;
 
     public ClientStreamFactoryBuilder(
         Configuration config)
@@ -102,11 +104,19 @@ public final class ClientStreamFactoryBuilder implements StreamFactoryBuilder
     }
 
     @Override
+    public StreamFactoryBuilder setCounterSupplier(
+        Function<String, LongSupplier> supplyCounter)
+    {
+        this.supplyCounter = supplyCounter;
+        return this;
+    }
+
+    @Override
     public StreamFactory build()
     {
         final BufferPool bufferPool = supplyBufferPool.get();
 
         return new ClientStreamFactory((HttpConfiguration) config, router, writeBuffer, bufferPool,
-                supplyStreamId, supplyCorrelationId, correlations);
+                supplyStreamId, supplyCorrelationId, correlations, supplyCounter);
     }
 }
