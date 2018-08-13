@@ -17,6 +17,7 @@ package org.reaktivity.nukleus.http.internal.streams.rfc7230.client;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.rules.RuleChain.outerRule;
+import static org.reaktivity.nukleus.http.internal.HttpConfiguration.MAXIMUM_QUEUED_REQUESTS_PROPERTY_NAME;
 
 import org.junit.Ignore;
 import org.junit.Rule;
@@ -29,6 +30,7 @@ import org.kaazing.k3po.junit.rules.K3poRule;
 import org.reaktivity.nukleus.http.internal.HttpConfiguration;
 import org.reaktivity.nukleus.http.internal.test.HttpCountersRule;
 import org.reaktivity.reaktor.test.ReaktorRule;
+import org.reaktivity.reaktor.test.annotation.Configure;
 
 public class ConnectionManagementPoolSize1IT
 {
@@ -222,6 +224,7 @@ public class ConnectionManagementPoolSize1IT
         k3po.finish();
     }
 
+    @Configure(name = MAXIMUM_QUEUED_REQUESTS_PROPERTY_NAME, value = "0")
     @Test
     @Specification({
         "${route}/client/controller",
