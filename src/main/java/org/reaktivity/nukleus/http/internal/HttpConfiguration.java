@@ -23,7 +23,12 @@ public class HttpConfiguration extends Configuration
     // the HTTP nukleus is acting as a client
     public static final String MAXIMUM_CONNECTIONS_PROPERTY_NAME = "nukleus.http.maximum.connections";
 
+    public static final String MAXIMUM_QUEUED_REQUESTS_PROPERTY_NAME = "nukleus.http.maximum.requests.queued";
+
+
     private static final int MAXIMUM_CONNECTIONS_DEFAULT = 10; // most browsers use 6, IE 11 uses 13
+    private static final int MAXIMUM_REQUESTS_QUEUED_DEFAULT = 10000;
+
 
     public HttpConfiguration(
         Configuration config)
@@ -36,4 +41,8 @@ public class HttpConfiguration extends Configuration
         return getInteger(MAXIMUM_CONNECTIONS_PROPERTY_NAME, MAXIMUM_CONNECTIONS_DEFAULT);
     }
 
+    public int maximumRequestsQueuedPerRoute()
+    {
+        return getInteger(MAXIMUM_QUEUED_REQUESTS_PROPERTY_NAME, MAXIMUM_REQUESTS_QUEUED_DEFAULT);
+    }
 }

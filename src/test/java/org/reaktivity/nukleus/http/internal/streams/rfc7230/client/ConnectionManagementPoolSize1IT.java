@@ -16,7 +16,9 @@
 package org.reaktivity.nukleus.http.internal.streams.rfc7230.client;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
+import static org.junit.Assert.assertEquals;
 import static org.junit.rules.RuleChain.outerRule;
+import static org.reaktivity.nukleus.http.internal.HttpConfiguration.MAXIMUM_QUEUED_REQUESTS_PROPERTY_NAME;
 
 import org.junit.Ignore;
 import org.junit.Rule;
@@ -29,6 +31,7 @@ import org.kaazing.k3po.junit.rules.K3poRule;
 import org.reaktivity.nukleus.http.internal.HttpConfiguration;
 import org.reaktivity.nukleus.http.internal.test.HttpCountersRule;
 import org.reaktivity.reaktor.test.ReaktorRule;
+import org.reaktivity.reaktor.test.annotation.Configure;
 
 public class ConnectionManagementPoolSize1IT
 {
@@ -57,7 +60,7 @@ public class ConnectionManagementPoolSize1IT
     @Test
     @Specification({
         "${route}/client/controller",
-        "${client}/multiple.requests.same.connection/client",
+        "${client}/concurrent.requests/client",
         "${server}/multiple.requests.same.connection/server" })
     // With connection pool size limited to one the second concurrent request
     // must wait to use the same single connection
@@ -151,6 +154,20 @@ public class ConnectionManagementPoolSize1IT
     @Test
     @Specification({
         "${route}/client/controller",
+        "${client}/pending.request.second.request.and.abort/client",
+        "${server}/pending.request.second.request.and.abort/server"})
+    public void shouldLeaveTransportUntouchedWhenEnqueuedRequestIsAborted() throws Exception
+    {
+        assertEquals(0, counters.enqueues());
+        assertEquals(0, counters.dequeues());
+        k3po.finish();
+        assertEquals(1, counters.enqueues());
+        assertEquals(1, counters.dequeues());
+    }
+
+    @Test
+    @Specification({
+        "${route}/client/controller",
         "${client}/request.receive.reset/client",
         "${server}/partial.request.receive.reset/server"})
     public void shouldResetRequestAndFreeConnectionWhenLowLevelIsReset() throws Exception
@@ -222,6 +239,7 @@ public class ConnectionManagementPoolSize1IT
         k3po.finish();
     }
 
+    @Configure(name = MAXIMUM_QUEUED_REQUESTS_PROPERTY_NAME, value = "0")
     @Test
     @Specification({
         "${route}/client/controller",
@@ -230,5 +248,6 @@ public class ConnectionManagementPoolSize1IT
     public void shouldSend503WithRetryAfterForSecondRequest() throws Exception
     {
         k3po.finish();
+        assertEquals(1, counters.requestsRejected());
     }
 }

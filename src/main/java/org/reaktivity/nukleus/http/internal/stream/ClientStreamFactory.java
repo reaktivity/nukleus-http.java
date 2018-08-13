@@ -79,6 +79,8 @@ public final class ClientStreamFactory implements StreamFactory
     final RouteManager router;
     final LongSupplier supplyStreamId;
     final LongSupplier supplyCorrelationId;
+    final LongSupplier enqueues;
+    final LongSupplier dequeues;
     final BufferPool bufferPool;
     final MessageWriter writer;
     long supplyTraceId;
@@ -89,6 +91,8 @@ public final class ClientStreamFactory implements StreamFactory
 
     final Map<String, Map<Long, ConnectionPool>> connectionPools;
     final int maximumConnectionsPerRoute;
+    final int maximumQueuedRequestsPerRoute;
+
 
     final UnsafeBuffer temporarySlot;
     final LongSupplier countRequests;
@@ -115,6 +119,7 @@ public final class ClientStreamFactory implements StreamFactory
         this.correlations = requireNonNull(correlations);
         this.connectionPools = new HashMap<>();
         this.maximumConnectionsPerRoute = configuration.maximumConnectionsPerRoute();
+        this.maximumQueuedRequestsPerRoute = configuration.maximumRequestsQueuedPerRoute();
         this.maximumHeadersSize = bufferPool.slotCapacity();
         this.temporarySlot = new UnsafeBuffer(ByteBuffer.allocateDirect(bufferPool.slotCapacity()));
         this.countRequests = supplyCounter.apply("requests");
@@ -122,6 +127,8 @@ public final class ClientStreamFactory implements StreamFactory
         this.countRequestsAbandoned = supplyCounter.apply("requests.abandoned");
         this.countResponses = supplyCounter.apply("responses");
         this.countResponsesAbandoned = supplyCounter.apply("responses.abandoned");
+        this.enqueues = supplyCounter.apply("enqueues");
+        this.dequeues = supplyCounter.apply("dequeues");
     }
 
     @Override
