@@ -73,6 +73,11 @@ public class HttpCountersRule implements TestRule
         return controller().count("dequeues");
     }
 
+    public long requestsRejected()
+    {
+        return controller().count("requests.rejected");
+    }
+
     private HttpController controller()
     {
         return reaktor.controller(HttpController.class);

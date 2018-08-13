@@ -16,9 +16,8 @@
 package org.reaktivity.nukleus.http.internal.stream;
 
 import java.util.ArrayDeque;
-import java.util.ArrayList;
 import java.util.Deque;
-import java.util.List;
+import java.util.Queue;
 import java.util.function.Consumer;
 
 import org.agrona.DirectBuffer;
@@ -36,10 +35,10 @@ final class ConnectionPool
         END, ABORT
     }
     private final Deque<Connection> availableConnections;
-    private final List<Connection> acquiredConnections;
     private final String connectName;
     private final long connectRef;
     private final ClientStreamFactory factory;
+    private final Queue<ConnectionRequest> queuedRequests;
 
     private int connectionsInUse;
 
@@ -49,13 +48,13 @@ final class ConnectionPool
         this.connectName = connectName;
         this.connectRef = connectRef;
         this.availableConnections = new ArrayDeque<>(factory.maximumConnectionsPerRoute);
-        this.acquiredConnections = new ArrayList<>();
+        this.queuedRequests = new ArrayDeque<>(factory.maximumQueuedRequestsPerRoute);
     }
 
     /*
-     * @return true if a connection is acquired, otherwise false
+     * @return true if the given request is served immediately or later, otherwise false
      */
-    Connection acquire(ConnectionRequest request)
+    boolean acquire(ConnectionRequest request)
     {
         Connection connection = availableConnections.poll();
         if (connection == null && connectionsInUse < factory.maximumConnectionsPerRoute)
@@ -67,10 +66,43 @@ final class ConnectionPool
             connection.noRequests++;
             request.getConsumer().accept(connection);
         }
+        else if (queuedRequests.size() < factory.maximumQueuedRequestsPerRoute)
+        {
+            queuedRequests.add(request);
+            factory.enqueues.getAsLong();
+        }
+        else
+        {
+            return false;
+        }
 
-        acquiredConnections.add(connection);
+        return true;
+    }
 
-        return connection;
+    private void acquireNextIfQueued()
+    {
+        if (!queuedRequests.isEmpty())
+        {
+            Connection connection = availableConnections.poll();
+            if (connection == null && connectionsInUse < factory.maximumConnectionsPerRoute)
+            {
+                connection = newConnection();
+            }
+
+            if (connection != null)
+            {
+                ConnectionRequest nextRequest = queuedRequests.poll();
+                factory.dequeues.getAsLong();
+                nextRequest.getConsumer().accept(connection);
+                connection.noRequests++;
+            }
+        }
+    }
+
+    void cancel(ConnectionRequest request)
+    {
+        queuedRequests.remove(request);
+        factory.dequeues.getAsLong();
     }
 
     private Connection newConnection()
@@ -113,7 +145,6 @@ final class ConnectionPool
         {
             setDefaultThrottle(connection);
             availableConnections.add(connection);
-            acquiredConnections.remove(connection);
         }
         else
         {
@@ -127,7 +158,6 @@ final class ConnectionPool
 
             // In case the connection was previously released when it was still persistent
             availableConnections.removeFirstOccurrence(connection);
-            acquiredConnections.remove(connection); // first occurrence
 
             if (action != null && !connection.endOrAbortSent)
             {
@@ -143,6 +173,8 @@ final class ConnectionPool
                 connection.endOrAbortSent = true;
             }
         }
+
+        acquireNextIfQueued();
     }
 
     void setDefaultThrottle(Connection connection)
