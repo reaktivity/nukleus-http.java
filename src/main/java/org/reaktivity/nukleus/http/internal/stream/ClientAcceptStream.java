@@ -218,7 +218,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
                                 .item(h -> h.name("retry-after").value("0")));
                 factory.writer.doHttpEnd(acceptReply, targetId, 0L);
 
-                // count rejected requests (no connection)
+                // count rejected requests (no connection or no space in the queue)
                 factory.countRequestsRejected.getAsLong();
             }
         }

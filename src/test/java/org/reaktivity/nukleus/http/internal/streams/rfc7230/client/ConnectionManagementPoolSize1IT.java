@@ -248,5 +248,6 @@ public class ConnectionManagementPoolSize1IT
     public void shouldSend503WithRetryAfterForSecondRequest() throws Exception
     {
         k3po.finish();
+        assertEquals(1, counters.requestsRejected());
     }
 }
