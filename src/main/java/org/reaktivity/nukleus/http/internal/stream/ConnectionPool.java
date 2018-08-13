@@ -38,7 +38,7 @@ final class ConnectionPool
     private final String connectName;
     private final long connectRef;
     private final ClientStreamFactory factory;
-    private final Queue<ConnectionRequest> requests;
+    private final Queue<ConnectionRequest> queuedRequests;
 
     private int connectionsInUse;
 
@@ -48,7 +48,7 @@ final class ConnectionPool
         this.connectName = connectName;
         this.connectRef = connectRef;
         this.availableConnections = new ArrayDeque<>(factory.maximumConnectionsPerRoute);
-        this.requests = new ArrayDeque<>(factory.maximumQueuedRequestsPerRoute);
+        this.queuedRequests = new ArrayDeque<>(factory.maximumQueuedRequestsPerRoute);
     }
 
     /*
@@ -66,9 +66,9 @@ final class ConnectionPool
             connection.noRequests++;
             request.getConsumer().accept(connection);
         }
-        else if (requests.size() + 1 < factory.maximumQueuedRequestsPerRoute)
+        else if (queuedRequests.size() < factory.maximumQueuedRequestsPerRoute)
         {
-            requests.add(request);
+            queuedRequests.add(request);
             factory.enqueues.getAsLong();
         }
         else
@@ -79,21 +79,29 @@ final class ConnectionPool
         return true;
     }
 
-    private void acquireNext(ConnectionRequest request)
+    private void acquireNextIfQueued()
     {
-        Connection connection = availableConnections.poll();
-        if (connection == null && connectionsInUse < factory.maximumConnectionsPerRoute)
+        if (!queuedRequests.isEmpty())
         {
-            connection = newConnection();
+            Connection connection = availableConnections.poll();
+            if (connection == null && connectionsInUse < factory.maximumConnectionsPerRoute)
+            {
+                connection = newConnection();
+            }
+
+            if (connection != null)
+            {
+                ConnectionRequest nextRequest = queuedRequests.poll();
+                factory.dequeues.getAsLong();
+                nextRequest.getConsumer().accept(connection);
+                connection.noRequests++;
+            }
         }
-        assert connection != null;
-        connection.noRequests++;
-        request.getConsumer().accept(connection);
     }
 
     void cancel(ConnectionRequest request)
     {
-        requests.remove(request);
+        queuedRequests.remove(request);
         factory.dequeues.getAsLong();
     }
 
@@ -165,12 +173,8 @@ final class ConnectionPool
                 connection.endOrAbortSent = true;
             }
         }
-        ConnectionRequest nextRequest = requests.poll();
-        if (nextRequest != null)
-        {
-            acquireNext(nextRequest);
-            factory.dequeues.getAsLong();
-        }
+
+        acquireNextIfQueued();
     }
 
     void setDefaultThrottle(Connection connection)
