@@ -138,7 +138,8 @@ final class ConnectionPool
 
             long sourceCorrelationId = correlation.id();
             factory.writer.doHttpBegin(acceptReply, targetId, traceId, 0L, sourceCorrelationId,
-                    hs -> hs.item(h -> h.representation((byte) 0).name(":status").value("503")));
+                                       hs -> hs.item(h -> h.name(":status").value("503"))
+                                               .item(h -> h.name("retry-after").value("0")));
             factory.writer.doHttpEnd(acceptReply, targetId, 0L);
         }
         if (connection.persistent)
