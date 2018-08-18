@@ -275,8 +275,16 @@ final class ClientConnectReplyStream implements MessageConsumer
         doCleanup(CloseAction.ABORT);
     }
 
-    private void handleInvalidResponse(CloseAction action)
+    private void handleInvalidResponse(CloseAction action, long traceId)
     {
+        if (acceptReply != null)
+        {
+            factory.writer.doAbort(acceptReply, acceptReplyId, traceId);
+
+            // count abandoned responses
+            factory.countResponsesAbandoned.getAsLong();
+        }
+
         this.decoderState = this::decodeSkipData;
         this.streamState = this::handleStreamAfterReset;
 
@@ -352,7 +360,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         case HEADERS:
         case DATA:
             // Incomplete response
-            handleInvalidResponse(CloseAction.END);
+            handleInvalidResponse(CloseAction.END, end.trace());
             break;
         case FINAL:
             connection.persistent = false;
@@ -372,21 +380,13 @@ final class ClientConnectReplyStream implements MessageConsumer
             responseState = ResponseState.FINAL;
         }
 
-        if (acceptReply != null)
-        {
-            factory.writer.doAbort(acceptReply, acceptReplyId, abort.trace());
-
-            // count abandoned responses
-            factory.countResponsesAbandoned.getAsLong();
-        }
-
         switch (responseState)
         {
         case BEFORE_HEADERS:
         case HEADERS:
         case DATA:
             // Incomplete response
-            handleInvalidResponse(CloseAction.ABORT);
+            handleInvalidResponse(CloseAction.ABORT, abort.trace());
             break;
         case FINAL:
             connection.persistent = false;
