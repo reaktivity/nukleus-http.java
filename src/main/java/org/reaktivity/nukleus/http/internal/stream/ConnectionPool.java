@@ -136,6 +136,9 @@ final class ConnectionPool
             // count abandoned requests
             factory.countRequestsAbandoned.getAsLong();
 
+            // count all responses
+            factory.countResponses.getAsLong();
+
             long sourceCorrelationId = correlation.id();
             factory.writer.doHttpBegin(acceptReply, targetId, traceId, 0L, sourceCorrelationId,
                                        hs -> hs.item(h -> h.name(":status").value("503"))

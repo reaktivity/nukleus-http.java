@@ -211,6 +211,9 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
             // No backend connection or cannot store in queue, send 503 with Retry-After
             if (!acquired)
             {
+                // count all responses
+                factory.countResponses.getAsLong();
+
                 MessageConsumer acceptReply = factory.router.supplyTarget(acceptName);
                 long targetId = factory.supplyStreamId.getAsLong();
                 factory.writer.doHttpBegin(acceptReply, targetId, 0L, 0L, acceptCorrelationId,
