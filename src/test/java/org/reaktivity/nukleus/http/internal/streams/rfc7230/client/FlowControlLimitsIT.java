@@ -47,9 +47,9 @@ public class FlowControlLimitsIT
         .counterValuesBufferCapacity(1024)
         .clean()
         // Maximum headers size is limited to the size of each slot in the buffer pool:
-        .configure(ReaktorConfiguration.BUFFER_SLOT_CAPACITY_PROPERTY, 64)
+        .configure(ReaktorConfiguration.REAKTOR_BUFFER_SLOT_CAPACITY, 64)
         // Overall buffer pool size:
-        .configure(ReaktorConfiguration.BUFFER_POOL_CAPACITY_PROPERTY, 64)
+        .configure(ReaktorConfiguration.REAKTOR_BUFFER_POOL_CAPACITY, 64)
         .clean();
 
     @Rule
@@ -74,8 +74,8 @@ public class FlowControlLimitsIT
         k3po.finish();
     }
 
-    @Configure(name = ReaktorConfiguration.BUFFER_POOL_CAPACITY_PROPERTY, value = "8192")
-    @Configure(name = ReaktorConfiguration.BUFFER_SLOT_CAPACITY_PROPERTY, value = "8192")
+    @Configure(name = ReaktorRule.REAKTOR_BUFFER_POOL_CAPACITY_NAME, value = "8192")
+    @Configure(name = ReaktorRule.REAKTOR_BUFFER_SLOT_CAPACITY_NAME, value = "8192")
     @Test
     @Specification({
         "${route}/client/controller",

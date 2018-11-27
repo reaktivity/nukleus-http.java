@@ -42,7 +42,8 @@ public final class HttpNukleusFactorySpi implements NukleusFactorySpi
     {
         HttpConfiguration httpConfig = new HttpConfiguration(config);
 
-        return builder.streamFactory(CLIENT, new ClientStreamFactoryBuilder(httpConfig))
+        return builder.configure(httpConfig)
+                      .streamFactory(CLIENT, new ClientStreamFactoryBuilder(httpConfig))
                       .streamFactory(SERVER, new ServerStreamFactoryBuilder(httpConfig))
                       .build();
     }

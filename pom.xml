@@ -51,22 +51,15 @@
     <jmock.version>2.6.0</jmock.version>
 
     <k3po.version>3.0.0-alpha-96</k3po.version>
-    <k3po.nukleus.ext.version>0.30</k3po.nukleus.ext.version>
+    <k3po.nukleus.ext.version>0.31</k3po.nukleus.ext.version>
 
     <nukleus.plugin.version>0.28</nukleus.plugin.version>
-    <nukleus.version>0.23</nukleus.version>
 
     <nukleus.http.spec.version>0.60</nukleus.http.spec.version>
-    <reaktor.version>0.61</reaktor.version>
+    <reaktor.version>0.63</reaktor.version>
   </properties>
 
   <dependencies>
-    <dependency>
-      <groupId>org.reaktivity</groupId>
-      <artifactId>nukleus</artifactId>
-      <version>${nukleus.version}</version>
-      <scope>provided</scope>
-    </dependency>
     <dependency>
       <groupId>org.reaktivity</groupId>
       <artifactId>nukleus-http.spec</artifactId>
@@ -77,7 +70,7 @@
       <groupId>org.reaktivity</groupId>
       <artifactId>reaktor</artifactId>
       <version>${reaktor.version}</version>
-      <scope>test</scope>
+      <scope>provided</scope>
     </dependency>
     <dependency>
       <groupId>org.reaktivity</groupId>

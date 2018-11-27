@@ -19,30 +19,32 @@ import org.reaktivity.nukleus.Configuration;
 
 public class HttpConfiguration extends Configuration
 {
-    // Maximum number of parallel connections to a given target name and ref (i.e. route) when
-    // the HTTP nukleus is acting as a client
-    public static final String MAXIMUM_CONNECTIONS_PROPERTY_NAME = "nukleus.http.maximum.connections";
+    public static final IntPropertyDef HTTP_MAXIMUM_CONNECTIONS;
+    public static final IntPropertyDef HTTP_MAXIMUM_QUEUED_REQUESTS;
 
-    public static final String MAXIMUM_QUEUED_REQUESTS_PROPERTY_NAME = "nukleus.http.maximum.requests.queued";
+    private static final ConfigurationDef HTTP_CONFIG;
 
-
-    private static final int MAXIMUM_CONNECTIONS_DEFAULT = 10; // most browsers use 6, IE 11 uses 13
-    private static final int MAXIMUM_REQUESTS_QUEUED_DEFAULT = 10000;
-
+    static
+    {
+        final ConfigurationDef config = new ConfigurationDef("nukleus.http");
+        HTTP_MAXIMUM_CONNECTIONS = config.property("maximum.connections", 10);
+        HTTP_MAXIMUM_QUEUED_REQUESTS = config.property("maximum.requests.queued", 10000);
+        HTTP_CONFIG = config;
+    }
 
     public HttpConfiguration(
         Configuration config)
     {
-        super(config);
+        super(HTTP_CONFIG, config);
     }
 
     public int maximumConnectionsPerRoute()
     {
-        return getInteger(MAXIMUM_CONNECTIONS_PROPERTY_NAME, MAXIMUM_CONNECTIONS_DEFAULT);
+        return HTTP_MAXIMUM_CONNECTIONS.getAsInt(this);
     }
 
     public int maximumRequestsQueuedPerRoute()
     {
-        return getInteger(MAXIMUM_QUEUED_REQUESTS_PROPERTY_NAME, MAXIMUM_REQUESTS_QUEUED_DEFAULT);
+        return HTTP_MAXIMUM_QUEUED_REQUESTS.getAsInt(this);
     }
 }

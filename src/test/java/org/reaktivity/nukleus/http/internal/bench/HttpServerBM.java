@@ -23,8 +23,8 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.agrona.BitUtil.SIZE_OF_INT;
 import static org.agrona.BitUtil.SIZE_OF_LONG;
 import static org.agrona.IoUtil.ensureDirectoryExists;
-import static org.reaktivity.nukleus.Configuration.DIRECTORY_PROPERTY_NAME;
-import static org.reaktivity.nukleus.Configuration.STREAMS_BUFFER_CAPACITY_PROPERTY_NAME;
+import static org.reaktivity.reaktor.internal.ReaktorConfiguration.REAKTOR_DIRECTORY;
+import static org.reaktivity.reaktor.internal.ReaktorConfiguration.REAKTOR_STREAMS_BUFFER_CAPACITY;
 
 import java.io.File;
 import java.io.IOException;
@@ -86,8 +86,8 @@ public class HttpServerBM
 
         {
             Properties properties = new Properties();
-            properties.setProperty(DIRECTORY_PROPERTY_NAME, "target/nukleus-benchmarks");
-            properties.setProperty(STREAMS_BUFFER_CAPACITY_PROPERTY_NAME, Long.toString(1024L * 1024L * 16L));
+            properties.setProperty(REAKTOR_DIRECTORY.name(), "target/nukleus-benchmarks");
+            properties.setProperty(REAKTOR_STREAMS_BUFFER_CAPACITY.name(), Long.toString(1024L * 1024L * 16L));
 
             configuration = new Configuration(properties);
             ensureDirectoryExists(configuration.directory().toFile(), configuration.directory().toString());

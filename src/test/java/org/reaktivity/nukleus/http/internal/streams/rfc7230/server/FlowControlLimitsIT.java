@@ -45,9 +45,9 @@ public class FlowControlLimitsIT
         .counterValuesBufferCapacity(1024)
         .clean()
         // Maximum headers size is limited to the size of each slot in the buffer pool:
-        .configure(ReaktorConfiguration.BUFFER_SLOT_CAPACITY_PROPERTY, 64)
+        .configure(ReaktorConfiguration.REAKTOR_BUFFER_SLOT_CAPACITY, 64)
         // Overall buffer pool size:
-        .configure(ReaktorConfiguration.BUFFER_POOL_CAPACITY_PROPERTY, 64);
+        .configure(ReaktorConfiguration.REAKTOR_BUFFER_POOL_CAPACITY, 64);
 
     @Rule
     public final TestRule chain = outerRule(reaktor).around(k3po).around(timeout);
