@@ -18,7 +18,8 @@ package org.reaktivity.nukleus.http.internal.streams.rfc7230.client;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.Assert.assertEquals;
 import static org.junit.rules.RuleChain.outerRule;
-import static org.reaktivity.nukleus.http.internal.HttpConfiguration.MAXIMUM_QUEUED_REQUESTS_PROPERTY_NAME;
+import static org.reaktivity.nukleus.http.internal.HttpConfiguration.HTTP_MAXIMUM_CONNECTIONS;
+import static org.reaktivity.nukleus.http.internal.HttpConfigurationTest.HTTP_MAXIMUM_QUEUED_REQUESTS_NAME;
 
 import org.junit.Ignore;
 import org.junit.Rule;
@@ -28,7 +29,6 @@ import org.junit.rules.TestRule;
 import org.junit.rules.Timeout;
 import org.kaazing.k3po.junit.annotation.Specification;
 import org.kaazing.k3po.junit.rules.K3poRule;
-import org.reaktivity.nukleus.http.internal.HttpConfiguration;
 import org.reaktivity.nukleus.http.internal.test.HttpCountersRule;
 import org.reaktivity.reaktor.test.ReaktorRule;
 import org.reaktivity.reaktor.test.annotation.Configure;
@@ -49,7 +49,7 @@ public class ConnectionManagementPoolSize1IT
         .commandBufferCapacity(1024)
         .responseBufferCapacity(1024)
         .counterValuesBufferCapacity(1024)
-        .configure(HttpConfiguration.MAXIMUM_CONNECTIONS_PROPERTY_NAME, "1")
+        .configure(HTTP_MAXIMUM_CONNECTIONS, 1)
         .clean();
 
     private final HttpCountersRule counters = new HttpCountersRule(reaktor);
@@ -239,7 +239,7 @@ public class ConnectionManagementPoolSize1IT
         k3po.finish();
     }
 
-    @Configure(name = MAXIMUM_QUEUED_REQUESTS_PROPERTY_NAME, value = "0")
+    @Configure(name = HTTP_MAXIMUM_QUEUED_REQUESTS_NAME, value = "0")
     @Test
     @Specification({
         "${route}/client/controller",
