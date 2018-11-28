@@ -434,10 +434,21 @@ final class ServerAcceptStream implements MessageConsumer
         int length)
     {
         EndFW end = factory.endRO.wrap(buffer, index, index + length);
-        final long streamId = end.streamId();
         final long traceId = end.trace();
-        assert streamId == acceptId;
-        doEnd(traceId);
+
+        if (hasUpgrade)
+        {
+            factory.writer.doEnd(target, targetId, traceId);
+            decoderState = (b, o, l) -> o;
+            streamState = this::streamAfterEnd;
+            releaseSlotIfNecessary();
+        }
+        else
+        {
+            final long streamId = end.streamId();
+            assert streamId == acceptId;
+            doEnd(traceId);
+        }
     }
 
     private void processAbort(
@@ -458,7 +469,7 @@ final class ServerAcceptStream implements MessageConsumer
         releaseSlotIfNecessary();
     }
 
-    private void doEnd(Long traceId)
+    private void doEnd(long traceId)
     {
         decoderState = (b, o, l) -> o;
         streamState = this::streamAfterEnd;
