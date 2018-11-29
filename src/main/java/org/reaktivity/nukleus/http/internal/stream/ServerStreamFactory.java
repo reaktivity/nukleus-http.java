@@ -29,6 +29,7 @@ import org.reaktivity.nukleus.function.MessageConsumer;
 import org.reaktivity.nukleus.function.MessagePredicate;
 import org.reaktivity.nukleus.http.internal.types.control.HttpRouteExFW;
 import org.reaktivity.nukleus.http.internal.types.control.RouteFW;
+import org.reaktivity.nukleus.http.internal.types.stream.AbortFW;
 import org.reaktivity.nukleus.http.internal.types.stream.BeginFW;
 import org.reaktivity.nukleus.http.internal.types.stream.DataFW;
 import org.reaktivity.nukleus.http.internal.types.stream.EndFW;
@@ -55,6 +56,7 @@ public final class ServerStreamFactory implements StreamFactory
     final BeginFW beginRO = new BeginFW();
     final DataFW dataRO = new DataFW();
     final EndFW endRO = new EndFW();
+    final AbortFW abortRO = new AbortFW();
     final WindowFW windowRO = new WindowFW();
     final ResetFW resetRO = new ResetFW();
     final HttpBeginExFW beginExRO = new HttpBeginExFW();

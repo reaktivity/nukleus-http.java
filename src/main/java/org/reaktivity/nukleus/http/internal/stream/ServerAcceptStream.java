@@ -87,7 +87,8 @@ final class ServerAcceptStream implements MessageConsumer
     private Runnable cleanupConnectReply;
     private long replyStreamId;
     private MessageConsumer acceptReply;
-    private long traceId;
+    private long throttleTraceId;
+    private long streamTraceId;
 
     @Override
     public String toString()
@@ -105,7 +106,7 @@ final class ServerAcceptStream implements MessageConsumer
         this.throttleState = this::throttleIgnoreWindow;
         this.acceptThrottle = acceptThrottle;
         this.acceptId = acceptId;
-        this.traceId = traceId;
+        this.streamTraceId = traceId;
         this.acceptRef = acceptRef;
         this.acceptCorrelationId = acceptCorrelationId;
         this.authorization = authorization;
@@ -310,7 +311,7 @@ final class ServerAcceptStream implements MessageConsumer
                         WindowFW window = factory.windowRO.wrap(buffer, index, index + length);
                         acceptState.acceptReplyBudget += window.credit();
                         acceptState.acceptReplyPadding = window.padding();
-                        traceId = window.trace();
+                        throttleTraceId = window.trace();
                         int writableBytes = Math.max(
                             Math.min(acceptState.acceptReplyBudget - acceptState.acceptReplyPadding,
                                      payload.capacity() - offset), 0);
@@ -362,8 +363,7 @@ final class ServerAcceptStream implements MessageConsumer
         final MessageConsumer acceptReply = factory.router.supplyTarget(acceptName);
         ServerAcceptState state = new ServerAcceptState(acceptName, replyStreamId, acceptReply, factory.writer,
                  this::loopBackThrottle, factory.router, this::setCleanupConnectReply);
-        FrameFW frameFW = factory.frameRO.wrap(buffer, index, index + length);
-        factory.writer.doBegin(acceptReply, replyStreamId, frameFW.trace(), 0L, acceptCorrelationId);
+        factory.writer.doBegin(acceptReply, replyStreamId, streamTraceId, 0L, acceptCorrelationId);
         this.correlation = new Correlation<>(acceptCorrelationId, acceptName, state);
         doSourceWindow(maximumHeadersSize, 0, 0);
         this.acceptReply = acceptReply;
@@ -381,7 +381,7 @@ final class ServerAcceptStream implements MessageConsumer
         int length)
     {
         DataFW data = factory.dataRO.wrap(buffer, index, index + length);
-        traceId = data.typeId();
+        streamTraceId = data.trace();
 
         sourceBudget -= data.length() + data.padding();
 
@@ -434,11 +434,11 @@ final class ServerAcceptStream implements MessageConsumer
         int length)
     {
         EndFW end = factory.endRO.wrap(buffer, index, index + length);
-        final long traceId = end.trace();
+        streamTraceId = end.trace();
 
         if (hasUpgrade)
         {
-            factory.writer.doEnd(target, targetId, traceId);
+            factory.writer.doEnd(target, targetId, streamTraceId);
             decoderState = (b, o, l) -> o;
             streamState = this::streamAfterEnd;
             releaseSlotIfNecessary();
@@ -447,7 +447,7 @@ final class ServerAcceptStream implements MessageConsumer
         {
             final long streamId = end.streamId();
             assert streamId == acceptId;
-            doEnd(traceId);
+            doEnd(streamTraceId);
         }
     }
 
@@ -456,11 +456,13 @@ final class ServerAcceptStream implements MessageConsumer
             int index,
             int length)
     {
+        AbortFW abort = factory.abortRO.wrap(buffer, index, index + length);
+        streamTraceId = abort.trace();
         Correlation correlation = factory.correlations.remove(acceptCorrelationId);
         factory.writer.doAbort(acceptReply, replyStreamId, 0);
         if (targetBeginIssued)
         {
-            factory.writer.doAbort(target, targetId, 0);
+            factory.writer.doAbort(target, targetId, streamTraceId);
         }
         if (correlation == null &&  cleanupConnectReply != null)
         {
@@ -562,7 +564,7 @@ final class ServerAcceptStream implements MessageConsumer
         slotPosition = dataLength;
     }
 
-    private int     decodeHttpBegin(
+    private int decodeHttpBegin(
             final DirectBuffer payload,
             final int offset,
             final int limit)
@@ -699,8 +701,7 @@ final class ServerAcceptStream implements MessageConsumer
 
                     targetBudget = 0;
                     switchTarget(newTarget, newTargetId);
-                    FrameFW frameFW = factory.frameRO.wrap(payload, offset, offset + length);
-                    factory.writer.doHttpBegin(target, newTargetId, frameFW.trace(), targetRef, newTargetCorrelationId,
+                    factory.writer.doHttpBegin(target, newTargetId, streamTraceId, targetRef, newTargetCorrelationId,
                             hs -> headers.forEach((k, v) -> hs.item(i -> i.representation((byte)0).name(k).value(v))));
                     targetBeginIssued = true;
 
@@ -757,7 +758,8 @@ final class ServerAcceptStream implements MessageConsumer
         String authority = requestURI.getAuthority();
 
         final Map<String, String> headers = new LinkedHashMap<>();
-        headers.put(":scheme", "http");            headers.put(":method", start[0]);
+        headers.put(":scheme", "http");
+        headers.put(":method", start[0]);
         headers.put(":path", requestURI.getRawPath());
 
         if (authority != null)
@@ -851,8 +853,7 @@ final class ServerAcceptStream implements MessageConsumer
 
         if (writableBytes > 0)
         {
-            FrameFW frameFW = factory.frameRO.wrap(payload, offset, payload.capacity());
-            factory.writer.doHttpData(target, targetId, frameFW.trace(), targetPadding, payload, offset, writableBytes);
+            factory.writer.doHttpData(target, targetId, streamTraceId, targetPadding, payload, offset, writableBytes);
             targetBudget -= writableBytes + targetPadding;
             contentRemaining -= writableBytes;
         }
@@ -943,8 +944,7 @@ final class ServerAcceptStream implements MessageConsumer
 
         if (writableBytes > 0)
         {
-            FrameFW frameFW = factory.frameRO.wrap(payload, offset, payload.capacity());
-            factory.writer.doHttpData(target, targetId, frameFW.trace(), targetPadding, payload, offset, writableBytes);
+            factory.writer.doHttpData(target, targetId, streamTraceId, targetPadding, payload, offset, writableBytes);
             targetBudget -= writableBytes + targetPadding;
             chunkSizeRemaining -= writableBytes;
         }
@@ -965,8 +965,7 @@ final class ServerAcceptStream implements MessageConsumer
         int writableBytes = Math.min(length, targetBudget - targetPadding);
         if (writableBytes > 0)
         {
-            FrameFW frameFW = factory.frameRO.wrap(payload, offset, offset + limit);
-            factory.writer.doHttpData(target, targetId, frameFW.trace(), targetPadding, payload, offset, writableBytes);
+            factory.writer.doHttpData(target, targetId, streamTraceId, targetPadding, payload, offset, writableBytes);
             targetBudget -= writableBytes + targetPadding;
         }
         return offset + Math.max(writableBytes, 0);
@@ -987,14 +986,13 @@ final class ServerAcceptStream implements MessageConsumer
             final int limit)
     {
         // TODO: consider chunks, trailers
-        FrameFW frameFW = factory.frameRO.wrap(payload, offset, offset + limit);
-        factory.writer.doHttpEnd(target, targetId, frameFW.trace());
+        factory.writer.doHttpEnd(target, targetId, streamTraceId);
         return limit;
     };
 
     private void httpRequestComplete()
     {
-        factory.writer.doHttpEnd(target, targetId, 0L);
+        factory.writer.doHttpEnd(target, targetId, streamTraceId);
         // TODO: target.removeThrottle(targetId);
         decoderState = this::decodeBeforeHttpBegin;
         throttleState = this::throttleIgnoreWindow;
@@ -1161,7 +1159,7 @@ final class ServerAcceptStream implements MessageConsumer
     {
         targetBudget += window.credit();
         targetPadding = window.padding();
-        traceId = window.trace();
+        throttleTraceId = window.trace();
         if (slotIndex != NO_SLOT)
         {
             processDeferredData();
@@ -1174,7 +1172,7 @@ final class ServerAcceptStream implements MessageConsumer
     {
         targetBudget += window.credit();
         targetPadding = window.padding();
-        traceId = window.trace();
+        throttleTraceId = window.trace();
         if (slotIndex != NO_SLOT)
         {
             processDeferredData();
@@ -1217,9 +1215,9 @@ final class ServerAcceptStream implements MessageConsumer
     private void processReset(
         ResetFW reset)
     {
-        traceId = reset.trace();
+        throttleTraceId = reset.trace();
         releaseSlotIfNecessary();
-        factory.writer.doReset(acceptThrottle, acceptId, traceId);
+        factory.writer.doReset(acceptThrottle, acceptId, throttleTraceId);
     }
 
     private void switchTarget(String newTargetName, long newTargetId)
