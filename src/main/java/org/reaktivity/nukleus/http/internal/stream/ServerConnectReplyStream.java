@@ -202,7 +202,7 @@ public final class ServerConnectReplyStream implements MessageConsumer
         int index,
         int length)
     {
-        BeginFW begin =factory.beginRO.wrap(buffer, index, index + length);
+        BeginFW begin = factory.beginRO.wrap(buffer, index, index + length);
 
         final long sourceRef = begin.sourceRef();
         final long targetCorrelationId = begin.correlationId();
@@ -245,6 +245,11 @@ public final class ServerConnectReplyStream implements MessageConsumer
                 }
                 else
                 {
+                    if ("connection".equals(name) && "close".equals(value))
+                    {
+                        acceptState.endRequested = true;
+                    }
+
                     appendHeader(headersChars, name, value);
                 }
             });
@@ -328,7 +333,7 @@ public final class ServerConnectReplyStream implements MessageConsumer
 
     private void doEnd(long traceId)
     {
-        if (acceptState != null && acceptState.endRequested && --acceptState.pendingRequests == 0)
+        if (acceptState != null && --acceptState.pendingRequests == 0 && acceptState.endRequested)
         {
             factory.writer.doEnd(acceptState.acceptReply, acceptState.replyStreamId, traceId);
             acceptState.restoreInitialThrottle();

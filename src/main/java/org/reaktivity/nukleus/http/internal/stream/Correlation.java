@@ -85,6 +85,6 @@ public class Correlation<S>
     @Override
     public String toString()
     {
-        return String.format("[id=%s, source=\"%s\", established=%s]", id, source);
+        return String.format("[id=%s, source=\"%s\", state=%s]", id, source, state);
     }
 }
