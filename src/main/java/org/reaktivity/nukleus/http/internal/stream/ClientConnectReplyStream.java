@@ -586,9 +586,9 @@ final class ClientConnectReplyStream implements MessageConsumer
             String connectionOptions = headers.get("connection");
             if (connectionOptions != null)
             {
-                Arrays.stream(connectionOptions.toLowerCase().split(",")).forEach((element) ->
+                Arrays.stream(connectionOptions.split("\\s*,\\s*")).forEach((element) ->
                 {
-                    if (element.equals("close"))
+                    if (element.equalsIgnoreCase("close"))
                     {
                         connection.persistent = false;
                     }
