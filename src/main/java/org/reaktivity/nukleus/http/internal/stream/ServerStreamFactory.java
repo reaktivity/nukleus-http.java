@@ -19,6 +19,7 @@ import static java.util.Objects.requireNonNull;
 
 import java.nio.charset.StandardCharsets;
 import java.util.function.LongSupplier;
+import java.util.function.LongUnaryOperator;
 
 import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
@@ -63,6 +64,7 @@ public final class ServerStreamFactory implements StreamFactory
 
     final RouteManager router;
     final LongSupplier supplyStreamId;
+    final LongUnaryOperator supplyReplyId;
     final LongSupplier supplyCorrelationId;
     final BufferPool bufferPool;
 
@@ -74,6 +76,7 @@ public final class ServerStreamFactory implements StreamFactory
         MutableDirectBuffer writeBuffer,
         BufferPool bufferPool,
         LongSupplier supplyStreamId,
+        LongUnaryOperator supplyReplyId,
         LongSupplier supplyCorrelationId,
         Long2ObjectHashMap<Correlation<?>> correlations)
     {
@@ -81,6 +84,7 @@ public final class ServerStreamFactory implements StreamFactory
         this.writer = new MessageWriter(requireNonNull(writeBuffer));
         this.bufferPool = requireNonNull(bufferPool);
         this.supplyStreamId = requireNonNull(supplyStreamId);
+        this.supplyReplyId = requireNonNull(supplyReplyId);
         this.supplyCorrelationId = supplyCorrelationId;
         this.correlations = requireNonNull(correlations);
     }
