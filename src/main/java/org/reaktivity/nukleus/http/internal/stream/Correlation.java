@@ -22,24 +22,33 @@ import java.util.Objects;
 public class Correlation<S>
 {
     private final String source;
+    private final long replyId;
     private final long id;
     private final S state;
 
     public Correlation(
         long id,
         String source,
+        long replyId,
         S state)
     {
         this.id = id;
         this.source = requireNonNull(source, "source");
+        this.replyId = replyId;
         this.state = state;
     }
 
     public Correlation(
-            long id,
-            String source)
+        long id,
+        String source,
+        long sourceId)
     {
-        this(id, source, null);
+        this(id, source, sourceId, null);
+    }
+
+    public long replyId()
+    {
+        return replyId;
     }
 
     public String source()

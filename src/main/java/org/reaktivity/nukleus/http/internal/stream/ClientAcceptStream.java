@@ -34,9 +34,9 @@ import org.reaktivity.nukleus.http.internal.types.stream.AbortFW;
 import org.reaktivity.nukleus.http.internal.types.stream.BeginFW;
 import org.reaktivity.nukleus.http.internal.types.stream.DataFW;
 import org.reaktivity.nukleus.http.internal.types.stream.EndFW;
+import org.reaktivity.nukleus.http.internal.types.stream.FrameFW;
 import org.reaktivity.nukleus.http.internal.types.stream.ResetFW;
 import org.reaktivity.nukleus.http.internal.types.stream.WindowFW;
-import org.reaktivity.nukleus.http.internal.types.stream.FrameFW;
 
 final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection>, MessageConsumer
 {
@@ -45,10 +45,11 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
     private MessageConsumer streamState;
     private MessageConsumer throttleState;
 
+    private final MessageConsumer acceptThrottle;
     private final long acceptId;
     private final String acceptName;
     private final long acceptCorrelationId;
-    private final MessageConsumer acceptThrottle;
+    private final long acceptReplyId;
     private final String connectName;
     private final long connectRef;
     private Map<String, String> headers;
@@ -64,14 +65,24 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
     private boolean persistent = true;
     private long traceId;
 
-    ClientAcceptStream(ClientStreamFactory factory, MessageConsumer acceptThrottle,
-            long acceptId, long acceptRef, String acceptName, long acceptCorrelationId,
-            String connectName, long connectRef, Map<String, String> headers)
+
+    ClientAcceptStream(
+        ClientStreamFactory factory,
+        MessageConsumer acceptThrottle,
+        long acceptId,
+        long acceptRef,
+        String acceptName,
+        long acceptCorrelationId,
+        long acceptReplyId,
+        String connectName,
+        long connectRef,
+        Map<String, String> headers)
     {
         this.factory = factory;
         this.acceptThrottle = acceptThrottle;
         this.acceptId = this.factory.beginRO.streamId();
         this.acceptName = acceptName;
+        this.acceptReplyId = acceptReplyId;
         this.acceptCorrelationId = acceptCorrelationId;
         this.connectName = connectName;
         this.connectRef = connectRef;
@@ -215,11 +226,10 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
                 factory.countResponses.getAsLong();
 
                 MessageConsumer acceptReply = factory.router.supplyTarget(acceptName);
-                long targetId = factory.supplyStreamId.getAsLong();
-                factory.writer.doHttpBegin(acceptReply, targetId, 0L, 0L, acceptCorrelationId,
+                factory.writer.doHttpBegin(acceptReply, acceptReplyId, 0L, 0L, acceptCorrelationId,
                         hs -> hs.item(h -> h.name(":status").value("503"))
                                 .item(h -> h.name("retry-after").value("0")));
-                factory.writer.doHttpEnd(acceptReply, targetId, 0L);
+                factory.writer.doHttpEnd(acceptReply, acceptReplyId, 0L);
 
                 // count rejected requests (no connection or no space in the queue)
                 factory.countRequestsRejected.getAsLong();
@@ -517,7 +527,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         connection.persistent = persistent;
         ClientConnectReplyState state = new ClientConnectReplyState(connectionPool, connection);
         final Correlation<ClientConnectReplyState> correlation =
-                new Correlation<>(acceptCorrelationId, acceptName, state);
+                new Correlation<>(acceptCorrelationId, acceptName, acceptReplyId, state);
         factory.correlations.put(connection.correlationId, correlation);
         factory.router.setThrottle(connectName, connection.connectStreamId, this::handleThrottle);
         if (connection.budget > 0)

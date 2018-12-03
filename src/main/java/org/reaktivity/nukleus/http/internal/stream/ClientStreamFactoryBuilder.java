@@ -19,6 +19,7 @@ import java.util.function.Function;
 import java.util.function.IntUnaryOperator;
 import java.util.function.LongFunction;
 import java.util.function.LongSupplier;
+import java.util.function.LongUnaryOperator;
 import java.util.function.Supplier;
 
 import org.agrona.MutableDirectBuffer;
@@ -38,6 +39,7 @@ public final class ClientStreamFactoryBuilder implements StreamFactoryBuilder
     private RouteManager router;
     private MutableDirectBuffer writeBuffer;
     private LongSupplier supplyStreamId;
+    private LongUnaryOperator supplyReplyId;
     private LongSupplier supplyCorrelationId;
     private Supplier<BufferPool> supplyBufferPool;
     private Function<String, LongSupplier> supplyCounter;
@@ -66,7 +68,15 @@ public final class ClientStreamFactoryBuilder implements StreamFactoryBuilder
     }
 
     @Override
-    public ClientStreamFactoryBuilder setStreamIdSupplier(
+    public ClientStreamFactoryBuilder setReplyIdSupplier(
+        LongUnaryOperator supplyReplyId)
+    {
+        this.supplyReplyId = supplyReplyId;
+        return this;
+    }
+
+    @Override
+    public ClientStreamFactoryBuilder setInitialIdSupplier(
         LongSupplier supplyStreamId)
     {
         this.supplyStreamId = supplyStreamId;
@@ -117,6 +127,6 @@ public final class ClientStreamFactoryBuilder implements StreamFactoryBuilder
         final BufferPool bufferPool = supplyBufferPool.get();
 
         return new ClientStreamFactory((HttpConfiguration) config, router, writeBuffer, bufferPool,
-                supplyStreamId, supplyCorrelationId, correlations, supplyCounter);
+                supplyStreamId, supplyReplyId, supplyCorrelationId, correlations, supplyCounter);
     }
 }

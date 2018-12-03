@@ -26,6 +26,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.function.Function;
 import java.util.function.LongSupplier;
+import java.util.function.LongUnaryOperator;
 
 import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
@@ -78,6 +79,7 @@ public final class ClientStreamFactory implements StreamFactory
 
     final RouteManager router;
     final LongSupplier supplyStreamId;
+    final LongUnaryOperator supplyReplyId;
     final LongSupplier supplyCorrelationId;
     final LongSupplier enqueues;
     final LongSupplier dequeues;
@@ -107,6 +109,7 @@ public final class ClientStreamFactory implements StreamFactory
         MutableDirectBuffer writeBuffer,
         BufferPool bufferPool,
         LongSupplier supplyStreamId,
+        LongUnaryOperator supplyReplyId,
         LongSupplier supplyCorrelationId,
         Long2ObjectHashMap<Correlation<?>> correlations,
         Function<String, LongSupplier> supplyCounter)
@@ -116,6 +119,7 @@ public final class ClientStreamFactory implements StreamFactory
         this.bufferPool = requireNonNull(bufferPool);
         this.supplyStreamId = requireNonNull(supplyStreamId);
         this.supplyCorrelationId = supplyCorrelationId;
+        this.supplyReplyId = requireNonNull(supplyReplyId);
         this.correlations = requireNonNull(correlations);
         this.connectionPools = new HashMap<>();
         this.maximumConnectionsPerRoute = configuration.maximumConnectionsPerRoute();
@@ -185,9 +189,10 @@ public final class ClientStreamFactory implements StreamFactory
             final long acceptCorrelationId = begin.correlationId();
             final String connectName = route.target().asString();
             final long connectRef = route.targetRef();
+            final long acceptReplyId = supplyReplyId.applyAsLong(acceptId);
 
             newStream = new ClientAcceptStream(this,
-                    acceptThrottle, acceptId, acceptRef, acceptName, acceptCorrelationId,
+                    acceptThrottle, acceptId, acceptRef, acceptName, acceptCorrelationId, acceptReplyId,
                     connectName, connectRef, headers);
         }
 

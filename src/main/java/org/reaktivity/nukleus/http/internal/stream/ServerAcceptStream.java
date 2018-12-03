@@ -85,7 +85,7 @@ final class ServerAcceptStream implements MessageConsumer
     private Correlation<ServerAcceptState> correlation;
     private boolean targetBeginIssued;
     private Runnable cleanupConnectReply;
-    private long replyStreamId;
+    private long acceptReplyId;
     private MessageConsumer acceptReply;
     private long throttleTraceId;
     private long streamTraceId;
@@ -358,16 +358,15 @@ final class ServerAcceptStream implements MessageConsumer
         this.streamState = this::streamAfterBeginOrData;
         this.decoderState = this::decodeBeforeHttpBegin;
 
-        // Proactively issue BEGIN on server accept reply since we only support bidirectional transport
-        long replyStreamId = factory.supplyStreamId.getAsLong();
+        final long acceptReplyId = factory.supplyReplyId.applyAsLong(acceptId);
         final MessageConsumer acceptReply = factory.router.supplyTarget(acceptName);
-        ServerAcceptState state = new ServerAcceptState(acceptName, replyStreamId, acceptReply, factory.writer,
+        final ServerAcceptState state = new ServerAcceptState(acceptName, acceptReplyId, acceptReply, factory.writer,
                  this::loopBackThrottle, factory.router, this::setCleanupConnectReply);
-        factory.writer.doBegin(acceptReply, replyStreamId, streamTraceId, 0L, acceptCorrelationId);
-        this.correlation = new Correlation<>(acceptCorrelationId, acceptName, state);
+        factory.writer.doBegin(acceptReply, acceptReplyId, streamTraceId, 0L, acceptCorrelationId);
+        this.correlation = new Correlation<>(acceptCorrelationId, acceptName, acceptReplyId, state);
         doSourceWindow(maximumHeadersSize, 0, 0);
         this.acceptReply = acceptReply;
-        this.replyStreamId = replyStreamId;
+        this.acceptReplyId = acceptReplyId;
     }
 
     void setCleanupConnectReply(Runnable cleanupConnectReply)
@@ -459,7 +458,7 @@ final class ServerAcceptStream implements MessageConsumer
         AbortFW abort = factory.abortRO.wrap(buffer, index, index + length);
         streamTraceId = abort.trace();
         Correlation correlation = factory.correlations.remove(acceptCorrelationId);
-        factory.writer.doAbort(acceptReply, replyStreamId, 0);
+        factory.writer.doAbort(acceptReply, acceptReplyId, 0);
         if (targetBeginIssued)
         {
             factory.writer.doAbort(target, targetId, streamTraceId);
