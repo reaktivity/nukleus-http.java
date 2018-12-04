@@ -1015,7 +1015,7 @@ final class ServerAcceptStream implements MessageConsumer
     {
         final MessagePredicate filter = (t, b, o, l) ->
         {
-            final RouteFW route = factory.routeRO.wrap(b, o, l);
+            final RouteFW route = factory.routeRO.wrap(b, o, o + l);
             final OctetsFW extension = route.extension();
             boolean headersMatch = true;
             if (extension.sizeof() > 0)
