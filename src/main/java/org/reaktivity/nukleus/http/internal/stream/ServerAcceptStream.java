@@ -257,7 +257,12 @@ final class ServerAcceptStream implements MessageConsumer
 
             // We can't write back an HTTP error response because we already forwarded the request to the target
             factory.writer.doReset(acceptThrottle, acceptId, 0);
-            factory.writer.doHttpEnd(target, targetId, 0);
+            factory.writer.doAbort(target, targetId, 0);
+            if (correlation != null)
+            {
+                correlation.state().pendingRequests--;
+            }
+
             doEnd(0L);
         }
         else
@@ -327,7 +332,7 @@ final class ServerAcceptStream implements MessageConsumer
                             // Drain data from source before resetting to allow its writes to complete
                             throttleState = ServerAcceptStream.this::throttlePropagateWindow;
                             doSourceWindow(ServerAcceptStream.this.maximumHeadersSize, 0, window.trace());
-                            ServerAcceptStream.this.factory.writer.doReset(acceptThrottle, acceptId, 0);
+                            factory.writer.doEnd(target, targetId, 0); // connection: close
                         }
                         break;
                     case ResetFW.TYPE_ID:
@@ -346,7 +351,7 @@ final class ServerAcceptStream implements MessageConsumer
             // Drain data from source before resetting to allow its writes to complete
             throttleState = ServerAcceptStream.this::throttlePropagateWindow;
             doSourceWindow(maximumHeadersSize, 0, 0);
-            factory.writer.doReset(acceptThrottle, acceptId, 0);
+            factory.writer.doEnd(target, targetId, 0); // connection: close
         }
     }
 
@@ -975,6 +980,7 @@ final class ServerAcceptStream implements MessageConsumer
             final int offset,
             final int limit)
     {
+        doSourceWindow(limit - offset, 0, 0);
         return limit;
     };
 
