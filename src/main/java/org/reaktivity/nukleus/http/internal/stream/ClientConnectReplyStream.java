@@ -229,7 +229,7 @@ final class ClientConnectReplyStream implements MessageConsumer
             this.streamState = this::handleStreamAfterEnd;
             break;
         case AbortFW.TYPE_ID:
-            this.factory.abortRO.wrap(buffer, index, length);
+            this.factory.abortRO.wrap(buffer, index, index + length);
             this.streamState = this::handleStreamAfterEnd;
             break;
         default:
@@ -540,6 +540,7 @@ final class ClientConnectReplyStream implements MessageConsumer
             if (length >= factory.maximumHeadersSize)
             {
                 handleInvalidResponseAndReset();
+                result = offset + factory.maximumHeadersSize;
             }
         }
         else
@@ -830,6 +831,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         final int offset,
         final int limit)
     {
+        factory.writer.doWindow(connectReplyThrottle, connectReplyId, 0, limit - offset, 0);
         return limit;
     };
 
