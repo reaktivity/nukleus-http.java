@@ -27,6 +27,7 @@ import org.reaktivity.nukleus.route.RouteManager;
 final class ServerAcceptState
 {
     final String acceptReplyName;
+    final long acceptRouteId;
     final long replyStreamId;
     final MessageConsumer acceptReply;
     private final MessageConsumer initialThrottle;
@@ -41,6 +42,7 @@ final class ServerAcceptState
 
     ServerAcceptState(
         String acceptReplyName,
+        long acceptRouteId,
         long replyStreamId,
         MessageConsumer acceptReply,
         MessageWriter writer,
@@ -48,6 +50,7 @@ final class ServerAcceptState
         RouteManager router,
         Consumer<Runnable> setCleanupConnectReply)
     {
+        this.acceptRouteId = acceptRouteId;
         this.replyStreamId = replyStreamId;
         this.acceptReply = acceptReply;
         this.initialThrottle = initialThrottle;
@@ -75,7 +78,7 @@ final class ServerAcceptState
     {
         if (pendingRequests == 0)
         {
-            writer.doEnd(acceptReply, replyStreamId, traceId);
+            writer.doEnd(acceptReply, acceptRouteId, replyStreamId, traceId);
             // TODO: unset throttle on acceptReply
         }
         else
@@ -86,7 +89,7 @@ final class ServerAcceptState
 
     public void doAbort(MessageWriter writer, long traceId)
     {
-        writer.doAbort(acceptReply, replyStreamId, traceId);
+        writer.doAbort(acceptReply, acceptRouteId, replyStreamId, traceId);
     }
 }
 

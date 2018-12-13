@@ -137,11 +137,11 @@ public final class ClientStreamFactory implements StreamFactory
 
     @Override
     public MessageConsumer newStream(
-            int msgTypeId,
-            DirectBuffer buffer,
-            int index,
-            int length,
-            MessageConsumer throttle)
+        int msgTypeId,
+        DirectBuffer buffer,
+        int index,
+        int length,
+        MessageConsumer throttle)
     {
         final BeginFW begin = beginRO.wrap(buffer, index, index + length);
         final long sourceRef = begin.sourceRef();
@@ -161,7 +161,9 @@ public final class ClientStreamFactory implements StreamFactory
         return newStream;
     }
 
-    private MessageConsumer newAcceptStream(BeginFW begin, MessageConsumer acceptThrottle)
+    private MessageConsumer newAcceptStream(
+        BeginFW begin,
+        MessageConsumer acceptThrottle)
     {
         final long acceptRef = begin.sourceRef();
         final String acceptName = begin.source().asString();
@@ -185,26 +187,31 @@ public final class ClientStreamFactory implements StreamFactory
 
         if (route != null)
         {
+            final long acceptRouteId = begin.routeId();
             final long acceptId = begin.streamId();
             final long acceptCorrelationId = begin.correlationId();
+            final long connectRouteId = route.correlationId();
             final String connectName = route.target().asString();
             final long connectRef = route.targetRef();
             final long acceptReplyId = supplyReplyId.applyAsLong(acceptId);
 
             newStream = new ClientAcceptStream(this,
-                    acceptThrottle, acceptId, acceptRef, acceptName, acceptCorrelationId, acceptReplyId,
-                    connectName, connectRef, headers);
+                    acceptThrottle, acceptRouteId, acceptId, acceptRef, acceptName, acceptCorrelationId, acceptReplyId,
+                    connectRouteId, connectName, connectRef, headers);
         }
 
         return newStream;
     }
 
-    private MessageConsumer newConnectReplyStream(BeginFW begin, MessageConsumer connectReplyThrottle)
+    private MessageConsumer newConnectReplyStream(
+        BeginFW begin,
+        MessageConsumer connectReplyThrottle)
     {
+        final long connectRouteId = begin.routeId();
         final String connectReplyName = begin.source().asString();
         final long connectReplyId = begin.streamId();
 
-        return new ClientConnectReplyStream(this, connectReplyThrottle, connectReplyId,
+        return new ClientConnectReplyStream(this, connectReplyThrottle, connectRouteId, connectReplyId,
                 connectReplyName);
     }
 

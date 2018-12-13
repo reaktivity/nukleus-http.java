@@ -135,24 +135,28 @@ public final class ServerStreamFactory implements StreamFactory
 
         if (route != null)
         {
+            final long acceptRouteId = begin.routeId();
             final long acceptId = begin.streamId();
             final long acceptTraceId = begin.trace();
             final long acceptCorrelationId = begin.correlationId();
 
             newStream = new ServerAcceptStream(this, acceptThrottle,
-                    acceptId, acceptTraceId, acceptRef, acceptName, acceptCorrelationId, authorization);
+                    acceptRouteId, acceptId, acceptTraceId, acceptRef, acceptName, acceptCorrelationId, authorization);
         }
 
         return newStream;
     }
 
-    private MessageConsumer newConnectReplyStream(final BeginFW begin, final MessageConsumer connectReplyThrottle)
+    private MessageConsumer newConnectReplyStream(
+        final BeginFW begin,
+        final MessageConsumer connectReplyThrottle)
     {
         final String connectReplyName = begin.source().asString();
+        final long connectRouteId = begin.routeId();
         final long connectReplyId = begin.streamId();
         final long connectReplyTraceId = begin.trace();
 
-        return new ServerConnectReplyStream(this, connectReplyThrottle, connectReplyId, connectReplyTraceId,
+        return new ServerConnectReplyStream(this, connectReplyThrottle, connectRouteId, connectReplyId, connectReplyTraceId,
                 connectReplyName);
     }
 

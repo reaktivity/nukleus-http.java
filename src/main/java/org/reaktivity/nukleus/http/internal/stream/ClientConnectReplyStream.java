@@ -65,9 +65,11 @@ final class ClientConnectReplyStream implements MessageConsumer
     private int slotPosition;
     private boolean endDeferred;
 
+    private long connectRouteId;
     private long connectReplyId;
 
     private MessageConsumer acceptReply;
+    private long acceptRouteId;
     private long acceptReplyId;
     private long traceId;
     private String acceptReplyName;
@@ -95,11 +97,13 @@ final class ClientConnectReplyStream implements MessageConsumer
     ClientConnectReplyStream(
         ClientStreamFactory factory,
         MessageConsumer connectReplyThrottle,
+        long connectRouteId,
         long connectReplyId,
         String connectReplyName)
     {
         this.factory = factory;
         this.connectReplyThrottle = connectReplyThrottle;
+        this.connectRouteId = connectRouteId;
         this.connectReplyId = connectReplyId;
         this.connectReplyName = connectReplyName;
         this.streamState = this::handleStreamBeforeBegin;
@@ -222,7 +226,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         {
         case DataFW.TYPE_ID:
             final DataFW data = this.factory.dataRO.wrap(buffer, index, index + length);
-            factory.writer.doWindow(connectReplyThrottle, data.streamId(), 0, data.length(), 0);
+            factory.writer.doWindow(connectReplyThrottle, connectRouteId, data.streamId(), 0, data.length(), 0);
             break;
         case EndFW.TYPE_ID:
             this.factory.endRO.wrap(buffer, index, index + length);
@@ -251,10 +255,10 @@ final class ClientConnectReplyStream implements MessageConsumer
     private void handleUnexpected(
         long streamId)
     {
-        factory.writer.doReset(connectReplyThrottle, streamId, 0);
+        factory.writer.doReset(connectReplyThrottle, connectRouteId, streamId, 0);
         if (acceptReply != null)
         {
-            factory.writer.doAbort(acceptReply, acceptReplyId, 0);
+            factory.writer.doAbort(acceptReply, acceptRouteId, acceptReplyId, 0);
         }
 
         this.streamState = this::handleStreamAfterReset;
@@ -268,8 +272,8 @@ final class ClientConnectReplyStream implements MessageConsumer
 
         // Drain data from source before resetting to allow its writes to complete
         int window = factory.maximumHeadersSize;
-        factory.writer.doWindow(connectReplyThrottle, connectReplyId, 0L, window, 0);
-        factory.writer.doReset(connectReplyThrottle, connectReplyId, 0L);
+        factory.writer.doWindow(connectReplyThrottle, connectRouteId, connectReplyId, 0L, window, 0);
+        factory.writer.doReset(connectReplyThrottle, connectRouteId, connectReplyId, 0L);
 
         connection.persistent = false;
         doCleanup(CloseAction.ABORT);
@@ -279,7 +283,7 @@ final class ClientConnectReplyStream implements MessageConsumer
     {
         if (acceptReply != null)
         {
-            factory.writer.doAbort(acceptReply, acceptReplyId, traceId);
+            factory.writer.doAbort(acceptReply, acceptRouteId, acceptReplyId, traceId);
 
             // count abandoned responses
             factory.countResponsesAbandoned.getAsLong();
@@ -415,7 +419,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         if (slotIndex == NO_SLOT)
         {
             // Out of slab memory
-            factory.writer.doReset(connectReplyThrottle, connectReplyId, 0L);
+            factory.writer.doReset(connectReplyThrottle, connectRouteId, connectReplyId, 0L);
             connection.persistent = false;
             doCleanup(CloseAction.ABORT);
         }
@@ -474,7 +478,7 @@ final class ClientConnectReplyStream implements MessageConsumer
                 connection.persistent = false;
                 if (contentRemaining > 0)
                 {
-                    factory.writer.doAbort(acceptReply, acceptReplyId, 0);
+                    factory.writer.doAbort(acceptReply, acceptRouteId, acceptReplyId, 0);
                 }
                 doCleanup(CloseAction.END);
             }
@@ -576,7 +580,7 @@ final class ClientConnectReplyStream implements MessageConsumer
             resolveTarget();
 
             FrameFW frameFW = factory.frameRO.wrap(payload, offset, payload.capacity());
-            factory.writer.doHttpBegin(acceptReply, acceptReplyId, frameFW.trace(), 0L, acceptCorrelationId,
+            factory.writer.doHttpBegin(acceptReply, acceptRouteId, acceptReplyId, frameFW.trace(), 0L, acceptCorrelationId,
                     hs -> headers.forEach((k, v) -> hs.item(i -> i.representation((byte) 0).name(k).value(v))));
             factory.router.setThrottle(acceptReplyName, acceptReplyId, this::handleThrottle);
 
@@ -697,7 +701,7 @@ final class ClientConnectReplyStream implements MessageConsumer
 
         if (writableBytes > 0)
         {
-            factory.writer.doHttpData(acceptReply, acceptReplyId, traceId, acceptReplyPadding, payload,
+            factory.writer.doHttpData(acceptReply, acceptRouteId, acceptReplyId, traceId, acceptReplyPadding, payload,
                     offset, writableBytes);
             acceptReplyBudget -= writableBytes + acceptReplyPadding;
             contentRemaining -= writableBytes;
@@ -793,7 +797,8 @@ final class ClientConnectReplyStream implements MessageConsumer
 
         if (writableBytes > 0)
         {
-            factory.writer.doHttpData(acceptReply, acceptReplyId, traceId, acceptReplyPadding, payload, offset, writableBytes);
+            factory.writer.doHttpData(acceptReply, acceptRouteId, acceptReplyId, traceId, acceptReplyPadding,
+                                      payload, offset, writableBytes);
             acceptReplyBudget -= writableBytes + acceptReplyPadding;
             chunkSizeRemaining -= writableBytes;
             contentRemaining -= writableBytes;
@@ -818,7 +823,7 @@ final class ClientConnectReplyStream implements MessageConsumer
 
         if (writableBytes > 0)
         {
-            factory.writer.doData(acceptReply, acceptReplyId, traceId, acceptReplyPadding,
+            factory.writer.doData(acceptReply, acceptRouteId, acceptReplyId, traceId, acceptReplyPadding,
                     payload, offset, writableBytes);
             acceptReplyBudget -= writableBytes + acceptReplyPadding;
         }
@@ -831,7 +836,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         final int offset,
         final int limit)
     {
-        factory.writer.doWindow(connectReplyThrottle, connectReplyId, 0, limit - offset, 0);
+        factory.writer.doWindow(connectReplyThrottle, connectRouteId, connectReplyId, 0, limit - offset, 0);
         return limit;
     };
 
@@ -842,7 +847,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         int limit)
     {
         // TODO: consider chunks, trailers
-        factory.writer.doHttpEnd(acceptReply, acceptReplyId, traceId);
+        factory.writer.doHttpEnd(acceptReply, acceptRouteId, acceptReplyId, traceId);
         connectionPool.release(connection, CloseAction.END);
         return limit;
     }
@@ -859,7 +864,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         if (connectReplyCredit > 0)
         {
             this.connectReplyBudget += connectReplyCredit;
-            factory.writer.doWindow(connectReplyThrottle, connectReplyId, 0, connectReplyCredit, 0);
+            factory.writer.doWindow(connectReplyThrottle, connectRouteId, connectReplyId, 0, connectReplyCredit, 0);
         }
 
         // TODO: Support HTTP/1.1 Pipelined Responses (may be buffered already)
@@ -868,7 +873,7 @@ final class ClientConnectReplyStream implements MessageConsumer
 
     private void httpResponseComplete()
     {
-        factory.writer.doHttpEnd(acceptReply, acceptReplyId, 0);
+        factory.writer.doHttpEnd(acceptReply, acceptRouteId, acceptReplyId, 0);
         acceptReply = null;
 
         if (connection.persistent)
@@ -889,6 +894,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         final Correlation<?> correlation = factory.correlations.remove(connection.correlationId);
         this.acceptReplyName = correlation.source();
         this.acceptReply = factory.router.supplyTarget(acceptReplyName);
+        this.acceptRouteId = correlation.routeId();
         this.acceptReplyId = correlation.replyId();
         this.acceptCorrelationId = correlation.id();
         this.acceptReplyBudget = 0;
@@ -962,7 +968,7 @@ final class ClientConnectReplyStream implements MessageConsumer
             connectReplyBudget += connectReplyCredit;
             int connectReplyPadding = acceptReplyPadding;
             final long connectReplyTraceId = window.trace();
-            factory.writer.doWindow(connectReplyThrottle, connectReplyId,
+            factory.writer.doWindow(connectReplyThrottle, connectRouteId, connectReplyId,
                     connectReplyTraceId, connectReplyCredit, connectReplyPadding);
         }
     }
@@ -971,7 +977,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         ResetFW reset)
     {
         releaseSlotIfNecessary();
-        factory.writer.doReset(connectReplyThrottle, connectReplyId, reset.trace());
+        factory.writer.doReset(connectReplyThrottle, connectRouteId, connectReplyId, reset.trace());
         connection.persistent = false;
         connectionPool.release(connection, CloseAction.ABORT);
     }

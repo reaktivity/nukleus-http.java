@@ -43,7 +43,7 @@ public class FlowControlIT
         .directory("target/nukleus-itests")
         .commandBufferCapacity(1024)
         .responseBufferCapacity(1024)
-        .counterValuesBufferCapacity(1024);
+        .counterValuesBufferCapacity(4096);
 
     @Rule
     public final TestRule chain = outerRule(reaktor).around(k3po).around(timeout);

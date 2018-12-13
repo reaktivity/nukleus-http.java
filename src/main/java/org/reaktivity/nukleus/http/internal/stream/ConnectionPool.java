@@ -36,16 +36,22 @@ final class ConnectionPool
     }
     private final Deque<Connection> availableConnections;
     private final String connectName;
+    private final long connectRouteId;
     private final long connectRef;
     private final ClientStreamFactory factory;
     private final Queue<ConnectionRequest> queuedRequests;
 
     private int connectionsInUse;
 
-    ConnectionPool(ClientStreamFactory factory, String connectName, long connectRef)
+    ConnectionPool(
+        ClientStreamFactory factory,
+        String connectName,
+        long connectRouteId,
+        long connectRef)
     {
         this.factory = factory;
         this.connectName = connectName;
+        this.connectRouteId = connectRouteId;
         this.connectRef = connectRef;
         this.availableConnections = new ArrayDeque<>(factory.maximumConnectionsPerRoute);
         this.queuedRequests = new ArrayDeque<>(factory.maximumQueuedRequestsPerRoute);
@@ -111,7 +117,7 @@ final class ConnectionPool
         final long streamId = factory.supplyStreamId.getAsLong();
         Connection connection = new Connection(streamId, correlationId);
         MessageConsumer output = factory.router.supplyTarget(connectName);
-        factory.writer.doBegin(output, streamId, factory.supplyTraceId, connectRef, correlationId);
+        factory.writer.doBegin(output, connectRouteId, streamId, factory.supplyTraceId, connectRef, correlationId);
         factory.router.setThrottle(connectName, streamId, connection::handleThrottleDefault);
         connectionsInUse++;
         return connection;
@@ -130,6 +136,7 @@ final class ConnectionPool
             // We did not yet send response headers (high level begin) to the client accept reply stream.
             // This implies we got an incomplete response. We report this as service unavailable (503).
             MessageConsumer acceptReply = factory.router.supplyTarget(correlation.source());
+            long acceptRouteId = correlation.routeId();
             long targetId = factory.supplyStreamId.getAsLong();
             long traceId = factory.supplyTraceId;
 
@@ -140,10 +147,10 @@ final class ConnectionPool
             factory.countResponses.getAsLong();
 
             long sourceCorrelationId = correlation.id();
-            factory.writer.doHttpBegin(acceptReply, targetId, traceId, 0L, sourceCorrelationId,
+            factory.writer.doHttpBegin(acceptReply, acceptRouteId, targetId, traceId, 0L, sourceCorrelationId,
                                        hs -> hs.item(h -> h.name(":status").value("503"))
                                                .item(h -> h.name("retry-after").value("0")));
-            factory.writer.doHttpEnd(acceptReply, targetId, 0L);
+            factory.writer.doHttpEnd(acceptReply, acceptRouteId, targetId, 0L);
         }
         if (connection.persistent)
         {
@@ -169,10 +176,10 @@ final class ConnectionPool
                 switch(action)
                 {
                 case END:
-                    factory.writer.doEnd(connect, connection.connectStreamId, 0);
+                    factory.writer.doEnd(connect, connectRouteId, connection.connectStreamId, 0);
                     break;
                 case ABORT:
-                    factory.writer.doAbort(connect, connection.connectStreamId, 0);
+                    factory.writer.doAbort(connect, connectRouteId, connection.connectStreamId, 0);
                 }
                 connection.endOrAbortSent = true;
             }
@@ -231,7 +238,7 @@ final class ConnectionPool
                 if (connectReplyThrottle != null)
                 {
                     ResetFW resetFW = factory.resetRO.wrap(buffer, index, index + length);
-                    factory.writer.doReset(connectReplyThrottle, connectReplyStreamId, resetFW.trace());
+                    factory.writer.doReset(connectReplyThrottle, connectRouteId, connectReplyStreamId, resetFW.trace());
                 }
                 break;
             case WindowFW.TYPE_ID:

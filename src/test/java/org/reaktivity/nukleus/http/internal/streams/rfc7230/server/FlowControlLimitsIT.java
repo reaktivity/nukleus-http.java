@@ -42,7 +42,7 @@ public class FlowControlLimitsIT
         .directory("target/nukleus-itests")
         .commandBufferCapacity(1024)
         .responseBufferCapacity(1024)
-        .counterValuesBufferCapacity(1024)
+        .counterValuesBufferCapacity(4096)
         .clean()
         // Maximum headers size is limited to the size of each slot in the buffer pool:
         .configure(ReaktorConfiguration.REAKTOR_BUFFER_SLOT_CAPACITY, 64)

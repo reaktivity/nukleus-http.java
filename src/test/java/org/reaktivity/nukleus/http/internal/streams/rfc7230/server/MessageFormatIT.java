@@ -44,7 +44,7 @@ public class MessageFormatIT
         .directory("target/nukleus-itests")
         .commandBufferCapacity(1024)
         .responseBufferCapacity(1024)
-        .counterValuesBufferCapacity(1024)
+        .counterValuesBufferCapacity(4096)
         .configure(ReaktorConfiguration.REAKTOR_BUFFER_SLOT_CAPACITY, 8192);
 
     @Rule
