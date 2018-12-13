@@ -22,6 +22,7 @@ import java.util.Objects;
 public class Correlation<S>
 {
     private final String source;
+    private final long routeId;
     private final long replyId;
     private final long id;
     private final S state;
@@ -29,21 +30,29 @@ public class Correlation<S>
     public Correlation(
         long id,
         String source,
+        long routeId,
         long replyId,
         S state)
     {
         this.id = id;
         this.source = requireNonNull(source, "source");
+        this.routeId = routeId;
         this.replyId = replyId;
         this.state = state;
     }
 
     public Correlation(
         long id,
+        long routeId,
         String source,
         long sourceId)
     {
-        this(id, source, sourceId, null);
+        this(id, source, routeId, sourceId, null);
+    }
+
+    public long routeId()
+    {
+        return routeId;
     }
 
     public long replyId()

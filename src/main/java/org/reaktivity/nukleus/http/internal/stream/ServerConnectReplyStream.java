@@ -45,6 +45,7 @@ public final class ServerConnectReplyStream implements MessageConsumer
 
     private final ServerStreamFactory factory;
     private final MessageConsumer connectReplyThrottle;
+    private final long connectRouteId;
     private final long connectReplyId;
     private final String connectReplyName;
 
@@ -64,12 +65,14 @@ public final class ServerConnectReplyStream implements MessageConsumer
     public ServerConnectReplyStream(
         ServerStreamFactory factory,
         MessageConsumer connectReplyThrottle,
+        long connectRouteId,
         long connectReplyId,
         long traceId,
         String connectReplyName)
     {
         this.factory = factory;
         this.connectReplyThrottle = connectReplyThrottle;
+        this.connectRouteId = connectRouteId;
         this.connectReplyId = connectReplyId;
         this.connectReplyName = connectReplyName;
         this.traceId = traceId;
@@ -173,7 +176,7 @@ public final class ServerConnectReplyStream implements MessageConsumer
             DataFW data = factory.dataRO.wrap(buffer, index, index + length);
             final long streamId = data.streamId();
             connectReplyBudget += data.length();
-            factory.writer.doWindow(connectReplyThrottle, streamId, 0, data.length() + data.padding(), 0);
+            factory.writer.doWindow(connectReplyThrottle, connectRouteId, streamId, 0, data.length() + data.padding(), 0);
         }
         else if (msgTypeId == EndFW.TYPE_ID)
         {
@@ -191,7 +194,7 @@ public final class ServerConnectReplyStream implements MessageConsumer
 
     private void doCleanup()
     {
-        factory.writer.doReset(connectReplyThrottle, connectReplyId, 0);
+        factory.writer.doReset(connectReplyThrottle, connectRouteId, connectReplyId, 0);
         acceptState.doAbort(factory.writer, 0);
         this.streamState = this::streamAfterRejectOrReset;
         releaseSlotIfNecessary();
@@ -261,7 +264,7 @@ public final class ServerConnectReplyStream implements MessageConsumer
             slotIndex = factory.bufferPool.acquire(connectReplyId);
             if (slotIndex == NO_SLOT)
             {
-                factory.writer.doReset(connectReplyThrottle, connectReplyId, 0L);
+                factory.writer.doReset(connectReplyThrottle, connectRouteId, connectReplyId, 0L);
                 this.streamState = this::streamAfterRejectOrReset;
             }
             else
@@ -274,9 +277,9 @@ public final class ServerConnectReplyStream implements MessageConsumer
                     acceptState.acceptReplyBudget -=
                             RESPONSE_HEADERS_TOO_LONG_RESPONSE.length + acceptState.acceptReplyPadding;
                     assert acceptState.acceptReplyBudget >= 0;
-                    factory.writer.doData(acceptState.acceptReply, acceptState.replyStreamId, traceId,
+                    factory.writer.doData(acceptState.acceptReply, acceptState.acceptRouteId, acceptState.replyStreamId, traceId,
                             acceptState.acceptReplyPadding, slot, 0, RESPONSE_HEADERS_TOO_LONG_RESPONSE.length);
-                    factory.writer.doReset(connectReplyThrottle, connectReplyId, 0L);
+                    factory.writer.doReset(connectReplyThrottle, connectRouteId, connectReplyId, 0L);
                 }
                 else
                 {
@@ -317,7 +320,7 @@ public final class ServerConnectReplyStream implements MessageConsumer
             final OctetsFW payload = data.payload();
             acceptState.acceptReplyBudget -= payload.sizeof() + acceptState.acceptReplyPadding;
             assert acceptState.acceptReplyBudget >= 0;
-            factory.writer.doData(acceptState.acceptReply, acceptState.replyStreamId, traceId,
+            factory.writer.doData(acceptState.acceptReply, acceptState.acceptRouteId, acceptState.replyStreamId, traceId,
                     acceptState.acceptReplyPadding, payload);
         }
     }
@@ -335,7 +338,7 @@ public final class ServerConnectReplyStream implements MessageConsumer
     {
         if (acceptState != null && --acceptState.pendingRequests == 0 && acceptState.endRequested)
         {
-            factory.writer.doEnd(acceptState.acceptReply, acceptState.replyStreamId, traceId);
+            factory.writer.doEnd(acceptState.acceptReply, acceptState.acceptRouteId, acceptState.replyStreamId, traceId);
             acceptState.restoreInitialThrottle();
             this.streamState = this::streamAfterEnd;
             releaseSlotIfNecessary();
@@ -354,9 +357,10 @@ public final class ServerConnectReplyStream implements MessageConsumer
     {
         FrameFW frame = factory.frameRO.wrap(buffer, index, index + length);
 
+        final long routeId = frame.routeId();
         final long streamId = frame.streamId();
 
-        factory.writer.doReset(connectReplyThrottle, streamId, 0);
+        factory.writer.doReset(connectReplyThrottle, routeId, streamId, 0);
 
         this.streamState = this::streamAfterRejectOrReset;
     }
@@ -456,7 +460,7 @@ public final class ServerConnectReplyStream implements MessageConsumer
         if (writableBytes > 0)
         {
             MutableDirectBuffer slot = factory.bufferPool.buffer(slotIndex);
-            factory.writer.doData(acceptState.acceptReply, acceptState.replyStreamId, traceId,
+            factory.writer.doData(acceptState.acceptReply, acceptState.acceptRouteId, acceptState.replyStreamId, traceId,
                     acceptState.acceptReplyPadding, slot, slotOffset, writableBytes);
             acceptState.acceptReplyBudget -= writableBytes + acceptState.acceptReplyPadding;
             assert acceptState.acceptReplyBudget >= 0;
@@ -491,7 +495,8 @@ public final class ServerConnectReplyStream implements MessageConsumer
             connectReplyBudget += connectReplyCredit;
             int connectReplyPadding = acceptState.acceptReplyPadding;
             long traceId = window.trace();
-            factory.writer.doWindow(connectReplyThrottle, connectReplyId, traceId, connectReplyCredit, connectReplyPadding);
+            factory.writer.doWindow(connectReplyThrottle, connectRouteId, connectReplyId, traceId,
+                    connectReplyCredit, connectReplyPadding);
         }
     }
 
@@ -501,7 +506,7 @@ public final class ServerConnectReplyStream implements MessageConsumer
         releaseSlotIfNecessary();
         final long traceId = reset.trace();
 
-        factory.writer.doReset(connectReplyThrottle, connectReplyId, traceId);
+        factory.writer.doReset(connectReplyThrottle, connectRouteId, connectReplyId, traceId);
     }
 
     private void releaseSlotIfNecessary()

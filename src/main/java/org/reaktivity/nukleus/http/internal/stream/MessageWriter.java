@@ -53,32 +53,35 @@ final class MessageWriter
 
     private MutableDirectBuffer writeBuffer;
 
-    MessageWriter(MutableDirectBuffer writeBuffer)
+    MessageWriter(
+        MutableDirectBuffer writeBuffer)
     {
         this.writeBuffer = writeBuffer;
     }
 
     void doBegin(
-        MessageConsumer stream,
-        long targetId,
+        MessageConsumer receiver,
+        long routeId,
+        long streamId,
         long traceId,
         long targetRef,
         long correlationId)
     {
-        BeginFW begin = beginRW.wrap(writeBuffer, 0, writeBuffer.capacity())
-                .streamId(targetId)
+        final BeginFW begin = beginRW.wrap(writeBuffer, 0, writeBuffer.capacity())
+                .routeId(routeId)
+                .streamId(streamId)
                 .trace(traceId)
                 .source(SOURCE_NAME_BUFFER, 0, SOURCE_NAME_BUFFER.capacity())
                 .sourceRef(targetRef)
                 .correlationId(correlationId)
-                .extension(e -> e.reset())
                 .build();
 
-        stream.accept(begin.typeId(), begin.buffer(), begin.offset(), begin.sizeof());
+        receiver.accept(begin.typeId(), begin.buffer(), begin.offset(), begin.sizeof());
     }
 
     void doData(
-        MessageConsumer stream,
+        MessageConsumer receiver,
+        long routeId,
         long streamId,
         long traceId,
         int padding,
@@ -86,71 +89,80 @@ final class MessageWriter
         int offset,
         int length)
     {
-        DataFW data = dataRW.wrap(writeBuffer, 0, writeBuffer.capacity())
+        final DataFW data = dataRW.wrap(writeBuffer, 0, writeBuffer.capacity())
+                .routeId(routeId)
                 .streamId(streamId)
                 .trace(traceId)
                 .groupId(0)
                 .padding(padding)
                 .payload(p -> p.set(payload, offset, length))
-                .extension(e -> e.reset())
                 .build();
 
-        stream.accept(data.typeId(), data.buffer(), data.offset(), data.sizeof());
+        receiver.accept(data.typeId(), data.buffer(), data.offset(), data.sizeof());
     }
 
     public void doData(
-        MessageConsumer stream,
+        MessageConsumer receiver,
+        long routeId,
         long streamId,
         long traceId,
         int padding,
         OctetsFW payload)
     {
-        DataFW data = dataRW.wrap(writeBuffer, 0, writeBuffer.capacity())
+        final DataFW data = dataRW.wrap(writeBuffer, 0, writeBuffer.capacity())
+                .routeId(routeId)
                 .streamId(streamId)
                 .trace(traceId)
                 .groupId(0)
                 .padding(padding)
                 .payload(p -> p.set(payload))
-                .extension(e -> e.reset())
                 .build();
 
-        stream.accept(data.typeId(), data.buffer(), data.offset(), data.sizeof());
+        receiver.accept(data.typeId(), data.buffer(), data.offset(), data.sizeof());
     }
 
     void doEnd(
-        MessageConsumer stream,
-        long targetId,
+        MessageConsumer receiver,
+        long routeId,
+        long streamId,
         long traceId)
     {
-        EndFW end = endRW.wrap(writeBuffer, 0, writeBuffer.capacity())
-                .streamId(targetId)
+        final EndFW end = endRW.wrap(writeBuffer, 0, writeBuffer.capacity())
+                .routeId(routeId)
+                .streamId(streamId)
                 .trace(traceId)
-                .extension(e -> e.reset())
                 .build();
 
-        stream.accept(end.typeId(), end.buffer(), end.offset(), end.sizeof());
+        receiver.accept(end.typeId(), end.buffer(), end.offset(), end.sizeof());
     }
 
-    void doAbort(MessageConsumer stream, long targetId, long trace)
+    void doAbort(
+        MessageConsumer receiver,
+        long routeId,
+        long streamId,
+        long traceId)
     {
-        AbortFW abort = abortRW.wrap(writeBuffer, 0, writeBuffer.capacity())
-                .streamId(targetId)
-                .trace(trace)
-                .extension(e -> e.reset())
+        final AbortFW abort = abortRW.wrap(writeBuffer, 0, writeBuffer.capacity())
+                .routeId(routeId)
+                .streamId(streamId)
+                .trace(traceId)
                 .build();
-        stream.accept(abort.typeId(), abort.buffer(), abort.offset(), abort.sizeof());
+
+        receiver.accept(abort.typeId(), abort.buffer(), abort.offset(), abort.sizeof());
     }
 
     void doHttpBegin(
-        MessageConsumer stream,
-        long targetId,
+        MessageConsumer receiver,
+        long routeId,
+        long streamId,
         long traceId,
         long targetRef,
         long correlationId,
         Consumer<ListFW.Builder<HttpHeaderFW.Builder, HttpHeaderFW>> mutator)
     {
-        BeginFW begin = beginRW.wrap(writeBuffer, 0, writeBuffer.capacity())
-                .streamId(targetId)
+        final BeginFW begin = beginRW.wrap(writeBuffer, 0, writeBuffer.capacity())
+                .routeId(routeId)
+                .streamId(streamId)
                 .trace(traceId)
                 .source(SOURCE_NAME_BUFFER, 0, SOURCE_NAME_BUFFER.capacity())
                 .sourceRef(targetRef)
@@ -158,73 +170,79 @@ final class MessageWriter
                 .extension(e -> e.set(visitHttpBeginEx(mutator)))
                 .build();
 
-        stream.accept(begin.typeId(), begin.buffer(), begin.offset(), begin.sizeof());
+        receiver.accept(begin.typeId(), begin.buffer(), begin.offset(), begin.sizeof());
     }
 
     void doHttpData(
-        MessageConsumer stream,
-        long targetId,
+        MessageConsumer receiver,
+        long routeId,
+        long streamId,
         long traceId,
         int padding,
         DirectBuffer payload,
         int offset,
         int length)
     {
-        DataFW data = dataRW.wrap(writeBuffer, 0, writeBuffer.capacity())
-                .streamId(targetId)
+        final DataFW data = dataRW.wrap(writeBuffer, 0, writeBuffer.capacity())
+                .routeId(routeId)
+                .streamId(streamId)
                 .trace(traceId)
                 .groupId(0)
                 .padding(padding)
                 .payload(p -> p.set(payload, offset, length))
-                .extension(e -> e.reset())
                 .build();
 
-        stream.accept(data.typeId(), data.buffer(), data.offset(), data.sizeof());
+        receiver.accept(data.typeId(), data.buffer(), data.offset(), data.sizeof());
     }
 
     void doHttpEnd(
-        MessageConsumer stream,
-        long targetId,
+        MessageConsumer receiver,
+        long routeId,
+        long streamId,
         long traceId)
     {
-        EndFW end = endRW.wrap(writeBuffer, 0, writeBuffer.capacity())
-                .streamId(targetId)
+        final EndFW end = endRW.wrap(writeBuffer, 0, writeBuffer.capacity())
+                .routeId(routeId)
+                .streamId(streamId)
                 .trace(traceId)
-                .extension(e -> e.reset())
                 .build();
 
-        stream.accept(end.typeId(), end.buffer(), end.offset(), end.sizeof());
+        receiver.accept(end.typeId(), end.buffer(), end.offset(), end.sizeof());
     }
 
     void doWindow(
-        final MessageConsumer throttle,
-        final long throttleId,
+        final MessageConsumer sender,
+        final long routeId,
+        final long streamId,
         final long traceId,
         final int credit,
         final int padding)
     {
         final WindowFW window = windowRW.wrap(writeBuffer, 0, writeBuffer.capacity())
-                .streamId(throttleId)
+                .routeId(routeId)
+                .streamId(streamId)
                 .trace(traceId)
                 .credit(credit)
                 .padding(padding)
                 .groupId(0)
                 .build();
 
-        throttle.accept(window.typeId(), window.buffer(), window.offset(), window.sizeof());
+        sender.accept(window.typeId(), window.buffer(), window.offset(), window.sizeof());
     }
 
     void doReset(
-        final MessageConsumer throttle,
-        final long throttleId,
+        final MessageConsumer sender,
+        final long routeId,
+        final long streamId,
         final long traceId)
     {
         final ResetFW reset = resetRW.wrap(writeBuffer, 0, writeBuffer.capacity())
-                .streamId(throttleId)
+                .routeId(routeId)
+                .streamId(streamId)
                 .trace(traceId)
                 .build();
 
-        throttle.accept(reset.typeId(), reset.buffer(), reset.offset(), reset.sizeof());
+        sender.accept(reset.typeId(), reset.buffer(), reset.offset(), reset.sizeof());
     }
 
     private Flyweight.Builder.Visitor visitHttpBeginEx(

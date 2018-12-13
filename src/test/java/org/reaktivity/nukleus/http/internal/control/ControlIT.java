@@ -42,7 +42,7 @@ public class ControlIT
             .directory("target/nukleus-itests")
             .commandBufferCapacity(1024)
             .responseBufferCapacity(1024)
-            .counterValuesBufferCapacity(1024);
+            .counterValuesBufferCapacity(4096);
 
     @Rule
     public final TestRule chain = outerRule(k3po).around(timeout).around(reaktor);
