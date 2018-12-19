@@ -342,7 +342,8 @@ final class ServerAcceptStream implements MessageConsumer
                         if (writableBytes > 0)
                         {
                             acceptState.acceptReplyBudget -= writableBytes + acceptState.acceptReplyPadding;
-                            ServerAcceptStream.this.factory.writer.doData(target, targetRouteId, targetId, factory.supplyTrace.getAsLong(),
+                            ServerAcceptStream.this.factory.writer.doData(target, targetRouteId, targetId,
+                                    factory.supplyTrace.getAsLong(),
                                     acceptState.acceptReplyPadding, payload, offset, writableBytes);
                             offset += writableBytes;
                         }
@@ -351,7 +352,8 @@ final class ServerAcceptStream implements MessageConsumer
                             // Drain data from source before resetting to allow its writes to complete
                             throttleState = ServerAcceptStream.this::throttlePropagateWindow;
                             doSourceWindow(ServerAcceptStream.this.maximumHeadersSize, 0, window.trace());
-                            factory.writer.doEnd(target, targetRouteId, targetId, factory.supplyTrace.getAsLong()); // connection: close
+                            // connection: close
+                            factory.writer.doEnd(target, targetRouteId, targetId, factory.supplyTrace.getAsLong());
                         }
                         break;
                     case ResetFW.TYPE_ID:

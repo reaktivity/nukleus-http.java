@@ -231,7 +231,8 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
                 factory.countResponses.getAsLong();
 
                 MessageConsumer acceptReply = factory.router.supplyTarget(acceptName);
-                factory.writer.doHttpBegin(acceptReply, acceptRouteId, acceptReplyId, factory.supplyTrace.getAsLong(), 0L, acceptCorrelationId,
+                factory.writer.doHttpBegin(acceptReply, acceptRouteId, acceptReplyId, factory.supplyTrace.getAsLong(),
+                        0L, acceptCorrelationId,
                         hs -> hs.item(h -> h.name(":status").value("503"))
                                 .item(h -> h.name("retry-after").value("0")));
                 factory.writer.doHttpEnd(acceptReply, acceptRouteId, acceptReplyId, factory.supplyTrace.getAsLong());
