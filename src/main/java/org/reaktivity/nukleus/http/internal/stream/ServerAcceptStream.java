@@ -232,7 +232,8 @@ final class ServerAcceptStream implements MessageConsumer
             DataFW data = factory.dataRO.wrap(buffer, index, index + length);
             final long streamId = data.streamId();
 
-            factory.writer.doWindow(acceptThrottle, acceptRouteId, streamId, 0, data.length(), 0);
+            factory.writer.doWindow(acceptThrottle, acceptRouteId, streamId, factory.supplyTrace.getAsLong(),
+                    data.length(), 0);
         }
         else if (msgTypeId == EndFW.TYPE_ID)
         {
@@ -255,11 +256,11 @@ final class ServerAcceptStream implements MessageConsumer
     private void processUnexpected(
         long streamId)
     {
-        factory.writer.doReset(acceptThrottle, acceptRouteId, streamId, 0);
+        factory.writer.doReset(acceptThrottle, acceptRouteId, streamId, factory.supplyTrace.getAsLong());
         this.streamState = this::streamAfterReset;
     }
 
-    private void processInvalidRequest(int status, String message)
+    private void processInvalidRequest(int status, String message, long traceId)
     {
         this.decoderState = this::decodeSkipData;
         this.streamState = this::streamAfterReset;
@@ -271,14 +272,14 @@ final class ServerAcceptStream implements MessageConsumer
             doSourceWindow(maximumHeadersSize, 0, 0);
 
             // We can't write back an HTTP error response because we already forwarded the request to the target
-            factory.writer.doReset(acceptThrottle, acceptRouteId, acceptId, 0);
-            factory.writer.doAbort(target, targetRouteId, targetId, 0);
+            factory.writer.doReset(acceptThrottle, acceptRouteId, acceptId, factory.supplyTrace.getAsLong());
+            factory.writer.doAbort(target, targetRouteId, targetId, traceId);
             if (correlation != null)
             {
                 correlation.state().pendingRequests--;
             }
 
-            doEnd(0L);
+            doEnd(factory.supplyTrace.getAsLong());
         }
         else
         {
@@ -341,7 +342,8 @@ final class ServerAcceptStream implements MessageConsumer
                         if (writableBytes > 0)
                         {
                             acceptState.acceptReplyBudget -= writableBytes + acceptState.acceptReplyPadding;
-                            ServerAcceptStream.this.factory.writer.doData(target, targetRouteId, targetId, 0,
+                            ServerAcceptStream.this.factory.writer.doData(target, targetRouteId, targetId,
+                                    factory.supplyTrace.getAsLong(),
                                     acceptState.acceptReplyPadding, payload, offset, writableBytes);
                             offset += writableBytes;
                         }
@@ -350,7 +352,8 @@ final class ServerAcceptStream implements MessageConsumer
                             // Drain data from source before resetting to allow its writes to complete
                             throttleState = ServerAcceptStream.this::throttlePropagateWindow;
                             doSourceWindow(ServerAcceptStream.this.maximumHeadersSize, 0, window.trace());
-                            factory.writer.doEnd(target, targetRouteId, targetId, 0); // connection: close
+                            // connection: close
+                            factory.writer.doEnd(target, targetRouteId, targetId, factory.supplyTrace.getAsLong());
                         }
                         break;
                     case ResetFW.TYPE_ID:
@@ -368,8 +371,8 @@ final class ServerAcceptStream implements MessageConsumer
         {
             // Drain data from source before resetting to allow its writes to complete
             throttleState = ServerAcceptStream.this::throttlePropagateWindow;
-            doSourceWindow(maximumHeadersSize, 0, 0);
-            factory.writer.doEnd(target, targetRouteId, targetId, 0); // connection: close
+            doSourceWindow(maximumHeadersSize, 0, factory.supplyTrace.getAsLong());
+            factory.writer.doEnd(target, targetRouteId, targetId, factory.supplyTrace.getAsLong()); // connection: close
         }
     }
 
@@ -387,7 +390,7 @@ final class ServerAcceptStream implements MessageConsumer
                 factory.writer, this::loopBackThrottle, factory.router, this::setCleanupConnectReply);
         factory.writer.doBegin(acceptReply, acceptRouteId, acceptReplyId, streamTraceId, 0L, acceptCorrelationId);
         this.correlation = new Correlation<>(acceptCorrelationId, acceptName, acceptRouteId, acceptReplyId, state);
-        doSourceWindow(maximumHeadersSize, 0, 0);
+        doSourceWindow(maximumHeadersSize, 0, factory.supplyTrace.getAsLong());
         this.acceptReply = acceptReply;
         this.acceptReplyId = acceptReplyId;
     }
@@ -427,7 +430,7 @@ final class ServerAcceptStream implements MessageConsumer
                 if (slotIndex == NO_SLOT)
                 {
                     // Out of factory.slab memory
-                    processInvalidRequest(503, "Service Unavailable");
+                    processInvalidRequest(503, "Service Unavailable", streamTraceId);
                 }
                 else
                 {
@@ -481,7 +484,7 @@ final class ServerAcceptStream implements MessageConsumer
         AbortFW abort = factory.abortRO.wrap(buffer, index, index + length);
         streamTraceId = abort.trace();
         Correlation<?> correlation = factory.correlations.remove(acceptCorrelationId);
-        factory.writer.doAbort(acceptReply, acceptRouteId, acceptReplyId, 0);
+        factory.writer.doAbort(acceptReply, acceptRouteId, acceptReplyId, factory.supplyTrace.getAsLong());
         if (targetBeginIssued)
         {
             factory.writer.doAbort(target, targetRouteId, targetId, streamTraceId);
@@ -593,6 +596,7 @@ final class ServerAcceptStream implements MessageConsumer
     {
         int result = limit;
         final int endOfHeadersAt = limitOfBytes(payload, offset, limit, ServerStreamFactory.CRLFCRLF_BYTES);
+        FrameFW frame = factory.frameRO.wrap(payload, offset, payload.capacity());
         if (endOfHeadersAt == -1)
         {
             // Incomplete request, signal we can't consume the data
@@ -606,23 +610,23 @@ final class ServerAcceptStream implements MessageConsumer
                 String method = payload.getStringWithoutLengthUtf8(offset, length).split("\\s+")[0];
                 if (StandardMethods.parse(method) == null)
                 {
-                    processInvalidRequest(501, "Not Implemented");
+                    processInvalidRequest(501, "Not Implemented", frame.trace());
                 }
             }
             else  if (firstSpace == -1 && length > ServerStreamFactory.MAXIMUM_METHOD_BYTES)
             {
-                processInvalidRequest(400, "Bad Request");
+                processInvalidRequest(400, "Bad Request", streamTraceId);
             }
             if (length >= maximumHeadersSize)
             {
                 int firstCRLF = limitOfBytes(payload, offset, limit, ServerStreamFactory.CRLF_BYTES);
                 if (firstCRLF == -1 || firstCRLF > maximumHeadersSize)
                 {
-                    processInvalidRequest(414, "Request URI too long");
+                    processInvalidRequest(414, "Request URI too long", frame.trace());
                 }
                 else
                 {
-                    processInvalidRequest(431, "Request Header Fields Too Large");
+                    processInvalidRequest(431, "Request Header Fields Too Large", frame.trace());
                 }
             }
         }
@@ -664,10 +668,11 @@ final class ServerAcceptStream implements MessageConsumer
         // TODO: replace with lightweight approach (start)
         String[] lines = payload.getStringWithoutLengthUtf8(offset, length).split("\r\n");
         String[] start = lines[0].split("\\s+");
+        FrameFW frame = factory.frameRO.wrap(payload, offset, payload.capacity());
 
         if (start.length != 3)
         {
-            processInvalidRequest(400, "Bad Request");
+            processInvalidRequest(400, "Bad Request", frame.trace());
             return;
         }
 
@@ -679,16 +684,16 @@ final class ServerAcceptStream implements MessageConsumer
             Matcher validVersionMatcher = validVersionPattern.matcher(start[2]);
             if (validVersionMatcher.matches())
             {
-                processInvalidRequest(505, "HTTP Version Not Supported");
+                processInvalidRequest(505, "HTTP Version Not Supported", frame.trace());
             }
             else
             {
-                processInvalidRequest(400, "Bad Request");
+                processInvalidRequest(400, "Bad Request", frame.trace());
             }
         }
         else if (null == StandardMethods.parse(start[0]))
         {
-            processInvalidRequest(501, "Not Implemented");
+            processInvalidRequest(501, "Not Implemented", frame.trace());
         }
         else
         {
@@ -701,11 +706,11 @@ final class ServerAcceptStream implements MessageConsumer
 
             if (httpStatus.status != 200)
             {
-                processInvalidRequest(httpStatus.status, httpStatus.message);
+                processInvalidRequest(httpStatus.status, httpStatus.message, frame.trace());
             }
             else if (headers.get(":authority") == null || requestURI.getUserInfo() != null)
             {
-                processInvalidRequest(400, "Bad Request");
+                processInvalidRequest(400, "Bad Request", frame.trace());
             }
             else
             {
@@ -766,7 +771,7 @@ final class ServerAcceptStream implements MessageConsumer
                 }
                 else
                 {
-                    processInvalidRequest(404, "Not Found");
+                    processInvalidRequest(404, "Not Found", frame.trace());
                 }
             }
         }
@@ -896,7 +901,7 @@ final class ServerAcceptStream implements MessageConsumer
             final int limit)
     {
         int result = limit;
-
+        FrameFW frame = factory.frameRO.wrap(payload, offset, payload.capacity());
         final int chunkHeaderLimit = limitOfBytes(payload, offset, limit, ServerStreamFactory.CRLF_BYTES);
         if (chunkHeaderLimit == -1)
         {
@@ -915,7 +920,7 @@ final class ServerAcceptStream implements MessageConsumer
             }
             catch (NumberFormatException ex)
             {
-                processInvalidRequest(400,  "Bad Request");
+                processInvalidRequest(400,  "Bad Request", frame.trace());
             }
 
             if (chunkSizeRemaining == 0)
@@ -939,12 +944,13 @@ final class ServerAcceptStream implements MessageConsumer
     {
         int length = limit - offset;
         int result = offset;
+        FrameFW frame = factory.frameRO.wrap(payload, offset, payload.capacity());
         if (length > 1)
         {
             if (payload.getByte(offset) != '\r'
                 || payload.getByte(offset + 1) != '\n')
             {
-                processInvalidRequest(400,  "Bad Request");
+                processInvalidRequest(400,  "Bad Request", frame.trace());
             }
             else
             {
@@ -1002,7 +1008,7 @@ final class ServerAcceptStream implements MessageConsumer
             final int offset,
             final int limit)
     {
-        doSourceWindow(limit - offset, 0, 0);
+        doSourceWindow(limit - offset, 0, factory.supplyTrace.getAsLong());
         return limit;
     };
 

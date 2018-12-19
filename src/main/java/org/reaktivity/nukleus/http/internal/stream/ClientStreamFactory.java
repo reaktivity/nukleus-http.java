@@ -83,6 +83,7 @@ public final class ClientStreamFactory implements StreamFactory
     final LongSupplier supplyCorrelationId;
     final LongSupplier enqueues;
     final LongSupplier dequeues;
+    final LongSupplier supplyTrace;
     final BufferPool bufferPool;
     final MessageWriter writer;
     long supplyTraceId;
@@ -112,8 +113,10 @@ public final class ClientStreamFactory implements StreamFactory
         LongUnaryOperator supplyReplyId,
         LongSupplier supplyCorrelationId,
         Long2ObjectHashMap<Correlation<?>> correlations,
-        Function<String, LongSupplier> supplyCounter)
+        Function<String, LongSupplier> supplyCounter,
+        LongSupplier supplyTrace)
     {
+        this.supplyTrace = requireNonNull(supplyTrace);
         this.router = requireNonNull(router);
         this.writer = new MessageWriter(requireNonNull(writeBuffer));
         this.bufferPool = requireNonNull(bufferPool);
