@@ -66,6 +66,7 @@ public final class ServerStreamFactory implements StreamFactory
     final LongSupplier supplyStreamId;
     final LongUnaryOperator supplyReplyId;
     final LongSupplier supplyCorrelationId;
+    final LongSupplier supplyTrace;
     final BufferPool bufferPool;
 
     Long2ObjectHashMap<Correlation<?>> correlations;
@@ -78,8 +79,10 @@ public final class ServerStreamFactory implements StreamFactory
         LongSupplier supplyStreamId,
         LongUnaryOperator supplyReplyId,
         LongSupplier supplyCorrelationId,
-        Long2ObjectHashMap<Correlation<?>> correlations)
+        Long2ObjectHashMap<Correlation<?>> correlations,
+        LongSupplier supplyTrace)
     {
+        this.supplyTrace = requireNonNull(supplyTrace);
         this.router = requireNonNull(router);
         this.writer = new MessageWriter(requireNonNull(writeBuffer));
         this.bufferPool = requireNonNull(bufferPool);

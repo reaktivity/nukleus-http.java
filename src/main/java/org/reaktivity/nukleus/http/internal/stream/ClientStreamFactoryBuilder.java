@@ -41,6 +41,7 @@ public final class ClientStreamFactoryBuilder implements StreamFactoryBuilder
     private LongSupplier supplyStreamId;
     private LongUnaryOperator supplyReplyId;
     private LongSupplier supplyCorrelationId;
+    private LongSupplier supplyTrace;
     private Supplier<BufferPool> supplyBufferPool;
     private Function<String, LongSupplier> supplyCounter;
 
@@ -72,6 +73,13 @@ public final class ClientStreamFactoryBuilder implements StreamFactoryBuilder
         LongUnaryOperator supplyReplyId)
     {
         this.supplyReplyId = supplyReplyId;
+        return this;
+    }
+
+    @Override
+    public StreamFactoryBuilder setTraceSupplier(LongSupplier supplyTrace)
+    {
+        this.supplyTrace = supplyTrace;
         return this;
     }
 
@@ -127,6 +135,6 @@ public final class ClientStreamFactoryBuilder implements StreamFactoryBuilder
         final BufferPool bufferPool = supplyBufferPool.get();
 
         return new ClientStreamFactory((HttpConfiguration) config, router, writeBuffer, bufferPool,
-                supplyStreamId, supplyReplyId, supplyCorrelationId, correlations, supplyCounter);
+                supplyStreamId, supplyReplyId, supplyCorrelationId, correlations, supplyCounter, supplyTrace);
     }
 }

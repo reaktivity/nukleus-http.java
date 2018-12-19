@@ -232,7 +232,8 @@ final class ServerAcceptStream implements MessageConsumer
             DataFW data = factory.dataRO.wrap(buffer, index, index + length);
             final long streamId = data.streamId();
 
-            factory.writer.doWindow(acceptThrottle, acceptRouteId, streamId, 0, data.length(), 0);
+            factory.writer.doWindow(acceptThrottle, acceptRouteId, streamId, factory.supplyTrace.getAsLong(),
+                    data.length(), 0);
         }
         else if (msgTypeId == EndFW.TYPE_ID)
         {
@@ -255,7 +256,7 @@ final class ServerAcceptStream implements MessageConsumer
     private void processUnexpected(
         long streamId)
     {
-        factory.writer.doReset(acceptThrottle, acceptRouteId, streamId, 0);
+        factory.writer.doReset(acceptThrottle, acceptRouteId, streamId, factory.supplyTrace.getAsLong());
         this.streamState = this::streamAfterReset;
     }
 
@@ -271,14 +272,14 @@ final class ServerAcceptStream implements MessageConsumer
             doSourceWindow(maximumHeadersSize, 0, 0);
 
             // We can't write back an HTTP error response because we already forwarded the request to the target
-            factory.writer.doReset(acceptThrottle, acceptRouteId, acceptId, 0);
-            factory.writer.doAbort(target, targetRouteId, targetId, 0);
+            factory.writer.doReset(acceptThrottle, acceptRouteId, acceptId, factory.supplyTrace.getAsLong());
+            factory.writer.doAbort(target, targetRouteId, targetId, factory.supplyTrace.getAsLong());
             if (correlation != null)
             {
                 correlation.state().pendingRequests--;
             }
 
-            doEnd(0L);
+            doEnd(factory.supplyTrace.getAsLong());
         }
         else
         {
@@ -341,7 +342,7 @@ final class ServerAcceptStream implements MessageConsumer
                         if (writableBytes > 0)
                         {
                             acceptState.acceptReplyBudget -= writableBytes + acceptState.acceptReplyPadding;
-                            ServerAcceptStream.this.factory.writer.doData(target, targetRouteId, targetId, 0,
+                            ServerAcceptStream.this.factory.writer.doData(target, targetRouteId, targetId, factory.supplyTrace.getAsLong(),
                                     acceptState.acceptReplyPadding, payload, offset, writableBytes);
                             offset += writableBytes;
                         }
@@ -350,7 +351,7 @@ final class ServerAcceptStream implements MessageConsumer
                             // Drain data from source before resetting to allow its writes to complete
                             throttleState = ServerAcceptStream.this::throttlePropagateWindow;
                             doSourceWindow(ServerAcceptStream.this.maximumHeadersSize, 0, window.trace());
-                            factory.writer.doEnd(target, targetRouteId, targetId, 0); // connection: close
+                            factory.writer.doEnd(target, targetRouteId, targetId, factory.supplyTrace.getAsLong()); // connection: close
                         }
                         break;
                     case ResetFW.TYPE_ID:
@@ -368,8 +369,8 @@ final class ServerAcceptStream implements MessageConsumer
         {
             // Drain data from source before resetting to allow its writes to complete
             throttleState = ServerAcceptStream.this::throttlePropagateWindow;
-            doSourceWindow(maximumHeadersSize, 0, 0);
-            factory.writer.doEnd(target, targetRouteId, targetId, 0); // connection: close
+            doSourceWindow(maximumHeadersSize, 0, factory.supplyTrace.getAsLong());
+            factory.writer.doEnd(target, targetRouteId, targetId, factory.supplyTrace.getAsLong()); // connection: close
         }
     }
 
@@ -387,7 +388,7 @@ final class ServerAcceptStream implements MessageConsumer
                 factory.writer, this::loopBackThrottle, factory.router, this::setCleanupConnectReply);
         factory.writer.doBegin(acceptReply, acceptRouteId, acceptReplyId, streamTraceId, 0L, acceptCorrelationId);
         this.correlation = new Correlation<>(acceptCorrelationId, acceptName, acceptRouteId, acceptReplyId, state);
-        doSourceWindow(maximumHeadersSize, 0, 0);
+        doSourceWindow(maximumHeadersSize, 0, factory.supplyTrace.getAsLong());
         this.acceptReply = acceptReply;
         this.acceptReplyId = acceptReplyId;
     }
@@ -481,7 +482,7 @@ final class ServerAcceptStream implements MessageConsumer
         AbortFW abort = factory.abortRO.wrap(buffer, index, index + length);
         streamTraceId = abort.trace();
         Correlation<?> correlation = factory.correlations.remove(acceptCorrelationId);
-        factory.writer.doAbort(acceptReply, acceptRouteId, acceptReplyId, 0);
+        factory.writer.doAbort(acceptReply, acceptRouteId, acceptReplyId, factory.supplyTrace.getAsLong());
         if (targetBeginIssued)
         {
             factory.writer.doAbort(target, targetRouteId, targetId, streamTraceId);
@@ -1002,7 +1003,7 @@ final class ServerAcceptStream implements MessageConsumer
             final int offset,
             final int limit)
     {
-        doSourceWindow(limit - offset, 0, 0);
+        doSourceWindow(limit - offset, 0, factory.supplyTrace.getAsLong());
         return limit;
     };
 
