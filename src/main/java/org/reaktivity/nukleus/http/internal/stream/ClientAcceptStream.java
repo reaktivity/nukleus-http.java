@@ -185,7 +185,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         case DataFW.TYPE_ID:
             DataFW data = this.factory.dataRO.wrap(buffer, index, index + length);
             final long streamId = data.streamId();
-            factory.writer.doWindow(acceptThrottle, acceptRouteId, streamId, 0L, data.length(), 0);
+            factory.writer.doWindow(acceptThrottle, acceptRouteId, streamId, factory.supplyTrace.getAsLong(), data.length(), 0);
             break;
         case EndFW.TYPE_ID:
             factory.endRO.wrap(buffer, index, index + length);
@@ -211,7 +211,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         if (bytes.length > factory.bufferPool.slotCapacity())
         {
             // TODO: diagnostics (reset reason?)
-            factory.writer.doReset(acceptThrottle, acceptRouteId, acceptId, 0L);
+            factory.writer.doReset(acceptThrottle, acceptRouteId, acceptId, factory.supplyTrace.getAsLong());
         }
         else
         {
@@ -231,10 +231,11 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
                 factory.countResponses.getAsLong();
 
                 MessageConsumer acceptReply = factory.router.supplyTarget(acceptName);
-                factory.writer.doHttpBegin(acceptReply, acceptRouteId, acceptReplyId, 0L, 0L, acceptCorrelationId,
+                factory.writer.doHttpBegin(acceptReply, acceptRouteId, acceptReplyId, factory.supplyTrace.getAsLong(),
+                        0L, acceptCorrelationId,
                         hs -> hs.item(h -> h.name(":status").value("503"))
                                 .item(h -> h.name("retry-after").value("0")));
-                factory.writer.doHttpEnd(acceptReply, acceptRouteId, acceptReplyId, 0L);
+                factory.writer.doHttpEnd(acceptReply, acceptRouteId, acceptReplyId, factory.supplyTrace.getAsLong());
 
                 // count rejected requests (no connection or no space in the queue)
                 factory.countRequestsRejected.getAsLong();
@@ -372,7 +373,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         FrameFW frame = this.factory.frameRO.wrap(buffer, index, index + length);
         final long streamId = frame.streamId();
 
-        factory.writer.doReset(acceptThrottle, acceptRouteId, streamId, 0);
+        factory.writer.doReset(acceptThrottle, acceptRouteId, streamId, factory.supplyTrace.getAsLong());
 
         this.streamState = this::streamAfterReplyOrReset;
     }
@@ -474,7 +475,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
                     throttleState = this::throttleNextWindow;
                     if (connection.budget > 0)
                     {
-                        doSourceWindow(connection.padding, 0L);
+                        doSourceWindow(connection.padding, factory.supplyTrace.getAsLong());
                     }
                 }
             }

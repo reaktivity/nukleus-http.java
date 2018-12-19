@@ -150,7 +150,7 @@ final class ConnectionPool
             factory.writer.doHttpBegin(acceptReply, acceptRouteId, targetId, traceId, 0L, sourceCorrelationId,
                                        hs -> hs.item(h -> h.name(":status").value("503"))
                                                .item(h -> h.name("retry-after").value("0")));
-            factory.writer.doHttpEnd(acceptReply, acceptRouteId, targetId, 0L);
+            factory.writer.doHttpEnd(acceptReply, acceptRouteId, targetId, factory.supplyTrace.getAsLong());
         }
         if (connection.persistent)
         {
@@ -176,10 +176,10 @@ final class ConnectionPool
                 switch(action)
                 {
                 case END:
-                    factory.writer.doEnd(connect, connectRouteId, connection.connectStreamId, 0);
+                    factory.writer.doEnd(connect, connectRouteId, connection.connectStreamId, factory.supplyTrace.getAsLong());
                     break;
                 case ABORT:
-                    factory.writer.doAbort(connect, connectRouteId, connection.connectStreamId, 0);
+                    factory.writer.doAbort(connect, connectRouteId, connection.connectStreamId, factory.supplyTrace.getAsLong());
                 }
                 connection.endOrAbortSent = true;
             }
