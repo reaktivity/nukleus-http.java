@@ -596,7 +596,7 @@ final class ServerAcceptStream implements MessageConsumer
     {
         int result = limit;
         final int endOfHeadersAt = limitOfBytes(payload, offset, limit, ServerStreamFactory.CRLFCRLF_BYTES);
-        FrameFW frameFW = factory.frameRO.wrap(payload, offset, payload.capacity());
+        FrameFW frame = factory.frameRO.wrap(payload, offset, payload.capacity());
         if (endOfHeadersAt == -1)
         {
             // Incomplete request, signal we can't consume the data
@@ -610,7 +610,7 @@ final class ServerAcceptStream implements MessageConsumer
                 String method = payload.getStringWithoutLengthUtf8(offset, length).split("\\s+")[0];
                 if (StandardMethods.parse(method) == null)
                 {
-                    processInvalidRequest(501, "Not Implemented", frameFW.trace());
+                    processInvalidRequest(501, "Not Implemented", frame.trace());
                 }
             }
             else  if (firstSpace == -1 && length > ServerStreamFactory.MAXIMUM_METHOD_BYTES)
@@ -622,11 +622,11 @@ final class ServerAcceptStream implements MessageConsumer
                 int firstCRLF = limitOfBytes(payload, offset, limit, ServerStreamFactory.CRLF_BYTES);
                 if (firstCRLF == -1 || firstCRLF > maximumHeadersSize)
                 {
-                    processInvalidRequest(414, "Request URI too long", frameFW.trace());
+                    processInvalidRequest(414, "Request URI too long", frame.trace());
                 }
                 else
                 {
-                    processInvalidRequest(431, "Request Header Fields Too Large", frameFW.trace());
+                    processInvalidRequest(431, "Request Header Fields Too Large", frame.trace());
                 }
             }
         }
@@ -668,11 +668,11 @@ final class ServerAcceptStream implements MessageConsumer
         // TODO: replace with lightweight approach (start)
         String[] lines = payload.getStringWithoutLengthUtf8(offset, length).split("\r\n");
         String[] start = lines[0].split("\\s+");
-        FrameFW frameFW = factory.frameRO.wrap(payload, offset, payload.capacity());
+        FrameFW frame = factory.frameRO.wrap(payload, offset, payload.capacity());
 
         if (start.length != 3)
         {
-            processInvalidRequest(400, "Bad Request", frameFW.trace());
+            processInvalidRequest(400, "Bad Request", frame.trace());
             return;
         }
 
@@ -684,16 +684,16 @@ final class ServerAcceptStream implements MessageConsumer
             Matcher validVersionMatcher = validVersionPattern.matcher(start[2]);
             if (validVersionMatcher.matches())
             {
-                processInvalidRequest(505, "HTTP Version Not Supported", frameFW.trace());
+                processInvalidRequest(505, "HTTP Version Not Supported", frame.trace());
             }
             else
             {
-                processInvalidRequest(400, "Bad Request", frameFW.trace());
+                processInvalidRequest(400, "Bad Request", frame.trace());
             }
         }
         else if (null == StandardMethods.parse(start[0]))
         {
-            processInvalidRequest(501, "Not Implemented", frameFW.trace());
+            processInvalidRequest(501, "Not Implemented", frame.trace());
         }
         else
         {
@@ -706,11 +706,11 @@ final class ServerAcceptStream implements MessageConsumer
 
             if (httpStatus.status != 200)
             {
-                processInvalidRequest(httpStatus.status, httpStatus.message, frameFW.trace());
+                processInvalidRequest(httpStatus.status, httpStatus.message, frame.trace());
             }
             else if (headers.get(":authority") == null || requestURI.getUserInfo() != null)
             {
-                processInvalidRequest(400, "Bad Request", frameFW.trace());
+                processInvalidRequest(400, "Bad Request", frame.trace());
             }
             else
             {
@@ -771,7 +771,7 @@ final class ServerAcceptStream implements MessageConsumer
                 }
                 else
                 {
-                    processInvalidRequest(404, "Not Found", frameFW.trace());
+                    processInvalidRequest(404, "Not Found", frame.trace());
                 }
             }
         }
@@ -901,7 +901,7 @@ final class ServerAcceptStream implements MessageConsumer
             final int limit)
     {
         int result = limit;
-        FrameFW frameFW = factory.frameRO.wrap(payload, offset, payload.capacity());
+        FrameFW frame = factory.frameRO.wrap(payload, offset, payload.capacity());
         final int chunkHeaderLimit = limitOfBytes(payload, offset, limit, ServerStreamFactory.CRLF_BYTES);
         if (chunkHeaderLimit == -1)
         {
@@ -920,7 +920,7 @@ final class ServerAcceptStream implements MessageConsumer
             }
             catch (NumberFormatException ex)
             {
-                processInvalidRequest(400,  "Bad Request", frameFW.trace());
+                processInvalidRequest(400,  "Bad Request", frame.trace());
             }
 
             if (chunkSizeRemaining == 0)
@@ -944,13 +944,13 @@ final class ServerAcceptStream implements MessageConsumer
     {
         int length = limit - offset;
         int result = offset;
-        FrameFW frameFW = factory.frameRO.wrap(payload, offset, payload.capacity());
+        FrameFW frame = factory.frameRO.wrap(payload, offset, payload.capacity());
         if (length > 1)
         {
             if (payload.getByte(offset) != '\r'
                 || payload.getByte(offset + 1) != '\n')
             {
-                processInvalidRequest(400,  "Bad Request", frameFW.trace());
+                processInvalidRequest(400,  "Bad Request", frame.trace());
             }
             else
             {

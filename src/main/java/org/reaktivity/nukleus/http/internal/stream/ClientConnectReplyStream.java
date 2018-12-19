@@ -246,10 +246,10 @@ final class ClientConnectReplyStream implements MessageConsumer
         int index,
         int length)
     {
-        FrameFW frameFW = this.factory.frameRO.wrap(buffer, index, index + length);
-        long streamId = frameFW.streamId();
+        FrameFW frame = this.factory.frameRO.wrap(buffer, index, index + length);
+        long streamId = frame.streamId();
 
-        handleUnexpected(streamId, frameFW.trace());
+        handleUnexpected(streamId, frame.trace());
     }
 
     private void handleUnexpected(
@@ -581,8 +581,8 @@ final class ClientConnectReplyStream implements MessageConsumer
 
             resolveTarget();
 
-            FrameFW frameFW = factory.frameRO.wrap(payload, offset, payload.capacity());
-            factory.writer.doHttpBegin(acceptReply, acceptRouteId, acceptReplyId, frameFW.trace(), 0L, acceptCorrelationId,
+            FrameFW frame = factory.frameRO.wrap(payload, offset, payload.capacity());
+            factory.writer.doHttpBegin(acceptReply, acceptRouteId, acceptReplyId, frame.trace(), 0L, acceptCorrelationId,
                     hs -> headers.forEach((k, v) -> hs.item(i -> i.representation((byte) 0).name(k).value(v))));
             factory.router.setThrottle(acceptReplyName, acceptReplyId, this::handleThrottle);
 
