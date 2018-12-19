@@ -249,16 +249,17 @@ final class ClientConnectReplyStream implements MessageConsumer
         FrameFW frameFW = this.factory.frameRO.wrap(buffer, index, index + length);
         long streamId = frameFW.streamId();
 
-        handleUnexpected(streamId);
+        handleUnexpected(streamId, frameFW.trace());
     }
 
     private void handleUnexpected(
-        long streamId)
+        long streamId,
+        long traceId)
     {
         factory.writer.doReset(connectReplyThrottle, connectRouteId, streamId, factory.supplyTrace.getAsLong());
         if (acceptReply != null)
         {
-            factory.writer.doAbort(acceptReply, acceptRouteId, acceptReplyId, factory.supplyTrace.getAsLong());
+            factory.writer.doAbort(acceptReply, acceptRouteId, acceptReplyId, traceId);
         }
 
         this.streamState = this::handleStreamAfterReset;
@@ -317,7 +318,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         }
         else
         {
-            handleUnexpected(connectReplyId);
+            handleUnexpected(connectReplyId, traceId);
         }
     }
 
@@ -329,7 +330,7 @@ final class ClientConnectReplyStream implements MessageConsumer
 
         if (connectReplyBudget < 0)
         {
-            handleUnexpected(data.streamId());
+            handleUnexpected(data.streamId(), traceId);
         }
         else
         {
@@ -440,7 +441,7 @@ final class ClientConnectReplyStream implements MessageConsumer
 
         if (connectReplyBudget < 0)
         {
-            handleUnexpected(data.streamId());
+            handleUnexpected(data.streamId(), traceId);
         }
         else
         {
