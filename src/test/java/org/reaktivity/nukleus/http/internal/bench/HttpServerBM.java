@@ -121,7 +121,7 @@ public class HttpServerBM
 
         private MutableDirectBuffer throttleBuffer;
 
-        private long sourceInputRef;
+        private long sourceRouteId;
         private Writer sourceInput;
         private Reader sourceOutputEst;
 
@@ -140,9 +140,9 @@ public class HttpServerBM
             final Random random = new Random();
             final HttpController controller = reaktor.controller(HttpController.class);
 
-            this.sourceInputRef = controller.routeServer("source", 0L, "http", 0L, emptyMap()).get();
+            this.sourceRouteId = controller.routeServer("http#0", "echo", emptyMap()).get();
 
-            this.sourceInput = controller.supplySource("source", Writer::new);
+//            this.sourceInput = controller.supplySource("source", Writer::new);
 
             this.sourceInputId = random.nextLong();
             this.sourceOutputEstHandler = this::processBegin;
@@ -150,9 +150,8 @@ public class HttpServerBM
             final AtomicBuffer writeBuffer = new UnsafeBuffer(new byte[256]);
 
             BeginFW begin = beginRW.wrap(writeBuffer, 0, writeBuffer.capacity())
+                    .routeId(sourceRouteId)
                     .streamId(sourceInputId)
-                    .source("source")
-                    .sourceRef(sourceInputRef)
                     .correlationId(random.nextLong())
                     .extension(e -> e.reset())
                     .build();
@@ -213,7 +212,7 @@ public class HttpServerBM
         {
             HttpController controller = reaktor.controller(HttpController.class);
 
-            controller.unrouteServer("source", sourceInputRef, "http", 0L, null).get();
+            controller.unroute(sourceRouteId).get();
 
             this.sourceInput = null;
 

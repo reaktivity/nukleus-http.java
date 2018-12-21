@@ -107,9 +107,8 @@ public class HttpClientBM
         private volatile Writer clientConnectReplyStreams;
 
         private String clientAccept;
-        private long clientAcceptRef;
+        private long clientRouteId;
         private String clientConnect;
-        private long clientConnectRef;
 
         private volatile long streamsSourced;
 
@@ -159,13 +158,12 @@ public class HttpClientBM
             final Random random = new Random();
             final long targetRef = random.nextLong();
 
-            this.clientAccept = "source";
-            this.clientConnect = "target";
-            this.clientConnectRef = targetRef;
-            this.clientAcceptRef = controller.routeClient("source", 0L, "target", targetRef, emptyMap()).get();
+            this.clientAccept = "http#0";
+            this.clientConnect = "target#0";
+            this.clientRouteId = controller.routeClient(clientAccept, clientConnect, emptyMap()).get();
 
-            this.clientAcceptStreams = controller.supplySource("source", Writer::new);
-            this.clientConnectReplyStreams = controller.supplySource("target", Writer::new);
+//            this.clientAcceptStreams = controller.supplySource("source", Writer::new);
+//            this.clientConnectReplyStreams = controller.supplySource("target", Writer::new);
 
             // Map file streams/source/http#target created by routeOutputNew TODO: the following may not do this
             clientConnectStreams = controller.supplyTarget("target", Reader::new);
@@ -243,7 +241,7 @@ public class HttpClientBM
 
             try
             {
-                controller.unrouteClient(clientAccept, clientAcceptRef, clientConnect, clientConnectRef, null).get();
+                controller.unroute(clientRouteId).get();
             }
             catch(Exception e)
             {
@@ -316,8 +314,8 @@ public class HttpClientBM
 
             final AtomicBuffer outputBeginBuffer = new UnsafeBuffer(new byte[256]);
             beginRW.wrap(outputBeginBuffer, 0, outputBeginBuffer.capacity())
-            .source(state.clientAccept)
-            .sourceRef(state.clientAcceptRef)
+            .routeId(state.clientRouteId)
+            .streamId(0L)
             .extension(e -> e.set((buffer, offset, limit) ->
                     new HttpBeginExFW.Builder().wrap(buffer, offset, limit)
                         .headers(hs -> hs
@@ -363,8 +361,7 @@ public class HttpClientBM
 
         private boolean writeRequestBegin()
         {
-            beginRW.source(sharedState.clientAccept);
-            beginRW.sourceRef(sharedState.clientAcceptRef);
+            beginRW.routeId(sharedState.clientRouteId);
             BeginFW begin = beginRW.build();
             return sharedState.clientAcceptStreams.streams.test(begin.typeId(), begin.buffer(), begin.offset(), begin.sizeof());
         }
@@ -591,8 +588,8 @@ public class HttpClientBM
 
             final AtomicBuffer outputBeginBuffer = new UnsafeBuffer(new byte[256]);
             beginRW.wrap(outputBeginBuffer, 0, outputBeginBuffer.capacity())
-            .source(state.clientConnect)
-            .sourceRef(0L)
+            .routeId(state.clientRouteId)
+            .streamId(0L)
             .extension(e -> e.reset());
 
             final AtomicBuffer outputDataBuffer = new UnsafeBuffer(new byte[256]);

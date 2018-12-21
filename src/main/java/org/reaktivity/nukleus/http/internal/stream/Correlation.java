@@ -15,13 +15,10 @@
  */
 package org.reaktivity.nukleus.http.internal.stream;
 
-import static java.util.Objects.requireNonNull;
-
 import java.util.Objects;
 
 public class Correlation<S>
 {
-    private final String source;
     private final long routeId;
     private final long replyId;
     private final long id;
@@ -29,13 +26,11 @@ public class Correlation<S>
 
     public Correlation(
         long id,
-        String source,
         long routeId,
         long replyId,
         S state)
     {
         this.id = id;
-        this.source = requireNonNull(source, "source");
         this.routeId = routeId;
         this.replyId = replyId;
         this.state = state;
@@ -44,10 +39,9 @@ public class Correlation<S>
     public Correlation(
         long id,
         long routeId,
-        String source,
         long sourceId)
     {
-        this(id, source, routeId, sourceId, null);
+        this(id, routeId, sourceId, null);
     }
 
     public long routeId()
@@ -58,11 +52,6 @@ public class Correlation<S>
     public long replyId()
     {
         return replyId;
-    }
-
-    public String source()
-    {
-        return source;
     }
 
     public long id()
@@ -79,10 +68,7 @@ public class Correlation<S>
     @Override
     public int hashCode()
     {
-        int result = Long.hashCode(id);
-        result = 31 * result + source.hashCode();
-
-        return result;
+        return Long.hashCode(id);
     }
 
     @Override
@@ -96,13 +82,12 @@ public class Correlation<S>
 
         Correlation<?> that = (Correlation<?>) obj;
         return this.id == that.id &&
-                Objects.equals(this.source, that.source) &&
                 Objects.equals(this.state, that.state);
     }
 
     @Override
     public String toString()
     {
-        return String.format("[id=%s, source=\"%s\", state=%s]", id, source, state);
+        return String.format("[id=%s, state=%s]", id, state);
     }
 }

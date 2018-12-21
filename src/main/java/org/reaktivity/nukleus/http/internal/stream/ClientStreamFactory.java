@@ -20,7 +20,6 @@ import static java.util.Objects.requireNonNull;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -78,7 +77,7 @@ public final class ClientStreamFactory implements StreamFactory
     final ResetFW resetRO = new ResetFW();
 
     final RouteManager router;
-    final LongSupplier supplyStreamId;
+    final LongSupplier supplyInitialId;
     final LongUnaryOperator supplyReplyId;
     final LongSupplier supplyCorrelationId;
     final LongSupplier enqueues;
@@ -92,7 +91,7 @@ public final class ClientStreamFactory implements StreamFactory
 
     Long2ObjectHashMap<Correlation<?>> correlations;
 
-    final Map<String, Map<Long, ConnectionPool>> connectionPools;
+    final Long2ObjectHashMap<ConnectionPool> connectionPools;
     final int maximumConnectionsPerRoute;
     final int maximumQueuedRequestsPerRoute;
 
@@ -120,11 +119,11 @@ public final class ClientStreamFactory implements StreamFactory
         this.router = requireNonNull(router);
         this.writer = new MessageWriter(requireNonNull(writeBuffer));
         this.bufferPool = requireNonNull(bufferPool);
-        this.supplyStreamId = requireNonNull(supplyStreamId);
+        this.supplyInitialId = requireNonNull(supplyStreamId);
         this.supplyCorrelationId = supplyCorrelationId;
         this.supplyReplyId = requireNonNull(supplyReplyId);
         this.correlations = requireNonNull(correlations);
-        this.connectionPools = new HashMap<>();
+        this.connectionPools = new Long2ObjectHashMap<>();
         this.maximumConnectionsPerRoute = configuration.maximumConnectionsPerRoute();
         this.maximumQueuedRequestsPerRoute = configuration.maximumRequestsQueuedPerRoute();
         this.maximumHeadersSize = bufferPool.slotCapacity();
@@ -147,18 +146,18 @@ public final class ClientStreamFactory implements StreamFactory
         MessageConsumer throttle)
     {
         final BeginFW begin = beginRO.wrap(buffer, index, index + length);
-        final long sourceRef = begin.sourceRef();
+        final long streamId = begin.streamId();
         this.supplyTraceId = begin.trace();
 
         MessageConsumer newStream;
 
-        if (sourceRef == 0L)
+        if ((streamId & 0x8000_0000_0000_0000L) == 0L)
         {
-            newStream = newConnectReplyStream(begin, throttle);
+            newStream = newAcceptStream(begin, throttle);
         }
         else
         {
-            newStream = newAcceptStream(begin, throttle);
+            newStream = newConnectReplyStream(begin, throttle);
         }
 
         return newStream;
@@ -168,8 +167,7 @@ public final class ClientStreamFactory implements StreamFactory
         BeginFW begin,
         MessageConsumer acceptThrottle)
     {
-        final long acceptRef = begin.sourceRef();
-        final String acceptName = begin.source().asString();
+        final long routeId = begin.routeId();
         final long authorization = begin.authorization();
 
         final OctetsFW extension = begin.extension();
@@ -184,7 +182,7 @@ public final class ClientStreamFactory implements StreamFactory
             headers = headers0;
         }
 
-        final RouteFW route = resolveTarget(acceptRef, authorization, headers);
+        final RouteFW route = resolveTarget(routeId, authorization, headers);
 
         MessageConsumer newStream = null;
 
@@ -194,13 +192,11 @@ public final class ClientStreamFactory implements StreamFactory
             final long acceptId = begin.streamId();
             final long acceptCorrelationId = begin.correlationId();
             final long connectRouteId = route.correlationId();
-            final String connectName = route.target().asString();
-            final long connectRef = route.targetRef();
             final long acceptReplyId = supplyReplyId.applyAsLong(acceptId);
 
             newStream = new ClientAcceptStream(this,
-                    acceptThrottle, acceptRouteId, acceptId, acceptRef, acceptName, acceptCorrelationId, acceptReplyId,
-                    connectRouteId, connectName, connectRef, headers);
+                    acceptThrottle, acceptRouteId, acceptId, acceptCorrelationId, acceptReplyId,
+                    connectRouteId, headers);
         }
 
         return newStream;
@@ -211,15 +207,13 @@ public final class ClientStreamFactory implements StreamFactory
         MessageConsumer connectReplyThrottle)
     {
         final long connectRouteId = begin.routeId();
-        final String connectReplyName = begin.source().asString();
         final long connectReplyId = begin.streamId();
 
-        return new ClientConnectReplyStream(this, connectReplyThrottle, connectRouteId, connectReplyId,
-                connectReplyName);
+        return new ClientConnectReplyStream(this, connectReplyThrottle, connectRouteId, connectReplyId);
     }
 
     private RouteFW resolveTarget(
-        long sourceRef,
+        long routeId,
         long authorization,
         Map<String, String> headers)
     {
@@ -234,10 +228,10 @@ public final class ClientStreamFactory implements StreamFactory
                 headersMatch = routeEx.headers().anyMatch(
                         h -> !Objects.equals(h.value(), headers.get(h.name())));
             }
-            return route.sourceRef() == sourceRef && headersMatch;
+            return headersMatch;
         };
 
-        return router.resolve(authorization, filter, (msgTypeId, buffer, index, length) ->
+        return router.resolve(routeId, authorization, filter, (msgTypeId, buffer, index, length) ->
             routeRO.wrap(buffer, index, index + length));
     }
 

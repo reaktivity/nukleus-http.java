@@ -47,7 +47,6 @@ public final class ServerConnectReplyStream implements MessageConsumer
     private final MessageConsumer connectReplyThrottle;
     private final long connectRouteId;
     private final long connectReplyId;
-    private final String connectReplyName;
 
     private MessageConsumer streamState;
     private MessageConsumer throttleState;
@@ -67,14 +66,12 @@ public final class ServerConnectReplyStream implements MessageConsumer
         MessageConsumer connectReplyThrottle,
         long connectRouteId,
         long connectReplyId,
-        long traceId,
-        String connectReplyName)
+        long traceId)
     {
         this.factory = factory;
         this.connectReplyThrottle = connectReplyThrottle;
         this.connectRouteId = connectRouteId;
         this.connectReplyId = connectReplyId;
-        this.connectReplyName = connectReplyName;
         this.traceId = traceId;
 
         this.streamState = this::streamBeforeBegin;
@@ -95,8 +92,8 @@ public final class ServerConnectReplyStream implements MessageConsumer
     @Override
     public String toString()
     {
-        return String.format("%s[source=%s, connectReplyId=%016x, window=%d, targetStream=%s]",
-                getClass().getSimpleName(), connectReplyName, connectReplyId, acceptState);
+        return String.format("%s[connectReplyId=%016x, window=%d, targetStream=%s]",
+                getClass().getSimpleName(), connectReplyId, acceptState);
     }
 
     private void streamBeforeBegin(
@@ -208,7 +205,6 @@ public final class ServerConnectReplyStream implements MessageConsumer
     {
         BeginFW begin = factory.beginRO.wrap(buffer, index, index + length);
 
-        final long sourceRef = begin.sourceRef();
         final long targetCorrelationId = begin.correlationId();
         final OctetsFW extension = begin.extension();
         traceId = begin.trace();
@@ -216,8 +212,7 @@ public final class ServerConnectReplyStream implements MessageConsumer
         @SuppressWarnings("unchecked")
         final Correlation<ServerAcceptState> correlation =
                      (Correlation<ServerAcceptState>) factory.correlations.remove(targetCorrelationId);
-
-        if (sourceRef == 0L && correlation != null)
+        if (correlation != null)
         {
             acceptState = correlation.state();
             acceptState.setCleanupConnectReply.accept(this::doCleanup);

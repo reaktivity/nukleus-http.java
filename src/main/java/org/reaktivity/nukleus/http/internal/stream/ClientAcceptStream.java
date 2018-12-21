@@ -23,7 +23,6 @@ import java.util.Map;
 import java.util.function.Consumer;
 
 import org.agrona.DirectBuffer;
-import org.agrona.collections.Long2ObjectHashMap;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.reaktivity.nukleus.function.MessageConsumer;
 import org.reaktivity.nukleus.http.internal.stream.ConnectionPool.CloseAction;
@@ -48,12 +47,9 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
     private final MessageConsumer acceptThrottle;
     private final long acceptRouteId;
     private final long acceptId;
-    private final String acceptName;
     private final long acceptCorrelationId;
     private final long acceptReplyId;
     private final long connectRouteId;
-    private final String connectName;
-    private final long connectRef;
 
     private Map<String, String> headers;
     private MessageConsumer target;
@@ -72,25 +68,18 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         MessageConsumer acceptThrottle,
         long acceptRouteId,
         long acceptId,
-        long acceptRef,
-        String acceptName,
         long acceptCorrelationId,
         long acceptReplyId,
         long connectRouteId,
-        String connectName,
-        long connectRef,
         Map<String, String> headers)
     {
         this.factory = factory;
         this.acceptThrottle = acceptThrottle;
         this.acceptRouteId = acceptRouteId;
         this.acceptId = acceptId;
-        this.acceptName = acceptName;
         this.acceptReplyId = acceptReplyId;
         this.acceptCorrelationId = acceptCorrelationId;
         this.connectRouteId = connectRouteId;
-        this.connectName = connectName;
-        this.connectRef = connectRef;
         this.headers = headers;
         this.streamState = this::streamBeforeBegin;
         this.throttleState = this::throttleBeforeBegin;
@@ -221,8 +210,8 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
             headersOffset = 0;
             this.streamState = this::streamBeforeHeadersWritten;
             this.throttleState = this::throttleBeforeHeadersWritten;
-            target = factory.router.supplyTarget(connectName);
-            connectionPool = getConnectionPool(connectName, connectRouteId, connectRef);
+            target = factory.router.supplyReceiver(connectRouteId);
+            connectionPool = getConnectionPool(connectRouteId);
             boolean acquired = connectionPool.acquire(this);
             // No backend connection or cannot store in queue, send 503 with Retry-After
             if (!acquired)
@@ -230,9 +219,9 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
                 // count all responses
                 factory.countResponses.getAsLong();
 
-                MessageConsumer acceptReply = factory.router.supplyTarget(acceptName);
+                MessageConsumer acceptReply = factory.router.supplySender(acceptRouteId);
                 factory.writer.doHttpBegin(acceptReply, acceptRouteId, acceptReplyId, factory.supplyTrace.getAsLong(),
-                        0L, acceptCorrelationId,
+                        acceptCorrelationId,
                         hs -> hs.item(h -> h.name(":status").value("503"))
                                 .item(h -> h.name("retry-after").value("0")));
                 factory.writer.doHttpEnd(acceptReply, acceptRouteId, acceptReplyId, factory.supplyTrace.getAsLong());
@@ -318,14 +307,9 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
     }
 
     private ConnectionPool getConnectionPool(
-        String targetName,
-        long targetRouteId,
-        long targetRef)
+        long targetRouteId)
     {
-        Map<Long, ConnectionPool> connectionsByRef = this.factory.connectionPools.
-                computeIfAbsent(targetName, (n) -> new Long2ObjectHashMap<ConnectionPool>());
-        return connectionsByRef.computeIfAbsent(targetRef, (r) ->
-            new ConnectionPool(factory, targetName, targetRouteId, targetRef));
+        return factory.connectionPools.computeIfAbsent(targetRouteId, r -> new ConnectionPool(factory, r));
     }
 
     private void processData(
@@ -536,9 +520,9 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         connection.persistent = persistent;
         ClientConnectReplyState state = new ClientConnectReplyState(connectionPool, connection);
         final Correlation<ClientConnectReplyState> correlation =
-                new Correlation<>(acceptCorrelationId, acceptName, acceptRouteId, acceptReplyId, state);
+                new Correlation<>(acceptCorrelationId, acceptRouteId, acceptReplyId, state);
         factory.correlations.put(connection.correlationId, correlation);
-        factory.router.setThrottle(connectName, connection.connectStreamId, this::handleThrottle);
+        factory.router.setThrottle(connection.connectStreamId, this::handleThrottle);
         if (connection.budget > 0)
         {
             useWindowToWriteRequestHeaders();

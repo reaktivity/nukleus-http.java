@@ -15,15 +15,11 @@
  */
 package org.reaktivity.nukleus.http.internal.stream;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
-
 import java.util.function.Consumer;
 
 import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
-import org.agrona.concurrent.UnsafeBuffer;
 import org.reaktivity.nukleus.function.MessageConsumer;
-import org.reaktivity.nukleus.http.internal.HttpNukleusFactorySpi;
 import org.reaktivity.nukleus.http.internal.types.Flyweight;
 import org.reaktivity.nukleus.http.internal.types.HttpHeaderFW;
 import org.reaktivity.nukleus.http.internal.types.ListFW;
@@ -38,8 +34,6 @@ import org.reaktivity.nukleus.http.internal.types.stream.WindowFW;
 
 final class MessageWriter
 {
-    private static final DirectBuffer SOURCE_NAME_BUFFER = new UnsafeBuffer(HttpNukleusFactorySpi.NAME.getBytes(UTF_8));
-
     private final BeginFW.Builder beginRW = new BeginFW.Builder();
     private final DataFW.Builder dataRW = new DataFW.Builder();
     private final EndFW.Builder endRW = new EndFW.Builder();
@@ -64,15 +58,12 @@ final class MessageWriter
         long routeId,
         long streamId,
         long traceId,
-        long targetRef,
         long correlationId)
     {
         final BeginFW begin = beginRW.wrap(writeBuffer, 0, writeBuffer.capacity())
                 .routeId(routeId)
                 .streamId(streamId)
                 .trace(traceId)
-                .source(SOURCE_NAME_BUFFER, 0, SOURCE_NAME_BUFFER.capacity())
-                .sourceRef(targetRef)
                 .correlationId(correlationId)
                 .build();
 
@@ -156,7 +147,6 @@ final class MessageWriter
         long routeId,
         long streamId,
         long traceId,
-        long targetRef,
         long correlationId,
         Consumer<ListFW.Builder<HttpHeaderFW.Builder, HttpHeaderFW>> mutator)
     {
@@ -164,8 +154,6 @@ final class MessageWriter
                 .routeId(routeId)
                 .streamId(streamId)
                 .trace(traceId)
-                .source(SOURCE_NAME_BUFFER, 0, SOURCE_NAME_BUFFER.capacity())
-                .sourceRef(targetRef)
                 .correlationId(correlationId)
                 .extension(e -> e.set(visitHttpBeginEx(mutator)))
                 .build();

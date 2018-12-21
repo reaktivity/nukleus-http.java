@@ -47,7 +47,6 @@ import org.reaktivity.nukleus.http.internal.types.stream.FrameFW;
 final class ClientConnectReplyStream implements MessageConsumer
 {
     private final ClientStreamFactory factory;
-    private final String connectReplyName;
     private final MessageConsumer connectReplyThrottle;
 
     private MessageConsumer streamState;
@@ -72,7 +71,6 @@ final class ClientConnectReplyStream implements MessageConsumer
     private long acceptRouteId;
     private long acceptReplyId;
     private long traceId;
-    private String acceptReplyName;
 
     private long acceptCorrelationId;
     private int contentRemaining;
@@ -90,22 +88,20 @@ final class ClientConnectReplyStream implements MessageConsumer
     @Override
     public String toString()
     {
-        return String.format("%s[source=%s, connectReplyId=%016x, sourceBudget=%d, targetId=%016x]",
-                getClass().getSimpleName(), connectReplyName, connectReplyId, connectReplyBudget, acceptReplyId);
+        return String.format("%s[connectReplyId=%016x, sourceBudget=%d, targetId=%016x]",
+                getClass().getSimpleName(), connectReplyId, connectReplyBudget, acceptReplyId);
     }
 
     ClientConnectReplyStream(
         ClientStreamFactory factory,
         MessageConsumer connectReplyThrottle,
         long connectRouteId,
-        long connectReplyId,
-        String connectReplyName)
+        long connectReplyId)
     {
         this.factory = factory;
         this.connectReplyThrottle = connectReplyThrottle;
         this.connectRouteId = connectRouteId;
         this.connectReplyId = connectReplyId;
-        this.connectReplyName = connectReplyName;
         this.streamState = this::handleStreamBeforeBegin;
         this.throttleState = this::handleThrottleBeforeBegin;
         this.windowHandler = this::handleWindow;
@@ -302,18 +298,17 @@ final class ClientConnectReplyStream implements MessageConsumer
         BeginFW begin)
     {
         this.connectReplyId = begin.streamId();
-        final long sourceRef = begin.sourceRef();
         long connectCorrelationId = begin.correlationId();
         traceId = begin.trace();
 
         @SuppressWarnings("unchecked")
         final Correlation<ClientConnectReplyState> correlation =
                 (Correlation<ClientConnectReplyState>) factory.correlations.get(connectCorrelationId);
-        connection = correlation.state().connection;
-        connectionPool = correlation.state().connectionPool;
-        connection.setInput(connectReplyThrottle, connectReplyId);
-        if (sourceRef == 0L && correlation != null)
+        if (correlation != null)
         {
+            connection = correlation.state().connection;
+            connectionPool = correlation.state().connectionPool;
+            connection.setInput(connectReplyThrottle, connectReplyId);
             httpResponseBegin();
         }
         else
@@ -582,9 +577,9 @@ final class ClientConnectReplyStream implements MessageConsumer
             resolveTarget();
 
             FrameFW frame = factory.frameRO.wrap(payload, offset, payload.capacity());
-            factory.writer.doHttpBegin(acceptReply, acceptRouteId, acceptReplyId, frame.trace(), 0L, acceptCorrelationId,
+            factory.writer.doHttpBegin(acceptReply, acceptRouteId, acceptReplyId, frame.trace(), acceptCorrelationId,
                     hs -> headers.forEach((k, v) -> hs.item(i -> i.representation((byte) 0).name(k).value(v))));
-            factory.router.setThrottle(acceptReplyName, acceptReplyId, this::handleThrottle);
+            factory.router.setThrottle(acceptReplyId, this::handleThrottle);
 
             // count all responses
             factory.countResponses.getAsLong();
@@ -896,11 +891,10 @@ final class ClientConnectReplyStream implements MessageConsumer
     private void resolveTarget()
     {
         final Correlation<?> correlation = factory.correlations.remove(connection.correlationId);
-        this.acceptReplyName = correlation.source();
-        this.acceptReply = factory.router.supplyTarget(acceptReplyName);
         this.acceptRouteId = correlation.routeId();
         this.acceptReplyId = correlation.replyId();
         this.acceptCorrelationId = correlation.id();
+        this.acceptReply = factory.router.supplySender(acceptRouteId);
         this.acceptReplyBudget = 0;
     }
 
