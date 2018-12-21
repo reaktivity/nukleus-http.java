@@ -20,7 +20,6 @@ import static org.junit.rules.RuleChain.outerRule;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.Random;
 
 import org.junit.Rule;
 import org.junit.Test;
@@ -58,14 +57,13 @@ public class ControllerIT
     })
     public void shouldRouteServer() throws Exception
     {
-        long targetRef = new Random().nextLong();
         Map<String, String> headers = new LinkedHashMap<>();
         headers.put(":authority", "localhost:8080");
 
         k3po.start();
 
         reaktor.controller(HttpController.class)
-               .routeServer("source", 0L, "target", targetRef, headers)
+               .routeServer("http#0", "target#0", headers)
                .get();
 
         k3po.finish();
@@ -77,14 +75,13 @@ public class ControllerIT
     })
     public void shouldRouteClient() throws Exception
     {
-        long targetRef = new Random().nextLong();
         Map<String, String> headers = new LinkedHashMap<>();
         headers.put(":authority", "localhost:8080");
 
         k3po.start();
 
         reaktor.controller(HttpController.class)
-               .routeClient("source", 0L, "target", targetRef, headers)
+               .routeClient("http#0", "target#0", headers)
                .get();
 
         k3po.finish();
@@ -97,20 +94,19 @@ public class ControllerIT
     })
     public void shouldUnrouteServer() throws Exception
     {
-        long targetRef = new Random().nextLong();
         Map<String, String> headers = new LinkedHashMap<>();
         headers.put(":authority", "localhost:8080");
 
         k3po.start();
 
-        long sourceRef = reaktor.controller(HttpController.class)
-              .routeServer("source", 0L, "target", targetRef, headers)
+        long routeId = reaktor.controller(HttpController.class)
+              .routeServer("http#0", "target#0", headers)
               .get();
 
         k3po.notifyBarrier("ROUTED_SERVER");
 
         reaktor.controller(HttpController.class)
-               .unrouteServer("source", sourceRef, "target", targetRef, headers)
+               .unroute(routeId)
                .get();
 
         k3po.finish();
@@ -123,20 +119,19 @@ public class ControllerIT
     })
     public void shouldUnrouteClient() throws Exception
     {
-        long targetRef = new Random().nextLong();
         Map<String, String> headers = new LinkedHashMap<>();
         headers.put(":authority", "localhost:8080");
 
         k3po.start();
 
-        long sourceRef = reaktor.controller(HttpController.class)
-              .routeClient("source", 0L, "target", targetRef, headers)
+        long routeId = reaktor.controller(HttpController.class)
+              .routeClient("http#0", "target#0", headers)
               .get();
 
         k3po.notifyBarrier("ROUTED_CLIENT");
 
         reaktor.controller(HttpController.class)
-               .unrouteClient("source", sourceRef, "target", targetRef, headers)
+               .unroute(routeId)
                .get();
 
         k3po.finish();

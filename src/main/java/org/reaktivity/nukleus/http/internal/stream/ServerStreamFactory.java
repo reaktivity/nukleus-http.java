@@ -101,17 +101,17 @@ public final class ServerStreamFactory implements StreamFactory
             MessageConsumer throttle)
     {
         final BeginFW begin = beginRO.wrap(buffer, index, index + length);
-        final long sourceRef = begin.sourceRef();
+        final long streamId = begin.streamId();
 
         MessageConsumer newStream;
 
-        if (sourceRef == 0L)
+        if ((streamId & 0x8000_0000_0000_0000L) == 0L)
         {
-            newStream = newConnectReplyStream(begin, throttle);
+            newStream = newAcceptStream(begin, throttle);
         }
         else
         {
-            newStream = newAcceptStream(begin, throttle);
+            newStream = newConnectReplyStream(begin, throttle);
         }
 
         return newStream;
@@ -121,18 +121,11 @@ public final class ServerStreamFactory implements StreamFactory
         final BeginFW begin,
         final MessageConsumer acceptThrottle)
     {
-        final long acceptRef = begin.sourceRef();
-        final String acceptName = begin.source().asString();
+        final long routeId = begin.routeId();
         final long authorization = begin.authorization();
 
-        final MessagePredicate filter = (t, b, o, l) ->
-        {
-            final RouteFW route = routeRO.wrap(b, o, o + l);
-            return acceptRef == route.sourceRef() &&
-                    acceptName.equals(route.source().asString());
-        };
-
-        final RouteFW route = router.resolve(authorization, filter, this::wrapRoute);
+        final MessagePredicate filter = (t, b, o, l) -> true;
+        final RouteFW route = router.resolve(routeId, authorization, filter, this::wrapRoute);
 
         MessageConsumer newStream = null;
 
@@ -144,7 +137,7 @@ public final class ServerStreamFactory implements StreamFactory
             final long acceptCorrelationId = begin.correlationId();
 
             newStream = new ServerAcceptStream(this, acceptThrottle,
-                    acceptRouteId, acceptId, acceptTraceId, acceptRef, acceptName, acceptCorrelationId, authorization);
+                    acceptRouteId, acceptId, acceptTraceId, acceptCorrelationId, authorization);
         }
 
         return newStream;
@@ -154,13 +147,11 @@ public final class ServerStreamFactory implements StreamFactory
         final BeginFW begin,
         final MessageConsumer connectReplyThrottle)
     {
-        final String connectReplyName = begin.source().asString();
         final long connectRouteId = begin.routeId();
         final long connectReplyId = begin.streamId();
         final long connectReplyTraceId = begin.trace();
 
-        return new ServerConnectReplyStream(this, connectReplyThrottle, connectRouteId, connectReplyId, connectReplyTraceId,
-                connectReplyName);
+        return new ServerConnectReplyStream(this, connectReplyThrottle, connectRouteId, connectReplyId, connectReplyTraceId);
     }
 
     private RouteFW wrapRoute(int msgTypeId, DirectBuffer buffer, int index, int length)

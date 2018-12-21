@@ -35,9 +35,7 @@ final class ConnectionPool
         END, ABORT
     }
     private final Deque<Connection> availableConnections;
-    private final String connectName;
     private final long connectRouteId;
-    private final long connectRef;
     private final ClientStreamFactory factory;
     private final Queue<ConnectionRequest> queuedRequests;
 
@@ -45,14 +43,10 @@ final class ConnectionPool
 
     ConnectionPool(
         ClientStreamFactory factory,
-        String connectName,
-        long connectRouteId,
-        long connectRef)
+        long connectRouteId)
     {
         this.factory = factory;
-        this.connectName = connectName;
         this.connectRouteId = connectRouteId;
-        this.connectRef = connectRef;
         this.availableConnections = new ArrayDeque<>(factory.maximumConnectionsPerRoute);
         this.queuedRequests = new ArrayDeque<>(factory.maximumQueuedRequestsPerRoute);
     }
@@ -114,11 +108,11 @@ final class ConnectionPool
     private Connection newConnection()
     {
         final long correlationId = factory.supplyCorrelationId.getAsLong();
-        final long streamId = factory.supplyStreamId.getAsLong();
+        final long streamId = factory.supplyInitialId.getAsLong();
         Connection connection = new Connection(streamId, correlationId);
-        MessageConsumer output = factory.router.supplyTarget(connectName);
-        factory.writer.doBegin(output, connectRouteId, streamId, factory.supplyTraceId, connectRef, correlationId);
-        factory.router.setThrottle(connectName, streamId, connection::handleThrottleDefault);
+        MessageConsumer output = factory.router.supplyReceiver(connectRouteId);
+        factory.writer.doBegin(output, connectRouteId, streamId, factory.supplyTraceId, correlationId);
+        factory.router.setThrottle(streamId, connection::handleThrottleDefault);
         connectionsInUse++;
         return connection;
     }
@@ -135,9 +129,9 @@ final class ConnectionPool
         {
             // We did not yet send response headers (high level begin) to the client accept reply stream.
             // This implies we got an incomplete response. We report this as service unavailable (503).
-            MessageConsumer acceptReply = factory.router.supplyTarget(correlation.source());
             long acceptRouteId = correlation.routeId();
-            long targetId = factory.supplyStreamId.getAsLong();
+            MessageConsumer acceptReply = factory.router.supplySender(acceptRouteId);
+            long acceptReplyId = correlation.replyId();
             long traceId = factory.supplyTraceId;
 
             // count abandoned requests
@@ -146,11 +140,11 @@ final class ConnectionPool
             // count all responses
             factory.countResponses.getAsLong();
 
-            long sourceCorrelationId = correlation.id();
-            factory.writer.doHttpBegin(acceptReply, acceptRouteId, targetId, traceId, 0L, sourceCorrelationId,
+            long acceptCorrelationId = correlation.id();
+            factory.writer.doHttpBegin(acceptReply, acceptRouteId, acceptReplyId, traceId, acceptCorrelationId,
                                        hs -> hs.item(h -> h.name(":status").value("503"))
                                                .item(h -> h.name("retry-after").value("0")));
-            factory.writer.doHttpEnd(acceptReply, acceptRouteId, targetId, factory.supplyTrace.getAsLong());
+            factory.writer.doHttpEnd(acceptReply, acceptRouteId, acceptReplyId, factory.supplyTrace.getAsLong());
         }
         if (connection.persistent)
         {
@@ -172,7 +166,7 @@ final class ConnectionPool
 
             if (action != null && !connection.endOrAbortSent)
             {
-                MessageConsumer connect = factory.router.supplyTarget(connectName);
+                MessageConsumer connect = factory.router.supplyReceiver(connectRouteId);
                 switch(action)
                 {
                 case END:
@@ -190,7 +184,7 @@ final class ConnectionPool
 
     void setDefaultThrottle(Connection connection)
     {
-        factory.router.setThrottle(connectName, connection.connectStreamId, connection::handleThrottleDefault);
+        factory.router.setThrottle(connection.connectStreamId, connection::handleThrottleDefault);
     }
 
     public interface ConnectionRequest

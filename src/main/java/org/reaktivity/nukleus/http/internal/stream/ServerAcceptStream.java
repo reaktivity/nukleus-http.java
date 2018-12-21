@@ -60,8 +60,6 @@ final class ServerAcceptStream implements MessageConsumer
     private final MessageConsumer acceptThrottle;
     private final long acceptRouteId;
     private final long acceptId;
-    private final long acceptRef;
-    private final String acceptName;
     private final long acceptCorrelationId;
     private final long authorization;
 
@@ -76,7 +74,6 @@ final class ServerAcceptStream implements MessageConsumer
     private MessageConsumer target;
     private long targetRouteId;
     private long targetId;
-    private String targetName;
     private int sourceBudget;
     private int contentRemaining;
     private boolean isChunkedTransfer;
@@ -96,8 +93,8 @@ final class ServerAcceptStream implements MessageConsumer
     @Override
     public String toString()
     {
-        return String.format("%s[source=%s, sourceId=%016x, window=%d, targetId=%016x]",
-                getClass().getSimpleName(), acceptName, acceptId, sourceBudget, targetId);
+        return String.format("%s[sourceId=%016x, window=%d, targetId=%016x]",
+                getClass().getSimpleName(), acceptId, sourceBudget, targetId);
     }
 
     ServerAcceptStream(
@@ -106,8 +103,6 @@ final class ServerAcceptStream implements MessageConsumer
         long acceptRouteId,
         long acceptId,
         long traceId,
-        long acceptRef,
-        String acceptName,
         long acceptCorrelationId,
         long authorization)
     {
@@ -118,10 +113,8 @@ final class ServerAcceptStream implements MessageConsumer
         this.acceptRouteId = acceptRouteId;
         this.acceptId = acceptId;
         this.streamTraceId = traceId;
-        this.acceptRef = acceptRef;
         this.acceptCorrelationId = acceptCorrelationId;
         this.authorization = authorization;
-        this.acceptName = acceptName;
         this.temporarySlot = new UnsafeBuffer(ByteBuffer.allocateDirect(factory.bufferPool.slotCapacity()));
         this.maximumHeadersSize = factory.bufferPool.slotCapacity();
     }
@@ -302,7 +295,7 @@ final class ServerAcceptStream implements MessageConsumer
     {
         long serverAcceptRouteId = correlation.state().acceptRouteId;
         long serverAcceptReplyStreamId = correlation.state().replyStreamId;
-        switchTarget(acceptName, serverAcceptRouteId, serverAcceptReplyStreamId);
+        switchTarget(serverAcceptRouteId, serverAcceptReplyStreamId);
 
         StringBuffer payloadText = new StringBuffer()
                 .append(String.format("HTTP/1.1 %d %s\r\n", status, message))
@@ -385,11 +378,11 @@ final class ServerAcceptStream implements MessageConsumer
         this.decoderState = this::decodeBeforeHttpBegin;
 
         final long acceptReplyId = factory.supplyReplyId.applyAsLong(acceptId);
-        final MessageConsumer acceptReply = factory.router.supplyTarget(acceptName);
-        final ServerAcceptState state = new ServerAcceptState(acceptName, acceptRouteId, acceptReplyId, acceptReply,
+        final MessageConsumer acceptReply = factory.router.supplySender(acceptRouteId);
+        final ServerAcceptState state = new ServerAcceptState(acceptRouteId, acceptReplyId, acceptReply,
                 factory.writer, this::loopBackThrottle, factory.router, this::setCleanupConnectReply);
-        factory.writer.doBegin(acceptReply, acceptRouteId, acceptReplyId, streamTraceId, 0L, acceptCorrelationId);
-        this.correlation = new Correlation<>(acceptCorrelationId, acceptName, acceptRouteId, acceptReplyId, state);
+        factory.writer.doBegin(acceptReply, acceptRouteId, acceptReplyId, streamTraceId, acceptCorrelationId);
+        this.correlation = new Correlation<>(acceptCorrelationId, acceptRouteId, acceptReplyId, state);
         doSourceWindow(maximumHeadersSize, 0, factory.supplyTrace.getAsLong());
         this.acceptReply = acceptReply;
         this.acceptReplyId = acceptReplyId;
@@ -714,11 +707,9 @@ final class ServerAcceptStream implements MessageConsumer
             }
             else
             {
-                final RouteFW route = resolveTarget(acceptRef, authorization, headers);
+                final RouteFW route = resolveTarget(acceptRouteId, authorization, headers);
                 if (route != null)
                 {
-                    final String newTarget = route.target().asString();
-                    final long targetRef = route.targetRef();
                     final long newTargetRouteId = route.correlationId();
                     final long newTargetId = factory.supplyStreamId.getAsLong();
 
@@ -727,9 +718,9 @@ final class ServerAcceptStream implements MessageConsumer
                     correlation.state().pendingRequests++;
 
                     targetBudget = 0;
-                    switchTarget(newTarget, newTargetRouteId, newTargetId);
+                    switchTarget(newTargetRouteId, newTargetId);
                     factory.writer.doHttpBegin(target, newTargetRouteId, newTargetId,
-                            streamTraceId, targetRef, newTargetCorrelationId,
+                            streamTraceId, newTargetCorrelationId,
                             hs -> headers.forEach((k, v) -> hs.item(i -> i.representation((byte)0).name(k).value(v))));
                     targetBeginIssued = true;
 
@@ -1043,7 +1034,7 @@ final class ServerAcceptStream implements MessageConsumer
     }
 
     private RouteFW resolveTarget(
-        long sourceRef,
+        long routeId,
         long authorization,
         Map<String, String> headers)
     {
@@ -1058,10 +1049,10 @@ final class ServerAcceptStream implements MessageConsumer
                 headersMatch = routeEx.headers().anyMatch(
                         h -> !Objects.equals(h.value(), headers.get(h.name())));
             }
-            return route.sourceRef() == sourceRef && headersMatch;
+            return headersMatch;
         };
 
-        return factory.router.resolve(authorization, filter, (msgTypeId, buffer, index, length) ->
+        return factory.router.resolve(routeId, authorization, filter, (msgTypeId, buffer, index, length) ->
             factory.routeRO.wrap(buffer, index, index + length));
     }
 
@@ -1254,18 +1245,18 @@ final class ServerAcceptStream implements MessageConsumer
     }
 
     private void switchTarget(
-        String newTargetName,
         long newTargetRouteId,
         long newTargetId)
     {
         // TODO: do we need to worry about removing the throttle on target (old target)?
-        MessageConsumer newTarget = factory.router.supplyTarget(newTargetName);
+        MessageConsumer newTarget = (newTargetId & 0x8000_0000_0000_0000L) == 0L
+                ? factory.router.supplyReceiver(newTargetRouteId)
+                : factory.router.supplySender(newTargetRouteId);
         target = newTarget;
         targetRouteId = newTargetRouteId;
         targetId = newTargetId;
-        targetName = newTargetName;
         targetBeginIssued = false;
-        factory.router.setThrottle(targetName, newTargetId, this::handleThrottle);
+        factory.router.setThrottle(newTargetId, this::handleThrottle);
         throttleState = this::throttleIgnoreWindow;
     }
 }

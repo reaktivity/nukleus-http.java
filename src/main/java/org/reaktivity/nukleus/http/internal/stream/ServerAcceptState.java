@@ -26,7 +26,6 @@ import org.reaktivity.nukleus.route.RouteManager;
  */
 final class ServerAcceptState
 {
-    final String acceptReplyName;
     final long acceptRouteId;
     final long replyStreamId;
     final MessageConsumer acceptReply;
@@ -41,7 +40,6 @@ final class ServerAcceptState
     boolean persistent = true;
 
     ServerAcceptState(
-        String acceptReplyName,
         long acceptRouteId,
         long replyStreamId,
         MessageConsumer acceptReply,
@@ -54,8 +52,7 @@ final class ServerAcceptState
         this.replyStreamId = replyStreamId;
         this.acceptReply = acceptReply;
         this.initialThrottle = initialThrottle;
-        this.acceptReplyName = acceptReplyName;
-        this.setThrottle = (t) -> router.setThrottle(acceptReplyName, replyStreamId, t);
+        this.setThrottle = t -> router.setThrottle(replyStreamId, t);
         this.setCleanupConnectReply = setCleanupConnectReply;
         setThrottle.accept(initialThrottle);
     }
@@ -64,8 +61,8 @@ final class ServerAcceptState
     public String toString()
     {
         return String.format(
-                "%s[streamId=%016x, target=%s, window=%d, padding=%d persistent=%b, pendingRequests=%d, endRequested=%b]",
-                getClass().getSimpleName(), replyStreamId, acceptReplyName, acceptReplyBudget,
+                "%s[streamId=%016x, window=%d, padding=%d persistent=%b, pendingRequests=%d, endRequested=%b]",
+                getClass().getSimpleName(), replyStreamId, acceptReplyBudget,
                 acceptReplyPadding, persistent, pendingRequests, endRequested);
     }
 
