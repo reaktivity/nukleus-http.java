@@ -15,11 +15,20 @@
  */
 package org.reaktivity.nukleus.http.internal;
 
-import org.reaktivity.nukleus.Configuration;
-import org.reaktivity.nukleus.NukleusFactorySpi;
+import org.reaktivity.nukleus.Nukleus;
 
-public final class HttpNukleusFactorySpi implements NukleusFactorySpi
+final class HttpNukleus implements Nukleus
 {
+    static final String NAME = "http";
+
+    private final HttpConfiguration config;
+
+    HttpNukleus(
+        HttpConfiguration config)
+    {
+        this.config = config;
+    }
+
     @Override
     public String name()
     {
@@ -27,9 +36,14 @@ public final class HttpNukleusFactorySpi implements NukleusFactorySpi
     }
 
     @Override
-    public HttpNukleus create(
-        Configuration config)
+    public HttpConfiguration config()
     {
-        return new HttpNukleus(new HttpConfiguration(config));
+        return config;
+    }
+
+    @Override
+    public HttpElektron supplyElektron()
+    {
+        return new HttpElektron(config);
     }
 }
