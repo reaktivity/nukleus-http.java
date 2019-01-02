@@ -130,7 +130,7 @@ final class ConnectionPool
             // We did not yet send response headers (high level begin) to the client accept reply stream.
             // This implies we got an incomplete response. We report this as service unavailable (503).
             long acceptRouteId = correlation.routeId();
-            MessageConsumer acceptReply = factory.router.supplySender(acceptRouteId);
+            MessageConsumer acceptReply = correlation.reply();
             long acceptReplyId = correlation.replyId();
             long traceId = factory.supplyTraceId;
 
