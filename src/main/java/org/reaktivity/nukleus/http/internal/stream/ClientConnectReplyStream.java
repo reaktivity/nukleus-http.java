@@ -894,7 +894,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         this.acceptRouteId = correlation.routeId();
         this.acceptReplyId = correlation.replyId();
         this.acceptCorrelationId = correlation.id();
-        this.acceptReply = factory.router.supplySender(acceptRouteId);
+        this.acceptReply = correlation.reply();
         this.acceptReplyBudget = 0;
     }
 

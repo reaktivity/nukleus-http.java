@@ -44,7 +44,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
     private MessageConsumer streamState;
     private MessageConsumer throttleState;
 
-    private final MessageConsumer acceptThrottle;
+    private final MessageConsumer acceptReply;
     private final long acceptRouteId;
     private final long acceptId;
     private final long acceptCorrelationId;
@@ -65,7 +65,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
 
     ClientAcceptStream(
         ClientStreamFactory factory,
-        MessageConsumer acceptThrottle,
+        MessageConsumer acceptReply,
         long acceptRouteId,
         long acceptId,
         long acceptCorrelationId,
@@ -74,7 +74,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         Map<String, String> headers)
     {
         this.factory = factory;
-        this.acceptThrottle = acceptThrottle;
+        this.acceptReply = acceptReply;
         this.acceptRouteId = acceptRouteId;
         this.acceptId = acceptId;
         this.acceptReplyId = acceptReplyId;
@@ -174,7 +174,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         case DataFW.TYPE_ID:
             DataFW data = this.factory.dataRO.wrap(buffer, index, index + length);
             final long streamId = data.streamId();
-            factory.writer.doWindow(acceptThrottle, acceptRouteId, streamId, factory.supplyTrace.getAsLong(), data.length(), 0);
+            factory.writer.doWindow(acceptReply, acceptRouteId, streamId, factory.supplyTrace.getAsLong(), data.length(), 0);
             break;
         case EndFW.TYPE_ID:
             factory.endRO.wrap(buffer, index, index + length);
@@ -200,7 +200,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         if (bytes.length > factory.bufferPool.slotCapacity())
         {
             // TODO: diagnostics (reset reason?)
-            factory.writer.doReset(acceptThrottle, acceptRouteId, acceptId, factory.supplyTrace.getAsLong());
+            factory.writer.doReset(acceptReply, acceptRouteId, acceptId, factory.supplyTrace.getAsLong());
         }
         else
         {
@@ -219,7 +219,6 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
                 // count all responses
                 factory.countResponses.getAsLong();
 
-                MessageConsumer acceptReply = factory.router.supplySender(acceptRouteId);
                 factory.writer.doHttpBegin(acceptReply, acceptRouteId, acceptReplyId, factory.supplyTrace.getAsLong(),
                         acceptCorrelationId,
                         hs -> hs.item(h -> h.name(":status").value("503"))
@@ -357,7 +356,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         FrameFW frame = this.factory.frameRO.wrap(buffer, index, index + length);
         final long streamId = frame.streamId();
 
-        factory.writer.doReset(acceptThrottle, acceptRouteId, streamId, factory.supplyTrace.getAsLong());
+        factory.writer.doReset(acceptReply, acceptRouteId, streamId, factory.supplyTrace.getAsLong());
 
         this.streamState = this::streamAfterReplyOrReset;
     }
@@ -472,7 +471,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         if (credit > 0)
         {
             sourceBudget += credit;
-            factory.writer.doWindow(acceptThrottle, acceptRouteId, acceptId, traceId, credit, padding);
+            factory.writer.doWindow(acceptReply, acceptRouteId, acceptId, traceId, credit, padding);
         }
     }
 
@@ -504,7 +503,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         ResetFW resetFW = factory.resetRO.wrap(buffer, index, index + length);
         connection.persistent = false;
         connectionPool.release(connection);
-        factory.writer.doReset(acceptThrottle, acceptRouteId, acceptId, resetFW.trace());
+        factory.writer.doReset(acceptReply, acceptRouteId, acceptId, resetFW.trace());
     }
 
     @Override
@@ -520,7 +519,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         connection.persistent = persistent;
         ClientConnectReplyState state = new ClientConnectReplyState(connectionPool, connection);
         final Correlation<ClientConnectReplyState> correlation =
-                new Correlation<>(acceptCorrelationId, acceptRouteId, acceptReplyId, state);
+                new Correlation<>(acceptReply, acceptCorrelationId, acceptRouteId, acceptReplyId, state);
         factory.correlations.put(connection.correlationId, correlation);
         factory.router.setThrottle(connection.connectStreamId, this::handleThrottle);
         if (connection.budget > 0)

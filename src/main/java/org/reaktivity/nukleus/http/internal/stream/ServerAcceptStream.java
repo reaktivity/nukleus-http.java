@@ -40,13 +40,13 @@ import org.reaktivity.nukleus.http.internal.stream.ServerStreamFactory.StandardM
 import org.reaktivity.nukleus.http.internal.types.OctetsFW;
 import org.reaktivity.nukleus.http.internal.types.control.HttpRouteExFW;
 import org.reaktivity.nukleus.http.internal.types.control.RouteFW;
+import org.reaktivity.nukleus.http.internal.types.stream.AbortFW;
 import org.reaktivity.nukleus.http.internal.types.stream.BeginFW;
 import org.reaktivity.nukleus.http.internal.types.stream.DataFW;
 import org.reaktivity.nukleus.http.internal.types.stream.EndFW;
 import org.reaktivity.nukleus.http.internal.types.stream.FrameFW;
 import org.reaktivity.nukleus.http.internal.types.stream.ResetFW;
 import org.reaktivity.nukleus.http.internal.types.stream.WindowFW;
-import org.reaktivity.nukleus.http.internal.types.stream.AbortFW;
 
 final class ServerAcceptStream implements MessageConsumer
 {
@@ -57,7 +57,7 @@ final class ServerAcceptStream implements MessageConsumer
 
 
     private ServerStreamFactory factory;
-    private final MessageConsumer acceptThrottle;
+    private final MessageConsumer acceptReply;
     private final long acceptRouteId;
     private final long acceptId;
     private final long acceptCorrelationId;
@@ -85,7 +85,6 @@ final class ServerAcceptStream implements MessageConsumer
     private boolean targetBeginIssued;
     private Runnable cleanupConnectReply;
     private long acceptReplyId;
-    private MessageConsumer acceptReply;
     private long throttleTraceId;
     private long streamTraceId;
 
@@ -99,7 +98,7 @@ final class ServerAcceptStream implements MessageConsumer
 
     ServerAcceptStream(
         ServerStreamFactory factory,
-        MessageConsumer acceptThrottle,
+        MessageConsumer acceptReply,
         long acceptRouteId,
         long acceptId,
         long traceId,
@@ -109,7 +108,7 @@ final class ServerAcceptStream implements MessageConsumer
         this.factory = factory;
         this.streamState = this::streamBeforeBegin;
         this.throttleState = this::throttleIgnoreWindow;
-        this.acceptThrottle = acceptThrottle;
+        this.acceptReply = acceptReply;
         this.acceptRouteId = acceptRouteId;
         this.acceptId = acceptId;
         this.streamTraceId = traceId;
@@ -225,7 +224,7 @@ final class ServerAcceptStream implements MessageConsumer
             DataFW data = factory.dataRO.wrap(buffer, index, index + length);
             final long streamId = data.streamId();
 
-            factory.writer.doWindow(acceptThrottle, acceptRouteId, streamId, factory.supplyTrace.getAsLong(),
+            factory.writer.doWindow(acceptReply, acceptRouteId, streamId, factory.supplyTrace.getAsLong(),
                     data.length(), 0);
         }
         else if (msgTypeId == EndFW.TYPE_ID)
@@ -249,7 +248,7 @@ final class ServerAcceptStream implements MessageConsumer
     private void processUnexpected(
         long streamId)
     {
-        factory.writer.doReset(acceptThrottle, acceptRouteId, streamId, factory.supplyTrace.getAsLong());
+        factory.writer.doReset(acceptReply, acceptRouteId, streamId, factory.supplyTrace.getAsLong());
         this.streamState = this::streamAfterReset;
     }
 
@@ -265,7 +264,7 @@ final class ServerAcceptStream implements MessageConsumer
             doSourceWindow(maximumHeadersSize, 0, 0);
 
             // We can't write back an HTTP error response because we already forwarded the request to the target
-            factory.writer.doReset(acceptThrottle, acceptRouteId, acceptId, factory.supplyTrace.getAsLong());
+            factory.writer.doReset(acceptReply, acceptRouteId, acceptId, factory.supplyTrace.getAsLong());
             factory.writer.doAbort(target, targetRouteId, targetId, traceId);
             if (correlation != null)
             {
@@ -378,13 +377,11 @@ final class ServerAcceptStream implements MessageConsumer
         this.decoderState = this::decodeBeforeHttpBegin;
 
         final long acceptReplyId = factory.supplyReplyId.applyAsLong(acceptId);
-        final MessageConsumer acceptReply = factory.router.supplySender(acceptRouteId);
         final ServerAcceptState state = new ServerAcceptState(acceptRouteId, acceptReplyId, acceptReply,
                 factory.writer, this::loopBackThrottle, factory.router, this::setCleanupConnectReply);
         factory.writer.doBegin(acceptReply, acceptRouteId, acceptReplyId, streamTraceId, acceptCorrelationId);
-        this.correlation = new Correlation<>(acceptCorrelationId, acceptRouteId, acceptReplyId, state);
+        this.correlation = new Correlation<>(acceptReply, acceptCorrelationId, acceptRouteId, acceptReplyId, state);
         doSourceWindow(maximumHeadersSize, 0, factory.supplyTrace.getAsLong());
-        this.acceptReply = acceptReply;
         this.acceptReplyId = acceptReplyId;
     }
 
@@ -1233,7 +1230,7 @@ final class ServerAcceptStream implements MessageConsumer
     private void doSourceWindow(int credit, int padding, long traceId)
     {
         sourceBudget += credit;
-        factory.writer.doWindow(acceptThrottle, acceptRouteId, acceptId, traceId, credit, padding);
+        factory.writer.doWindow(acceptReply, acceptRouteId, acceptId, traceId, credit, padding);
     }
 
     private void processReset(
@@ -1241,7 +1238,7 @@ final class ServerAcceptStream implements MessageConsumer
     {
         throttleTraceId = reset.trace();
         releaseSlotIfNecessary();
-        factory.writer.doReset(acceptThrottle, acceptRouteId, acceptId, throttleTraceId);
+        factory.writer.doReset(acceptReply, acceptRouteId, acceptId, throttleTraceId);
     }
 
     private void switchTarget(
@@ -1251,7 +1248,7 @@ final class ServerAcceptStream implements MessageConsumer
         // TODO: do we need to worry about removing the throttle on target (old target)?
         MessageConsumer newTarget = (newTargetId & 0x8000_0000_0000_0000L) == 0L
                 ? factory.router.supplyReceiver(newTargetRouteId)
-                : factory.router.supplySender(newTargetRouteId);
+                : acceptReply;
         target = newTarget;
         targetRouteId = newTargetRouteId;
         targetId = newTargetId;

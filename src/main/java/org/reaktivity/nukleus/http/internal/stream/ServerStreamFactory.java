@@ -119,7 +119,7 @@ public final class ServerStreamFactory implements StreamFactory
 
     private MessageConsumer newAcceptStream(
         final BeginFW begin,
-        final MessageConsumer acceptThrottle)
+        final MessageConsumer acceptReply)
     {
         final long routeId = begin.routeId();
         final long authorization = begin.authorization();
@@ -136,7 +136,7 @@ public final class ServerStreamFactory implements StreamFactory
             final long acceptTraceId = begin.trace();
             final long acceptCorrelationId = begin.correlationId();
 
-            newStream = new ServerAcceptStream(this, acceptThrottle,
+            newStream = new ServerAcceptStream(this, acceptReply,
                     acceptRouteId, acceptId, acceptTraceId, acceptCorrelationId, authorization);
         }
 

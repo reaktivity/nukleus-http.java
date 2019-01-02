@@ -165,7 +165,7 @@ public final class ClientStreamFactory implements StreamFactory
 
     private MessageConsumer newAcceptStream(
         BeginFW begin,
-        MessageConsumer acceptThrottle)
+        MessageConsumer acceptReply)
     {
         final long routeId = begin.routeId();
         final long authorization = begin.authorization();
@@ -195,7 +195,7 @@ public final class ClientStreamFactory implements StreamFactory
             final long acceptReplyId = supplyReplyId.applyAsLong(acceptId);
 
             newStream = new ClientAcceptStream(this,
-                    acceptThrottle, acceptRouteId, acceptId, acceptCorrelationId, acceptReplyId,
+                    acceptReply, acceptRouteId, acceptId, acceptCorrelationId, acceptReplyId,
                     connectRouteId, headers);
         }
 

@@ -17,19 +17,24 @@ package org.reaktivity.nukleus.http.internal.stream;
 
 import java.util.Objects;
 
+import org.reaktivity.nukleus.function.MessageConsumer;
+
 public class Correlation<S>
 {
+    private final MessageConsumer reply;
     private final long routeId;
     private final long replyId;
     private final long id;
     private final S state;
 
     public Correlation(
+        MessageConsumer reply,
         long id,
         long routeId,
         long replyId,
         S state)
     {
+        this.reply = reply;
         this.id = id;
         this.routeId = routeId;
         this.replyId = replyId;
@@ -37,11 +42,17 @@ public class Correlation<S>
     }
 
     public Correlation(
+        MessageConsumer reply,
         long id,
         long routeId,
         long sourceId)
     {
-        this(id, routeId, sourceId, null);
+        this(reply, id, routeId, sourceId, null);
+    }
+
+    public MessageConsumer reply()
+    {
+        return reply;
     }
 
     public long routeId()
