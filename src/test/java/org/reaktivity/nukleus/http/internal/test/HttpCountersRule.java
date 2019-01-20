@@ -20,14 +20,14 @@ import static org.junit.Assert.assertEquals;
 import org.junit.rules.TestRule;
 import org.junit.runner.Description;
 import org.junit.runners.model.Statement;
-import org.reaktivity.nukleus.http.internal.HttpController;
 import org.reaktivity.reaktor.test.ReaktorRule;
 
 public class HttpCountersRule implements TestRule
 {
     private final ReaktorRule reaktor;
 
-    public HttpCountersRule(ReaktorRule reaktor)
+    public HttpCountersRule(
+        ReaktorRule reaktor)
     {
         this.reaktor = reaktor;
     }
@@ -41,13 +41,12 @@ public class HttpCountersRule implements TestRule
             @Override
             public void evaluate() throws Throwable
             {
-                HttpController controller = controller();
-                assertEquals(0, controller.count("streams"));
-                assertEquals(0, controller.count("routes"));
-                assertEquals(0, controller.count("enqueues"));
-                assertEquals(0, controller.count("dequeues"));
+                assertEquals(0, streams());
+                assertEquals(0, routes());
+                assertEquals(0, enqueues());
+                assertEquals(0, dequeues());
                 base.evaluate();
-                assertEquals(controller.count("enqueues"), controller.count("dequeues"));
+                assertEquals(enqueues(), dequeues());
             }
 
         };
@@ -55,32 +54,26 @@ public class HttpCountersRule implements TestRule
 
     public long routes()
     {
-        return controller().count("routes");
+        return reaktor.counter("http.routes");
     }
 
     public long streams()
     {
-        return controller().count("streams");
+        return reaktor.counter("http.streams");
     }
 
     public long enqueues()
     {
-        return controller().count("enqueues");
+        return reaktor.counter("http.enqueues");
     }
 
     public long dequeues()
     {
-        return controller().count("dequeues");
+        return reaktor.counter("http.dequeues");
     }
 
     public long requestsRejected()
     {
-        return controller().count("requests.rejected");
+        return reaktor.counter("http.requests.rejected");
     }
-
-    private HttpController controller()
-    {
-        return reaktor.controller(HttpController.class);
-    }
-
 }

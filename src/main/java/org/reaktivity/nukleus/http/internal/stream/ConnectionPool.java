@@ -108,11 +108,11 @@ final class ConnectionPool
     private Connection newConnection()
     {
         final long correlationId = factory.supplyCorrelationId.getAsLong();
-        final long streamId = factory.supplyInitialId.getAsLong();
-        Connection connection = new Connection(streamId, correlationId);
-        MessageConsumer output = factory.router.supplyReceiver(connectRouteId);
-        factory.writer.doBegin(output, connectRouteId, streamId, factory.supplyTraceId, correlationId);
-        factory.router.setThrottle(streamId, connection::handleThrottleDefault);
+        final long connectInitialId = factory.supplyInitialId.applyAsLong(connectRouteId);
+        Connection connection = new Connection(connectInitialId, correlationId);
+        MessageConsumer connectInitial = factory.router.supplyReceiver(connectInitialId);
+        factory.writer.doBegin(connectInitial, connectRouteId, connectInitialId, factory.supplyTraceId, correlationId);
+        factory.router.setThrottle(connectInitialId, connection::handleThrottleDefault);
         connectionsInUse++;
         return connection;
     }
@@ -166,14 +166,14 @@ final class ConnectionPool
 
             if (action != null && !connection.endOrAbortSent)
             {
-                MessageConsumer connect = factory.router.supplyReceiver(connectRouteId);
+                MessageConsumer connect = factory.router.supplyReceiver(connection.connectInitialId);
                 switch(action)
                 {
                 case END:
-                    factory.writer.doEnd(connect, connectRouteId, connection.connectStreamId, factory.supplyTrace.getAsLong());
+                    factory.writer.doEnd(connect, connectRouteId, connection.connectInitialId, factory.supplyTrace.getAsLong());
                     break;
                 case ABORT:
-                    factory.writer.doAbort(connect, connectRouteId, connection.connectStreamId, factory.supplyTrace.getAsLong());
+                    factory.writer.doAbort(connect, connectRouteId, connection.connectInitialId, factory.supplyTrace.getAsLong());
                 }
                 connection.endOrAbortSent = true;
             }
@@ -184,7 +184,7 @@ final class ConnectionPool
 
     void setDefaultThrottle(Connection connection)
     {
-        factory.router.setThrottle(connection.connectStreamId, connection::handleThrottleDefault);
+        factory.router.setThrottle(connection.connectInitialId, connection::handleThrottleDefault);
     }
 
     public interface ConnectionRequest
@@ -194,7 +194,8 @@ final class ConnectionPool
 
     class Connection
     {
-        final long connectStreamId;
+        final long connectInitialId;
+        final MessageConsumer connectInitial;
         final long correlationId;
         int budget;
         int padding;
@@ -202,20 +203,25 @@ final class ConnectionPool
         boolean released;
         private boolean endOrAbortSent;
 
-        private long connectReplyStreamId;
+        private long connectReplyId;
         private MessageConsumer connectReplyThrottle;
         int noRequests;
 
-        Connection(long outputStreamId, long outputCorrelationId)
+        Connection(
+            long outputStreamId,
+            long outputCorrelationId)
         {
-            this.connectStreamId = outputStreamId;
+            this.connectInitialId = outputStreamId;
+            this.connectInitial = factory.router.supplyReceiver(outputStreamId);
             this.correlationId = outputCorrelationId;
         }
 
-        void setInput(MessageConsumer connectReplyThrottle, long connectReplyStreamId)
+        void setInput(
+            MessageConsumer connectReplyThrottle,
+            long connectReplyStreamId)
         {
             this.connectReplyThrottle = connectReplyThrottle;
-            this.connectReplyStreamId = connectReplyStreamId;
+            this.connectReplyId = connectReplyStreamId;
         }
 
         void handleThrottleDefault(
@@ -232,7 +238,7 @@ final class ConnectionPool
                 if (connectReplyThrottle != null)
                 {
                     ResetFW resetFW = factory.resetRO.wrap(buffer, index, index + length);
-                    factory.writer.doReset(connectReplyThrottle, connectRouteId, connectReplyStreamId, resetFW.trace());
+                    factory.writer.doReset(connectReplyThrottle, connectRouteId, connectReplyId, resetFW.trace());
                 }
                 break;
             case WindowFW.TYPE_ID:

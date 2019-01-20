@@ -17,6 +17,7 @@ package org.reaktivity.nukleus.http.internal.streams.rfc7230.client;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.rules.RuleChain.outerRule;
+import static org.reaktivity.reaktor.test.ReaktorRule.EXTERNAL_AFFINITY_MASK;
 
 import org.junit.Rule;
 import org.junit.Test;
@@ -44,11 +45,11 @@ public class FlowControlLimitsIT
         .commandBufferCapacity(1024)
         .responseBufferCapacity(1024)
         .counterValuesBufferCapacity(4096)
-        .clean()
         // Maximum headers size is limited to the size of each slot in the buffer pool:
         .configure(ReaktorConfiguration.REAKTOR_BUFFER_SLOT_CAPACITY, 64)
         // Overall buffer pool size:
         .configure(ReaktorConfiguration.REAKTOR_BUFFER_POOL_CAPACITY, 64)
+        .affinityMask("target#0", EXTERNAL_AFFINITY_MASK)
         .clean();
 
     @Rule

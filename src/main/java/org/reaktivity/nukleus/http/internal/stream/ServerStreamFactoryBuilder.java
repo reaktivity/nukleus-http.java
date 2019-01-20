@@ -23,27 +23,27 @@ import java.util.function.Supplier;
 
 import org.agrona.MutableDirectBuffer;
 import org.agrona.collections.Long2ObjectHashMap;
-import org.reaktivity.nukleus.Configuration;
 import org.reaktivity.nukleus.buffer.BufferPool;
+import org.reaktivity.nukleus.http.internal.HttpConfiguration;
 import org.reaktivity.nukleus.route.RouteManager;
 import org.reaktivity.nukleus.stream.StreamFactory;
 import org.reaktivity.nukleus.stream.StreamFactoryBuilder;
 
 public final class ServerStreamFactoryBuilder implements StreamFactoryBuilder
 {
-    private final Configuration config;
+    private final HttpConfiguration config;
     private final Long2ObjectHashMap<Correlation<?>> correlations;
 
     private RouteManager router;
     private MutableDirectBuffer writeBuffer;
-    private LongSupplier supplyStreamId;
-    private LongSupplier supplyTrace;
+    private LongUnaryOperator supplyInitialId;
     private LongUnaryOperator supplyReplyId;
     private LongSupplier supplyCorrelationId;
+    private LongSupplier supplyTrace;
     private Supplier<BufferPool> supplyBufferPool;
 
     public ServerStreamFactoryBuilder(
-        Configuration config)
+        HttpConfiguration config)
     {
         this.config = config;
         this.correlations = new Long2ObjectHashMap<>();
@@ -74,9 +74,9 @@ public final class ServerStreamFactoryBuilder implements StreamFactoryBuilder
 
     @Override
     public ServerStreamFactoryBuilder setInitialIdSupplier(
-        LongSupplier supplyStreamId)
+        LongUnaryOperator supplyStreamId)
     {
-        this.supplyStreamId = supplyStreamId;
+        this.supplyInitialId = supplyStreamId;
         return this;
     }
 
@@ -124,6 +124,6 @@ public final class ServerStreamFactoryBuilder implements StreamFactoryBuilder
         final BufferPool bufferPool = supplyBufferPool.get();
 
         return new ServerStreamFactory(config, router, writeBuffer,
-                bufferPool, supplyStreamId, supplyReplyId, supplyCorrelationId, correlations, supplyTrace);
+                bufferPool, supplyInitialId, supplyReplyId, supplyCorrelationId, correlations, supplyTrace);
     }
 }

@@ -166,7 +166,7 @@ public class HttpClientBM
 //            this.clientConnectReplyStreams = controller.supplySource("target", Writer::new);
 
             // Map file streams/source/http#target created by routeOutputNew TODO: the following may not do this
-            clientConnectStreams = controller.supplyTarget("target", Reader::new);
+            // TODO: clientConnectStreams = controller.supplyTarget("target", Reader::new);
 
             RequestWriterState writer = new RequestWriterState();
             writer.reinit(this,  control);
@@ -212,7 +212,7 @@ public class HttpClientBM
                 try
                 {
                     // Map file streams/source/http#target TODO: the following may not do this
-                    clientAcceptReplyStreams = controller.supplyTarget("source", Reader::new);
+                    // TODO: clientAcceptReplyStreams = controller.supplyTarget("source", Reader::new);
                 }
                 catch (IllegalStateException e)
                 {

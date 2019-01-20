@@ -24,7 +24,6 @@ import java.util.function.Supplier;
 
 import org.agrona.MutableDirectBuffer;
 import org.agrona.collections.Long2ObjectHashMap;
-import org.reaktivity.nukleus.Configuration;
 import org.reaktivity.nukleus.buffer.BufferPool;
 import org.reaktivity.nukleus.http.internal.HttpConfiguration;
 import org.reaktivity.nukleus.route.RouteManager;
@@ -33,12 +32,12 @@ import org.reaktivity.nukleus.stream.StreamFactoryBuilder;
 
 public final class ClientStreamFactoryBuilder implements StreamFactoryBuilder
 {
-    private final Configuration config;
+    private final HttpConfiguration config;
     private final Long2ObjectHashMap<Correlation<?>> correlations;
 
     private RouteManager router;
     private MutableDirectBuffer writeBuffer;
-    private LongSupplier supplyStreamId;
+    private LongUnaryOperator supplyStreamId;
     private LongUnaryOperator supplyReplyId;
     private LongSupplier supplyCorrelationId;
     private LongSupplier supplyTrace;
@@ -46,7 +45,7 @@ public final class ClientStreamFactoryBuilder implements StreamFactoryBuilder
     private Function<String, LongSupplier> supplyCounter;
 
     public ClientStreamFactoryBuilder(
-        Configuration config)
+        HttpConfiguration config)
     {
         this.config = config;
         this.correlations = new Long2ObjectHashMap<>();
@@ -69,6 +68,14 @@ public final class ClientStreamFactoryBuilder implements StreamFactoryBuilder
     }
 
     @Override
+    public ClientStreamFactoryBuilder setInitialIdSupplier(
+        LongUnaryOperator supplyStreamId)
+    {
+        this.supplyStreamId = supplyStreamId;
+        return this;
+    }
+
+    @Override
     public ClientStreamFactoryBuilder setReplyIdSupplier(
         LongUnaryOperator supplyReplyId)
     {
@@ -77,17 +84,10 @@ public final class ClientStreamFactoryBuilder implements StreamFactoryBuilder
     }
 
     @Override
-    public StreamFactoryBuilder setTraceSupplier(LongSupplier supplyTrace)
+    public StreamFactoryBuilder setTraceSupplier(
+        LongSupplier supplyTrace)
     {
         this.supplyTrace = supplyTrace;
-        return this;
-    }
-
-    @Override
-    public ClientStreamFactoryBuilder setInitialIdSupplier(
-        LongSupplier supplyStreamId)
-    {
-        this.supplyStreamId = supplyStreamId;
         return this;
     }
 
@@ -134,7 +134,7 @@ public final class ClientStreamFactoryBuilder implements StreamFactoryBuilder
     {
         final BufferPool bufferPool = supplyBufferPool.get();
 
-        return new ClientStreamFactory((HttpConfiguration) config, router, writeBuffer, bufferPool,
+        return new ClientStreamFactory(config, router, writeBuffer, bufferPool,
                 supplyStreamId, supplyReplyId, supplyCorrelationId, correlations, supplyCounter, supplyTrace);
     }
 }

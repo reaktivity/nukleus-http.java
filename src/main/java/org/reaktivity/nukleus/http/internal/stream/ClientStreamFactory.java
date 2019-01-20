@@ -77,7 +77,7 @@ public final class ClientStreamFactory implements StreamFactory
     final ResetFW resetRO = new ResetFW();
 
     final RouteManager router;
-    final LongSupplier supplyInitialId;
+    final LongUnaryOperator supplyInitialId;
     final LongUnaryOperator supplyReplyId;
     final LongSupplier supplyCorrelationId;
     final LongSupplier enqueues;
@@ -108,7 +108,7 @@ public final class ClientStreamFactory implements StreamFactory
         RouteManager router,
         MutableDirectBuffer writeBuffer,
         BufferPool bufferPool,
-        LongSupplier supplyStreamId,
+        LongUnaryOperator supplyInitialId,
         LongUnaryOperator supplyReplyId,
         LongSupplier supplyCorrelationId,
         Long2ObjectHashMap<Correlation<?>> correlations,
@@ -119,7 +119,7 @@ public final class ClientStreamFactory implements StreamFactory
         this.router = requireNonNull(router);
         this.writer = new MessageWriter(requireNonNull(writeBuffer));
         this.bufferPool = requireNonNull(bufferPool);
-        this.supplyInitialId = requireNonNull(supplyStreamId);
+        this.supplyInitialId = requireNonNull(supplyInitialId);
         this.supplyCorrelationId = supplyCorrelationId;
         this.supplyReplyId = requireNonNull(supplyReplyId);
         this.correlations = requireNonNull(correlations);
@@ -128,13 +128,13 @@ public final class ClientStreamFactory implements StreamFactory
         this.maximumQueuedRequestsPerRoute = configuration.maximumRequestsQueuedPerRoute();
         this.maximumHeadersSize = bufferPool.slotCapacity();
         this.temporarySlot = new UnsafeBuffer(ByteBuffer.allocateDirect(bufferPool.slotCapacity()));
-        this.countRequests = supplyCounter.apply("requests");
-        this.countRequestsRejected = supplyCounter.apply("requests.rejected");
-        this.countRequestsAbandoned = supplyCounter.apply("requests.abandoned");
-        this.countResponses = supplyCounter.apply("responses");
-        this.countResponsesAbandoned = supplyCounter.apply("responses.abandoned");
-        this.enqueues = supplyCounter.apply("enqueues");
-        this.dequeues = supplyCounter.apply("dequeues");
+        this.countRequests = supplyCounter.apply("http.requests");
+        this.countRequestsRejected = supplyCounter.apply("http.requests.rejected");
+        this.countRequestsAbandoned = supplyCounter.apply("http.requests.abandoned");
+        this.countResponses = supplyCounter.apply("http.responses");
+        this.countResponsesAbandoned = supplyCounter.apply("http.responses.abandoned");
+        this.enqueues = supplyCounter.apply("http.enqueues");
+        this.dequeues = supplyCounter.apply("http.dequeues");
     }
 
     @Override

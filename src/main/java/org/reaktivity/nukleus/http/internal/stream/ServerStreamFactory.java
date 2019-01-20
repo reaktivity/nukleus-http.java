@@ -24,10 +24,10 @@ import java.util.function.LongUnaryOperator;
 import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
 import org.agrona.collections.Long2ObjectHashMap;
-import org.reaktivity.nukleus.Configuration;
 import org.reaktivity.nukleus.buffer.BufferPool;
 import org.reaktivity.nukleus.function.MessageConsumer;
 import org.reaktivity.nukleus.function.MessagePredicate;
+import org.reaktivity.nukleus.http.internal.HttpConfiguration;
 import org.reaktivity.nukleus.http.internal.types.control.HttpRouteExFW;
 import org.reaktivity.nukleus.http.internal.types.control.RouteFW;
 import org.reaktivity.nukleus.http.internal.types.stream.AbortFW;
@@ -63,7 +63,7 @@ public final class ServerStreamFactory implements StreamFactory
     final HttpBeginExFW beginExRO = new HttpBeginExFW();
 
     final RouteManager router;
-    final LongSupplier supplyStreamId;
+    final LongUnaryOperator supplyInitialId;
     final LongUnaryOperator supplyReplyId;
     final LongSupplier supplyCorrelationId;
     final LongSupplier supplyTrace;
@@ -72,11 +72,11 @@ public final class ServerStreamFactory implements StreamFactory
     Long2ObjectHashMap<Correlation<?>> correlations;
 
     public ServerStreamFactory(
-        Configuration config,
+        HttpConfiguration config,
         RouteManager router,
         MutableDirectBuffer writeBuffer,
         BufferPool bufferPool,
-        LongSupplier supplyStreamId,
+        LongUnaryOperator supplyInitialId,
         LongUnaryOperator supplyReplyId,
         LongSupplier supplyCorrelationId,
         Long2ObjectHashMap<Correlation<?>> correlations,
@@ -86,7 +86,7 @@ public final class ServerStreamFactory implements StreamFactory
         this.router = requireNonNull(router);
         this.writer = new MessageWriter(requireNonNull(writeBuffer));
         this.bufferPool = requireNonNull(bufferPool);
-        this.supplyStreamId = requireNonNull(supplyStreamId);
+        this.supplyInitialId = requireNonNull(supplyInitialId);
         this.supplyReplyId = requireNonNull(supplyReplyId);
         this.supplyCorrelationId = supplyCorrelationId;
         this.correlations = requireNonNull(correlations);

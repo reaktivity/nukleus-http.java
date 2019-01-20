@@ -52,7 +52,6 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
     private final long connectRouteId;
 
     private Map<String, String> headers;
-    private MessageConsumer target;
     private Connection connection;
     private ConnectionPool connectionPool;
     private int sourceBudget;
@@ -210,7 +209,6 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
             headersOffset = 0;
             this.streamState = this::streamBeforeHeadersWritten;
             this.throttleState = this::throttleBeforeHeadersWritten;
-            target = factory.router.supplyReceiver(connectRouteId);
             connectionPool = getConnectionPool(connectRouteId);
             boolean acquired = connectionPool.acquire(this);
             // No backend connection or cannot store in queue, send 503 with Retry-After
@@ -327,7 +325,8 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         else
         {
             final OctetsFW payload = this.factory.dataRO.payload();
-            factory.writer.doData(target, connectRouteId, connection.connectStreamId, traceId, connection.padding, payload);
+            factory.writer.doData(connection.connectInitial, connectRouteId, connection.connectInitialId,
+                    traceId, connection.padding, payload);
             connection.budget -= payload.sizeof() + connection.padding;
             assert connection.budget >= 0;
         }
@@ -440,8 +439,8 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         int writableBytes = Math.min(headersPosition - headersOffset, connection.budget - connection.padding);
         if (writableBytes > 0)
         {
-            factory.writer.doData(target, connectRouteId, connection.connectStreamId, traceId, connection.padding, headersBuffer,
-                    headersOffset, writableBytes);
+            factory.writer.doData(connection.connectInitial, connectRouteId, connection.connectInitialId, traceId,
+                    connection.padding, headersBuffer, headersOffset, writableBytes);
             connection.budget -= writableBytes + connection.padding;
             assert connection.budget >= 0;
             headersOffset += writableBytes;
@@ -521,7 +520,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         final Correlation<ClientConnectReplyState> correlation =
                 new Correlation<>(acceptReply, acceptCorrelationId, acceptRouteId, acceptReplyId, state);
         factory.correlations.put(connection.correlationId, correlation);
-        factory.router.setThrottle(connection.connectStreamId, this::handleThrottle);
+        factory.router.setThrottle(connection.connectInitialId, this::handleThrottle);
         if (connection.budget > 0)
         {
             useWindowToWriteRequestHeaders();
