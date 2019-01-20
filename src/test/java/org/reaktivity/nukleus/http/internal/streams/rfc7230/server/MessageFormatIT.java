@@ -17,6 +17,7 @@ package org.reaktivity.nukleus.http.internal.streams.rfc7230.server;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.rules.RuleChain.outerRule;
+import static org.reaktivity.reaktor.test.ReaktorRule.EXTERNAL_AFFINITY_MASK;
 
 import org.junit.Ignore;
 import org.junit.Rule;
@@ -45,7 +46,9 @@ public class MessageFormatIT
         .commandBufferCapacity(1024)
         .responseBufferCapacity(1024)
         .counterValuesBufferCapacity(4096)
-        .configure(ReaktorConfiguration.REAKTOR_BUFFER_SLOT_CAPACITY, 8192);
+        .configure(ReaktorConfiguration.REAKTOR_BUFFER_SLOT_CAPACITY, 8192)
+        .affinityMask("target#0", EXTERNAL_AFFINITY_MASK)
+        .clean();
 
     @Rule
     public final TestRule chain = outerRule(reaktor).around(k3po).around(timeout);

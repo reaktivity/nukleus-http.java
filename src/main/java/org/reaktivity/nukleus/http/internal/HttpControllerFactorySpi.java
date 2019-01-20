@@ -38,8 +38,7 @@ public final class HttpControllerFactorySpi implements ControllerFactorySpi<Http
         Configuration config,
         ControllerBuilder<HttpController> builder)
     {
-        return builder.setName(name())
-                .setFactory(HttpController::new)
-                .build();
+        return builder.setFactory(HttpController::new)
+                      .build();
     }
 }

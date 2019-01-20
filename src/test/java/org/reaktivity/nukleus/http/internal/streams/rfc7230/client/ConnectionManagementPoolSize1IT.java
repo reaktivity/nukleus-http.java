@@ -20,6 +20,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.rules.RuleChain.outerRule;
 import static org.reaktivity.nukleus.http.internal.HttpConfiguration.HTTP_MAXIMUM_CONNECTIONS;
 import static org.reaktivity.nukleus.http.internal.HttpConfigurationTest.HTTP_MAXIMUM_QUEUED_REQUESTS_NAME;
+import static org.reaktivity.reaktor.test.ReaktorRule.EXTERNAL_AFFINITY_MASK;
 
 import org.junit.Rule;
 import org.junit.Test;
@@ -43,12 +44,12 @@ public class ConnectionManagementPoolSize1IT
 
     private final ReaktorRule reaktor = new ReaktorRule()
         .nukleus("http"::equals)
-        .controller("http"::equals)
         .directory("target/nukleus-itests")
         .commandBufferCapacity(1024)
         .responseBufferCapacity(1024)
         .counterValuesBufferCapacity(8192)
         .configure(HTTP_MAXIMUM_CONNECTIONS, 1)
+        .affinityMask("target#0", EXTERNAL_AFFINITY_MASK)
         .clean();
 
     private final HttpCountersRule counters = new HttpCountersRule(reaktor);

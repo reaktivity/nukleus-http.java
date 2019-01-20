@@ -708,7 +708,7 @@ final class ServerAcceptStream implements MessageConsumer
                 if (route != null)
                 {
                     final long newTargetRouteId = route.correlationId();
-                    final long newTargetId = factory.supplyStreamId.getAsLong();
+                    final long newTargetId = factory.supplyInitialId.applyAsLong(newTargetRouteId);
 
                     long newTargetCorrelationId = factory.supplyCorrelationId.getAsLong();
                     factory.correlations.put(newTargetCorrelationId, correlation);
@@ -1247,7 +1247,7 @@ final class ServerAcceptStream implements MessageConsumer
     {
         // TODO: do we need to worry about removing the throttle on target (old target)?
         MessageConsumer newTarget = (newTargetId & 0x8000_0000_0000_0000L) == 0L
-                ? factory.router.supplyReceiver(newTargetRouteId)
+                ? factory.router.supplyReceiver(newTargetId)
                 : acceptReply;
         target = newTarget;
         targetRouteId = newTargetRouteId;
