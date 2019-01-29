@@ -23,6 +23,7 @@ import java.net.URI;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -707,6 +708,9 @@ final class ServerAcceptStream implements MessageConsumer
                 final RouteFW route = resolveTarget(acceptRouteId, authorization, headers);
                 if (route != null)
                 {
+                    // update headers with the matched route's :scheme, :authority
+                    updateHeaders(route, headers);
+
                     final long newTargetRouteId = route.correlationId();
                     final long newTargetId = factory.supplyInitialId.applyAsLong(newTargetRouteId);
 
@@ -1033,7 +1037,7 @@ final class ServerAcceptStream implements MessageConsumer
     private RouteFW resolveTarget(
         long routeId,
         long authorization,
-        Map<String, String> headers)
+        Map<String, String> requestHeaders)
     {
         final MessagePredicate filter = (t, b, o, l) ->
         {
@@ -1043,14 +1047,92 @@ final class ServerAcceptStream implements MessageConsumer
             if (extension.sizeof() > 0)
             {
                 final HttpRouteExFW routeEx = extension.get(factory.routeExRO::wrap);
-                headersMatch = routeEx.headers().anyMatch(
-                        h -> !Objects.equals(h.value(), headers.get(h.name())));
+                if (requestHeaders.get(":authority").indexOf(':') == -1)
+                {
+                    // match a route after adding default port to :authority
+                    Map<String, String> routeHeaders = new HashMap<>();
+                    routeEx.headers().forEach(h -> routeHeaders.put(h.name().asString(), h.value().asString()));
+                    headersMatch = headersMatch(routeHeaders, requestHeaders);
+                }
+                else
+                {
+                    headersMatch = !routeEx.headers().anyMatch(
+                            h -> !Objects.equals(h.value().asString(), requestHeaders.get(h.name().asString())));
+                }
             }
             return headersMatch;
         };
 
         return factory.router.resolve(routeId, authorization, filter, (msgTypeId, buffer, index, length) ->
             factory.routeRO.wrap(buffer, index, index + length));
+    }
+
+    private boolean headersMatch(
+        Map<String, String> routeHeaders,
+        Map<String, String> requestHeaders)
+    {
+        boolean[] headersMatch = new boolean[1];
+        headersMatch[0] = true;
+        String routeScheme = routeHeaders.get(":scheme");
+        routeHeaders.forEach((name, routeValue) ->
+        {
+            if (headersMatch[0])
+            {
+                String requestValue = requestHeaders.get(name);
+                if (name.equals(":scheme"))
+                {
+                    // skip as request headers don't contain :scheme
+                }
+                else if (name.equals(":authority"))
+                {
+                    headersMatch[0] = matchAuthority(requestValue, routeValue, routeScheme);
+                }
+                else
+                {
+                    headersMatch[0] = Objects.equals(routeValue, requestValue);
+                }
+            }
+        });
+
+
+        return headersMatch[0];
+    }
+
+    private boolean matchAuthority(String requestValue, String routeValue, String routeScheme)
+    {
+        int portIndex = requestValue.indexOf(':');
+        if (portIndex == -1)
+        {
+            // request's :authority header has default port
+            return (Objects.equals(routeScheme, "http") && Objects.equals(routeValue, requestValue + ":80")) ||
+                    (Objects.equals(routeScheme, "https") && Objects.equals(routeValue, requestValue + ":443")) ||
+                    Objects.equals(requestValue, routeValue);
+        }
+        else
+        {
+            return Objects.equals(requestValue, routeValue);
+        }
+    }
+
+    // update headers with the matched route's :scheme and :authority
+    private void updateHeaders(
+        final RouteFW route,
+        final Map<String, String> requestHeaders)
+    {
+        final OctetsFW extension = route.extension();
+        if (extension.sizeof() > 0)
+        {
+            final HttpRouteExFW routeEx = extension.get(factory.routeExRO::wrap);
+            routeEx.headers().forEach(h ->
+            {
+                String name = h.name().asString();
+                String value = h.value().asString();
+                if (name.equals(":scheme") || name.equals(":authority"))
+                {
+                    requestHeaders.put(name, value);
+                }
+            });
+        }
     }
 
     private void handleThrottle(

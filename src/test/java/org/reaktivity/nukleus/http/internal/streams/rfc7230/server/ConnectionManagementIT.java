@@ -126,6 +126,16 @@ public class ConnectionManagementIT
 
     @Test
     @Specification({
+        "${route}/server.authority/controller",
+        "${client}/request.authority.with.no.port/client",
+        "${server}/request.authority.with.no.port/server" })
+    public void authorityWithNoPort() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
         "${route}/server/controller",
         "${client}/send.end.after.upgrade.request.completed/client",
         "${server}/send.end.after.upgrade.request.completed/server" })
