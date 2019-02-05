@@ -23,10 +23,10 @@ import java.net.URI;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -1058,18 +1058,24 @@ final class ServerAcceptStream implements MessageConsumer
             factory.routeRO.wrap(buffer, index, index + length));
     }
 
-    private boolean headersMatch(
-        ListFW<HttpHeaderFW> routeHeaders,
-        Map<String, String> requestHeaders)
+    private boolean headersMatch(ListFW<HttpHeaderFW> routeHeaders, Map<String, String> requestHeaders)
     {
         boolean[] headersMatch = new boolean[1];
         headersMatch[0] = true;
-        Map<String, String> routeHeadersMap = new HashMap<>();
-        routeHeaders.forEach(h -> routeHeadersMap.put(h.name().asString(), h.value().asString()));
-        String routeScheme = routeHeadersMap.get(":scheme");
-
-        routeHeadersMap.forEach((name, routeValue) ->
+        AtomicReference<String> routeScheme = new AtomicReference<>("");
+        routeHeaders.forEach(routeHeader ->
         {
+            if (routeHeader.name().asString().equals(":scheme"))
+            {
+                routeScheme.set(routeHeader.value().asString());
+            }
+        });
+
+        routeHeaders.forEach(routeHeader ->
+        {
+             String name = routeHeader.name().asString();
+             String routeValue = routeHeader.value().asString();
+
             if (headersMatch[0])
             {
                 String requestValue = requestHeaders.get(name);
@@ -1079,7 +1085,7 @@ final class ServerAcceptStream implements MessageConsumer
                 }
                 else if (name.equals(":authority"))
                 {
-                    headersMatch[0] = matchAuthority(requestValue, routeValue, routeScheme);
+                    headersMatch[0] = matchAuthority(requestValue, routeValue, routeScheme.get());
                 }
                 else
                 {
