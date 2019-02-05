@@ -38,6 +38,8 @@ import org.reaktivity.nukleus.function.MessagePredicate;
 import org.reaktivity.nukleus.http.internal.stream.ServerStreamFactory.DecoderState;
 import org.reaktivity.nukleus.http.internal.stream.ServerStreamFactory.HttpStatus;
 import org.reaktivity.nukleus.http.internal.stream.ServerStreamFactory.StandardMethods;
+import org.reaktivity.nukleus.http.internal.types.HttpHeaderFW;
+import org.reaktivity.nukleus.http.internal.types.ListFW;
 import org.reaktivity.nukleus.http.internal.types.OctetsFW;
 import org.reaktivity.nukleus.http.internal.types.control.HttpRouteExFW;
 import org.reaktivity.nukleus.http.internal.types.control.RouteFW;
@@ -1056,19 +1058,7 @@ final class ServerAcceptStream implements MessageConsumer
                 }
                 else
                 {
-                    headersMatch = !routeEx.headers().anyMatch(
-                            h ->
-                            {
-                                String name = h.name().asString();
-                                if (!name.equals(":scheme"))
-                                {
-                                    return  !Objects.equals(h.value().asString(), requestHeaders.get(h.name().asString()));
-                                }
-                                else
-                                {
-                                    return false;
-                                }
-                            });
+                    headersMatch = headersMatch(routeEx.headers(), requestHeaders);
                 }
             }
             return headersMatch;
@@ -1076,6 +1066,15 @@ final class ServerAcceptStream implements MessageConsumer
 
         return factory.router.resolve(routeId, authorization, filter, (msgTypeId, buffer, index, length) ->
             factory.routeRO.wrap(buffer, index, index + length));
+    }
+
+    private boolean headersMatch(ListFW<HttpHeaderFW> routeHeaders, Map<String, String> requestHeaders)
+    {
+        return !routeHeaders.anyMatch(h ->
+        {
+            final String name = h.name().asString();
+            return !":scheme".equals(name) && !Objects.equals(h.value().asString(), requestHeaders.get(name));
+        });
     }
 
     private boolean headersMatch(
