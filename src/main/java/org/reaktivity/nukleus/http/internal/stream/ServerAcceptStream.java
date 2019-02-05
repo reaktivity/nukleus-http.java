@@ -1057,7 +1057,18 @@ final class ServerAcceptStream implements MessageConsumer
                 else
                 {
                     headersMatch = !routeEx.headers().anyMatch(
-                            h -> !Objects.equals(h.value().asString(), requestHeaders.get(h.name().asString())));
+                            h ->
+                            {
+                                String name = h.name().asString();
+                                if (!name.equals(":scheme"))
+                                {
+                                    return  !Objects.equals(h.value().asString(), requestHeaders.get(h.name().asString()));
+                                }
+                                else
+                                {
+                                    return false;
+                                }
+                            });
                 }
             }
             return headersMatch;
