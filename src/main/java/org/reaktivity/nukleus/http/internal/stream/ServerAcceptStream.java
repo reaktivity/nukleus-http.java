@@ -1058,7 +1058,9 @@ final class ServerAcceptStream implements MessageConsumer
             factory.routeRO.wrap(buffer, index, index + length));
     }
 
-    private boolean headersMatch(ListFW<HttpHeaderFW> routeHeaders, Map<String, String> requestHeaders)
+    private boolean headersMatch(
+        ListFW<HttpHeaderFW> routeHeaders,
+        Map<String, String> requestHeaders)
     {
         boolean[] headersMatch = new boolean[1];
         headersMatch[0] = true;
