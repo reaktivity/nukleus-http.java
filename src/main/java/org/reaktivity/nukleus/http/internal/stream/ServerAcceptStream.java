@@ -1049,17 +1049,7 @@ final class ServerAcceptStream implements MessageConsumer
             if (extension.sizeof() > 0)
             {
                 final HttpRouteExFW routeEx = extension.get(factory.routeExRO::wrap);
-                if (requestHeaders.get(":authority").indexOf(':') == -1)
-                {
-                    // match a route after adding default port to :authority
-                    Map<String, String> routeHeaders = new HashMap<>();
-                    routeEx.headers().forEach(h -> routeHeaders.put(h.name().asString(), h.value().asString()));
-                    headersMatch = headersMatch(routeHeaders, requestHeaders);
-                }
-                else
-                {
-                    headersMatch = headersMatch(routeEx.headers(), requestHeaders);
-                }
+                headersMatch = headersMatch(routeEx.headers(), requestHeaders);
             }
             return headersMatch;
         };
@@ -1070,21 +1060,13 @@ final class ServerAcceptStream implements MessageConsumer
 
     private boolean headersMatch(ListFW<HttpHeaderFW> routeHeaders, Map<String, String> requestHeaders)
     {
-        return !routeHeaders.anyMatch(h ->
-        {
-            final String name = h.name().asString();
-            return !":scheme".equals(name) && !Objects.equals(h.value().asString(), requestHeaders.get(name));
-        });
-    }
-
-    private boolean headersMatch(
-        Map<String, String> routeHeaders,
-        Map<String, String> requestHeaders)
-    {
         boolean[] headersMatch = new boolean[1];
         headersMatch[0] = true;
-        String routeScheme = routeHeaders.get(":scheme");
-        routeHeaders.forEach((name, routeValue) ->
+        Map<String, String> routeHeadersMap = new HashMap<>();
+        routeHeaders.forEach(h -> routeHeadersMap.put(h.name().asString(), h.value().asString()));
+        String routeScheme = routeHeadersMap.get(":scheme");
+
+        routeHeadersMap.forEach((name, routeValue) ->
         {
             if (headersMatch[0])
             {
@@ -1103,7 +1085,6 @@ final class ServerAcceptStream implements MessageConsumer
                 }
             }
         });
-
 
         return headersMatch[0];
     }
