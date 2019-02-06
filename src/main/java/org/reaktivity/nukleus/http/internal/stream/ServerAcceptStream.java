@@ -22,10 +22,7 @@ import static org.reaktivity.nukleus.http.internal.util.BufferUtil.limitOfBytes;
 import java.net.URI;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -1055,7 +1052,7 @@ final class ServerAcceptStream implements MessageConsumer
         };
 
         return factory.router.resolve(routeId, authorization, filter, (msgTypeId, buffer, index, length) ->
-            factory.routeRO.wrap(buffer, index, index + length));
+                factory.routeRO.wrap(buffer, index, index + length));
     }
 
     private boolean headersMatch(
@@ -1075,8 +1072,8 @@ final class ServerAcceptStream implements MessageConsumer
 
         routeHeaders.forEach(routeHeader ->
         {
-             String name = routeHeader.name().asString();
-             String routeValue = routeHeader.value().asString();
+            String name = routeHeader.name().asString();
+            String routeValue = routeHeader.value().asString();
 
             if (headersMatch[0])
             {
