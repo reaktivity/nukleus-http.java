@@ -1064,14 +1064,13 @@ final class ServerAcceptStream implements MessageConsumer
     {
         boolean[] headersMatch = new boolean[1];
         headersMatch[0] = true;
+
         AtomicReference<String> routeScheme = new AtomicReference<>("");
-        routeHeaders.forEach(routeHeader ->
+        HttpHeaderFW schemeHeader = routeHeaders.matchFirst(header -> ":scheme".equals(header.name().asString()));
+        if (schemeHeader != null)
         {
-            if (routeHeader.name().asString().equals(":scheme"))
-            {
-                routeScheme.set(routeHeader.value().asString());
-            }
-        });
+            routeScheme.set(schemeHeader.value().asString());
+        }
 
         routeHeaders.forEach(routeHeader ->
         {

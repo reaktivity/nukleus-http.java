@@ -129,7 +129,7 @@ public class ConnectionManagementIT
         "${route}/server.authority/controller",
         "${client}/request.authority.with.no.port/client",
         "${server}/request.authority.with.no.port/server" })
-    public void authorityWithNoPort() throws Exception
+    public void shouldHandleRequestAuthorityWithNoPort() throws Exception
     {
         k3po.finish();
     }
@@ -139,7 +139,7 @@ public class ConnectionManagementIT
         "${route}/server.authority/controller",
         "${client}/request.authority.with.port/client",
         "${server}/request.authority.with.no.port/server" })
-    public void authorityWithPort() throws Exception
+    public void shouldHandleRequestAuthorityWithExplicitPort() throws Exception
     {
         k3po.finish();
     }
