@@ -51,12 +51,12 @@
     <jmock.version>2.6.0</jmock.version>
 
     <k3po.version>3.0.0-alpha-97</k3po.version>
-    <k3po.nukleus.ext.version>0.36</k3po.nukleus.ext.version>
+    <k3po.nukleus.ext.version>0.37</k3po.nukleus.ext.version>
 
     <nukleus.plugin.version>0.32</nukleus.plugin.version>
 
-    <nukleus.http.spec.version>0.66</nukleus.http.spec.version>
-    <reaktor.version>0.74</reaktor.version>
+    <nukleus.http.spec.version>0.67</nukleus.http.spec.version>
+    <reaktor.version>0.77</reaktor.version>
   </properties>
 
   <dependencies>

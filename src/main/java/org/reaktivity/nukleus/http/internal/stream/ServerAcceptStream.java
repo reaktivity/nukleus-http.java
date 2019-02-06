@@ -1328,7 +1328,7 @@ final class ServerAcceptStream implements MessageConsumer
         long newTargetId)
     {
         // TODO: do we need to worry about removing the throttle on target (old target)?
-        MessageConsumer newTarget = (newTargetId & 0x8000_0000_0000_0000L) == 0L
+        MessageConsumer newTarget = (newTargetId & 0x0000_0000_0000_0001L) != 0L
                 ? factory.router.supplyReceiver(newTargetId)
                 : acceptReply;
         target = newTarget;
