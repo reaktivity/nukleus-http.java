@@ -55,13 +55,8 @@
 
     <nukleus.plugin.version>0.32</nukleus.plugin.version>
 
-<<<<<<< HEAD
     <nukleus.http.spec.version>develop-SNAPSHOT</nukleus.http.spec.version>
-    <reaktor.version>0.74</reaktor.version>
-=======
-    <nukleus.http.spec.version>0.67</nukleus.http.spec.version>
     <reaktor.version>0.78</reaktor.version>
->>>>>>> d86453509b0b52fc9ee2e07fc7c13d74c703304a
   </properties>
 
   <dependencies>
@@ -309,9 +304,9 @@
             <configuration>
               <transformers>
                 <transformer
-                  implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer" />
+                        implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer" />
                 <transformer
-                  implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                        implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                   <mainClass>org.openjdk.jmh.Main</mainClass>
                   <manifestEntries>
                     <Class-Path>${project.artifactId}-shaded.jar</Class-Path>
@@ -428,4 +423,3 @@
   </profiles>
 
 </project>
-

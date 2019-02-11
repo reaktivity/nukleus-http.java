@@ -26,7 +26,6 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -1065,12 +1064,8 @@ final class ServerAcceptStream implements MessageConsumer
         boolean[] headersMatch = new boolean[1];
         headersMatch[0] = true;
 
-        AtomicReference<String> routeScheme = new AtomicReference<>("");
         HttpHeaderFW schemeHeader = routeHeaders.matchFirst(header -> ":scheme".equals(header.name().asString()));
-        if (schemeHeader != null)
-        {
-            routeScheme.set(schemeHeader.value().asString());
-        }
+        final String routeScheme = schemeHeader != null ? schemeHeader.value().asString() : null;
 
         routeHeaders.forEach(routeHeader ->
         {
@@ -1086,7 +1081,7 @@ final class ServerAcceptStream implements MessageConsumer
                 }
                 else if (name.equals(":authority"))
                 {
-                    headersMatch[0] = matchAuthority(requestValue, routeValue, routeScheme.get());
+                    headersMatch[0] = matchAuthority(requestValue, routeValue, routeScheme);
                 }
                 else
                 {
