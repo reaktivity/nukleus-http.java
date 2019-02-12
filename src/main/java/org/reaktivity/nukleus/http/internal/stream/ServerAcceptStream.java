@@ -23,7 +23,6 @@ import java.net.URI;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -38,6 +37,8 @@ import org.reaktivity.nukleus.function.MessagePredicate;
 import org.reaktivity.nukleus.http.internal.stream.ServerStreamFactory.DecoderState;
 import org.reaktivity.nukleus.http.internal.stream.ServerStreamFactory.HttpStatus;
 import org.reaktivity.nukleus.http.internal.stream.ServerStreamFactory.StandardMethods;
+import org.reaktivity.nukleus.http.internal.types.HttpHeaderFW;
+import org.reaktivity.nukleus.http.internal.types.ListFW;
 import org.reaktivity.nukleus.http.internal.types.OctetsFW;
 import org.reaktivity.nukleus.http.internal.types.control.HttpRouteExFW;
 import org.reaktivity.nukleus.http.internal.types.control.RouteFW;
@@ -1047,35 +1048,30 @@ final class ServerAcceptStream implements MessageConsumer
             if (extension.sizeof() > 0)
             {
                 final HttpRouteExFW routeEx = extension.get(factory.routeExRO::wrap);
-                if (requestHeaders.get(":authority").indexOf(':') == -1)
-                {
-                    // match a route after adding default port to :authority
-                    Map<String, String> routeHeaders = new HashMap<>();
-                    routeEx.headers().forEach(h -> routeHeaders.put(h.name().asString(), h.value().asString()));
-                    headersMatch = headersMatch(routeHeaders, requestHeaders);
-                }
-                else
-                {
-                    headersMatch = !routeEx.headers().anyMatch(
-                            h -> !Objects.equals(h.value().asString(), requestHeaders.get(h.name().asString())));
-                }
+                headersMatch = headersMatch(routeEx.headers(), requestHeaders);
             }
             return headersMatch;
         };
 
         return factory.router.resolve(routeId, authorization, filter, (msgTypeId, buffer, index, length) ->
-            factory.routeRO.wrap(buffer, index, index + length));
+                factory.routeRO.wrap(buffer, index, index + length));
     }
 
     private boolean headersMatch(
-        Map<String, String> routeHeaders,
+        ListFW<HttpHeaderFW> routeHeaders,
         Map<String, String> requestHeaders)
     {
         boolean[] headersMatch = new boolean[1];
         headersMatch[0] = true;
-        String routeScheme = routeHeaders.get(":scheme");
-        routeHeaders.forEach((name, routeValue) ->
+
+        HttpHeaderFW schemeHeader = routeHeaders.matchFirst(header -> ":scheme".equals(header.name().asString()));
+        final String routeScheme = schemeHeader != null ? schemeHeader.value().asString() : null;
+
+        routeHeaders.forEach(routeHeader ->
         {
+            String name = routeHeader.name().asString();
+            String routeValue = routeHeader.value().asString();
+
             if (headersMatch[0])
             {
                 String requestValue = requestHeaders.get(name);
@@ -1093,7 +1089,6 @@ final class ServerAcceptStream implements MessageConsumer
                 }
             }
         });
-
 
         return headersMatch[0];
     }
