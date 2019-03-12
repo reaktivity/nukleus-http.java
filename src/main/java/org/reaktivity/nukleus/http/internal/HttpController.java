@@ -20,18 +20,25 @@ import static java.nio.ByteOrder.nativeOrder;
 
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Consumer;
 
+import org.agrona.MutableDirectBuffer;
 import org.agrona.concurrent.AtomicBuffer;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.reaktivity.nukleus.Controller;
 import org.reaktivity.nukleus.ControllerSpi;
+import org.reaktivity.nukleus.http.internal.types.Flyweight;
 import org.reaktivity.nukleus.http.internal.types.OctetsFW;
 import org.reaktivity.nukleus.http.internal.types.control.FreezeFW;
 import org.reaktivity.nukleus.http.internal.types.control.HttpRouteExFW;
 import org.reaktivity.nukleus.http.internal.types.control.Role;
 import org.reaktivity.nukleus.http.internal.types.control.RouteFW;
 import org.reaktivity.nukleus.http.internal.types.control.UnrouteFW;
+import org.reaktivity.nukleus.route.RouteKind;
+
+import com.google.gson.Gson;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 
 public final class HttpController implements Controller
 {
@@ -44,14 +51,20 @@ public final class HttpController implements Controller
 
     private final HttpRouteExFW.Builder routeExRW = new HttpRouteExFW.Builder();
 
+    private final OctetsFW extensionRO = new OctetsFW().wrap(new UnsafeBuffer(new byte[0]), 0, 0);
+
     private final ControllerSpi controllerSpi;
-    private final AtomicBuffer atomicBuffer;
+    private final AtomicBuffer commandBuffer;
+    private final MutableDirectBuffer extensionBuffer;
+    private final Gson gson;
 
     public HttpController(
         ControllerSpi controllerSpi)
     {
         this.controllerSpi = controllerSpi;
-        this.atomicBuffer = new UnsafeBuffer(allocateDirect(MAX_SEND_LENGTH).order(nativeOrder()));
+        this.commandBuffer = new UnsafeBuffer(allocateDirect(MAX_SEND_LENGTH).order(nativeOrder()));
+        this.extensionBuffer = new UnsafeBuffer(allocateDirect(MAX_SEND_LENGTH).order(nativeOrder()));
+        this.gson = new Gson();
     }
 
     @Override
@@ -75,23 +88,66 @@ public final class HttpController implements Controller
     @Override
     public String name()
     {
-        return "http";
+        return HttpNukleus.NAME;
     }
 
+    @Deprecated
     public CompletableFuture<Long> routeServer(
         String localAddress,
         String remoteAddress,
         Map<String, String> headers)
     {
-        return route(Role.SERVER, localAddress, remoteAddress, headers);
+        return route(RouteKind.SERVER, localAddress, remoteAddress, gson.toJson(headers));
     }
 
+    @Deprecated
     public CompletableFuture<Long> routeClient(
         String localAddress,
         String remoteAddress,
         Map<String, String> headers)
     {
-        return route(Role.CLIENT, localAddress, remoteAddress, headers);
+        return route(RouteKind.CLIENT, localAddress, remoteAddress, gson.toJson(headers));
+    }
+
+    public CompletableFuture<Long> route(
+        RouteKind kind,
+        String localAddress,
+        String remoteAddress)
+    {
+        return route(kind, localAddress, remoteAddress, null);
+    }
+
+    public CompletableFuture<Long> route(
+        RouteKind kind,
+        String localAddress,
+        String remoteAddress,
+        String extension)
+    {
+        Flyweight routeEx = extensionRO;
+
+        if (extension != null)
+        {
+            final JsonParser parser = new JsonParser();
+            final JsonElement element = parser.parse(extension);
+            if (element.isJsonObject())
+            {
+                final JsonObject object = (JsonObject) element;
+
+                routeEx = routeExRW.wrap(extensionBuffer, 0, extensionBuffer.capacity())
+                        .headers(hs ->
+                        {
+                            object.entrySet().forEach(e ->
+                            {
+                                String name = e.getKey();
+                                String value = e.getValue().getAsString();
+                                hs.item(h -> h.name(name).value(value));
+                            });
+                        })
+                        .build();
+            }
+        }
+
+        return doRoute(kind, localAddress, remoteAddress, routeEx);
     }
 
     public CompletableFuture<Void> unroute(
@@ -99,7 +155,7 @@ public final class HttpController implements Controller
     {
         long correlationId = controllerSpi.nextCorrelationId();
 
-        UnrouteFW unrouteRO = unrouteRW.wrap(atomicBuffer, 0, atomicBuffer.capacity())
+        UnrouteFW unrouteRO = unrouteRW.wrap(commandBuffer, 0, commandBuffer.capacity())
                                  .correlationId(correlationId)
                                  .nukleus(name())
                                  .routeId(routeId)
@@ -112,7 +168,7 @@ public final class HttpController implements Controller
     {
         long correlationId = controllerSpi.nextCorrelationId();
 
-        FreezeFW freeze = freezeRW.wrap(atomicBuffer, 0, atomicBuffer.capacity())
+        FreezeFW freeze = freezeRW.wrap(commandBuffer, 0, commandBuffer.capacity())
                                   .correlationId(correlationId)
                                   .nukleus(name())
                                   .build();
@@ -120,44 +176,22 @@ public final class HttpController implements Controller
         return controllerSpi.doFreeze(freeze.typeId(), freeze.buffer(), freeze.offset(), freeze.sizeof());
     }
 
-    private Consumer<OctetsFW.Builder> extension(
-        Map<String, String> headers)
-    {
-        if (headers != null)
-        {
-            return e -> e.set((buffer, offset, limit) ->
-                routeExRW.wrap(buffer, offset, limit)
-                         .headers(hs ->
-                         {
-                             headers.forEach((k, v) ->
-                             {
-                                 hs.item(h -> h.name(k).value(v));
-                             });
-                         })
-                         .build()
-                         .sizeof());
-        }
-        else
-        {
-            return e -> {};
-        }
-    }
-
-    private CompletableFuture<Long> route(
-        Role role,
+    private CompletableFuture<Long> doRoute(
+        RouteKind kind,
         String localAddress,
         String remoteAddress,
-        Map<String, String> headers)
+        Flyweight extension)
     {
-        long correlationId = controllerSpi.nextCorrelationId();
+        final long correlationId = controllerSpi.nextCorrelationId();
+        final Role role = Role.valueOf(kind.ordinal());
 
-        RouteFW routeRO = routeRW.wrap(atomicBuffer, 0, atomicBuffer.capacity())
+        final RouteFW routeRO = routeRW.wrap(commandBuffer, 0, commandBuffer.capacity())
                                  .correlationId(correlationId)
                                  .nukleus(name())
                                  .role(b -> b.set(role))
                                  .localAddress(localAddress)
                                  .remoteAddress(remoteAddress)
-                                 .extension(extension(headers))
+                                 .extension(extension.buffer(), extension.offset(), extension.sizeof())
                                  .build();
 
         return controllerSpi.doRoute(routeRO.typeId(), routeRO.buffer(), routeRO.offset(), routeRO.sizeof());
