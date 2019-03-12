@@ -354,6 +354,11 @@ final class ClientConnectReplyStream implements MessageConsumer
         {
             responseState = ResponseState.FINAL;
         }
+        else if (responseState == ResponseState.DATA && !connection.persistent)
+        {
+            factory.writer.doEnd(acceptReply, acceptRouteId, acceptReplyId, end.trace());
+            responseState = ResponseState.FINAL;
+        }
 
         switch (responseState)
         {
@@ -378,6 +383,11 @@ final class ClientConnectReplyStream implements MessageConsumer
         if (responseState == ResponseState.BEFORE_HEADERS && acceptReply == null
                 && factory.correlations.get(connection.correlationId) == null)
         {
+            responseState = ResponseState.FINAL;
+        }
+        else if (responseState == ResponseState.DATA && !connection.persistent)
+        {
+            factory.writer.doAbort(acceptReply, acceptRouteId, acceptReplyId, abort.trace());
             responseState = ResponseState.FINAL;
         }
 
@@ -576,10 +586,10 @@ final class ClientConnectReplyStream implements MessageConsumer
 
             resolveTarget();
 
-            FrameFW frame = factory.frameRO.wrap(payload, offset, payload.capacity());
-            factory.writer.doHttpBegin(acceptReply, acceptRouteId, acceptReplyId, frame.trace(), acceptCorrelationId,
-                    hs -> headers.forEach((k, v) -> hs.item(i -> i.representation((byte) 0).name(k).value(v))));
+            final FrameFW frame = factory.frameRO.wrap(payload, offset, payload.capacity());
             factory.router.setThrottle(acceptReplyId, this::handleThrottle);
+            factory.writer.doHttpBegin(acceptReply, acceptRouteId, acceptReplyId, frame.trace(), acceptCorrelationId,
+                    hs -> headers.forEach((k, v) -> hs.item(i -> i.name(k).value(v))));
 
             // count all responses
             factory.countResponses.getAsLong();
@@ -600,6 +610,7 @@ final class ClientConnectReplyStream implements MessageConsumer
             if (upgraded)
             {
                 connection.persistent = false;
+                connection.upgraded = true;
                 connectionPool.release(connection);
                 this.decoderState = this::decodeHttpDataAfterUpgrade;
                 throttleState = this::handleThrottleAfterBegin;

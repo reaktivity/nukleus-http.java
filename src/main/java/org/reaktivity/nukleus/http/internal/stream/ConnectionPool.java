@@ -200,6 +200,7 @@ final class ConnectionPool
         int budget;
         int padding;
         boolean persistent = true;
+        boolean upgraded;
         boolean released;
         private boolean endOrAbortSent;
 

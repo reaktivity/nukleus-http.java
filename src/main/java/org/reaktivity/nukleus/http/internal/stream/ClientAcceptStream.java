@@ -337,13 +337,21 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         int index,
         int length)
     {
-        this.factory.endRO.wrap(buffer, index, index + length);
+        final EndFW end = factory.endRO.wrap(buffer, index, index + length);
+        traceId = end.trace();
         doEnd();
     }
 
     private void doEnd()
     {
-        connectionPool.setDefaultThrottle(connection);
+        if (connection.upgraded)
+        {
+            connectionPool.release(connection, CloseAction.END);
+        }
+        else
+        {
+            connectionPool.setDefaultThrottle(connection);
+        }
         this.streamState = this::streamAfterEndOrAbort;
     }
 
