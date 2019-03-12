@@ -17,9 +17,8 @@ package org.reaktivity.nukleus.http.internal.control;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.rules.RuleChain.outerRule;
-
-import java.util.LinkedHashMap;
-import java.util.Map;
+import static org.reaktivity.nukleus.route.RouteKind.CLIENT;
+import static org.reaktivity.nukleus.route.RouteKind.SERVER;
 
 import org.junit.Rule;
 import org.junit.Test;
@@ -31,6 +30,9 @@ import org.kaazing.k3po.junit.annotation.Specification;
 import org.kaazing.k3po.junit.rules.K3poRule;
 import org.reaktivity.nukleus.http.internal.HttpController;
 import org.reaktivity.reaktor.test.ReaktorRule;
+
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
 
 public class ControllerIT
 {
@@ -51,19 +53,21 @@ public class ControllerIT
     @Rule
     public final TestRule chain = outerRule(k3po).around(timeout).around(reaktor);
 
+    private final Gson gson = new Gson();
+
     @Test
     @Specification({
         "${route}/server/nukleus"
     })
     public void shouldRouteServer() throws Exception
     {
-        Map<String, String> headers = new LinkedHashMap<>();
-        headers.put(":authority", "localhost:8080");
-
         k3po.start();
 
+        final JsonObject extension = new JsonObject();
+        extension.addProperty(":authority", "localhost:8080");
+
         reaktor.controller(HttpController.class)
-               .routeServer("http#0", "target#0", headers)
+               .route(SERVER, "http#0", "target#0", gson.toJson(extension))
                .get();
 
         k3po.finish();
@@ -75,13 +79,13 @@ public class ControllerIT
     })
     public void shouldRouteClient() throws Exception
     {
-        Map<String, String> headers = new LinkedHashMap<>();
-        headers.put(":authority", "localhost:8080");
-
         k3po.start();
 
+        final JsonObject extension = new JsonObject();
+        extension.addProperty(":authority", "localhost:8080");
+
         reaktor.controller(HttpController.class)
-               .routeClient("http#0", "target#0", headers)
+               .route(CLIENT, "http#0", "target#0", gson.toJson(extension))
                .get();
 
         k3po.finish();
@@ -94,13 +98,13 @@ public class ControllerIT
     })
     public void shouldUnrouteServer() throws Exception
     {
-        Map<String, String> headers = new LinkedHashMap<>();
-        headers.put(":authority", "localhost:8080");
-
         k3po.start();
 
+        final JsonObject extension = new JsonObject();
+        extension.addProperty(":authority", "localhost:8080");
+
         long routeId = reaktor.controller(HttpController.class)
-              .routeServer("http#0", "target#0", headers)
+              .route(SERVER, "http#0", "target#0", gson.toJson(extension))
               .get();
 
         k3po.notifyBarrier("ROUTED_SERVER");
@@ -119,13 +123,13 @@ public class ControllerIT
     })
     public void shouldUnrouteClient() throws Exception
     {
-        Map<String, String> headers = new LinkedHashMap<>();
-        headers.put(":authority", "localhost:8080");
-
         k3po.start();
 
+        final JsonObject extension = new JsonObject();
+        extension.addProperty(":authority", "localhost:8080");
+
         long routeId = reaktor.controller(HttpController.class)
-              .routeClient("http#0", "target#0", headers)
+              .route(CLIENT, "http#0", "target#0", gson.toJson(extension))
               .get();
 
         k3po.notifyBarrier("ROUTED_CLIENT");
