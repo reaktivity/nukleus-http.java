@@ -520,7 +520,10 @@ final class ServerAcceptStream implements MessageConsumer
         }
     }
 
-    private void deferAndProcessData(DirectBuffer buffer, int offset, int limit)
+    private void deferAndProcessData(
+        DirectBuffer buffer,
+        int offset,
+        int limit)
     {
         final int dataLength = limit - offset;
         if (slotPosition + dataLength > factory.bufferPool.slotCapacity())
@@ -531,16 +534,6 @@ final class ServerAcceptStream implements MessageConsumer
         slot.putBytes(slotPosition, buffer, offset, dataLength);
         slotPosition += dataLength;
         processDeferredData();
-        if (sourceBudget == 0)
-        {
-            // Increase source window to ensure we can receive the largest possible amount of data we can factory.slab
-            int cachedBytes = slotPosition - slotOffset;
-            ensureSourceWindow(factory.bufferPool.slotCapacity() - cachedBytes, targetPadding);
-            if (sourceBudget == 0)
-            {
-                throw new IllegalStateException("Decoder failed to detect headers or chunk too long");
-            }
-        }
     }
 
     private void processDeferredData()
@@ -1027,7 +1020,7 @@ final class ServerAcceptStream implements MessageConsumer
         {
             this.streamState = this::streamAfterBeginOrData;
             this.decoderState = this::decodeBeforeHttpBegin;
-            ensureSourceWindow(maximumHeadersSize, 0);
+            ensureSourceWindow(maximumHeadersSize, 0, factory.supplyTrace.getAsLong());
         }
         else
         {
@@ -1262,7 +1255,7 @@ final class ServerAcceptStream implements MessageConsumer
         {
             processDeferredData();
         }
-        ensureSourceWindow(Math.min(targetBudget, factory.bufferPool.slotCapacity()), targetPadding);
+        ensureSourceWindow(Math.min(targetBudget, factory.bufferPool.slotCapacity()), targetPadding, throttleTraceId);
     }
 
     private void processWindowForHttpDataAfterUpgrade(
@@ -1277,7 +1270,7 @@ final class ServerAcceptStream implements MessageConsumer
         }
         if (slotIndex == NO_SLOT)
         {
-            ensureSourceWindow(targetBudget, targetPadding);
+            ensureSourceWindow(targetBudget, targetPadding, throttleTraceId);
             if (this.sourceBudget == targetBudget)
             {
                 // Windows are now aligned
@@ -1295,16 +1288,22 @@ final class ServerAcceptStream implements MessageConsumer
         doSourceWindow(credit, targetPadding, window.trace());
     }
 
-    private void ensureSourceWindow(int requiredWindow, int padding)
+    private void ensureSourceWindow(
+        int requiredWindow,
+        int padding,
+        long traceId)
     {
         if (requiredWindow > sourceBudget)
         {
             int credit = requiredWindow - sourceBudget;
-            doSourceWindow(credit, padding, 0L);
+            doSourceWindow(credit, padding, traceId);
         }
     }
 
-    private void doSourceWindow(int credit, int padding, long traceId)
+    private void doSourceWindow(
+        int credit,
+        int padding,
+        long traceId)
     {
         sourceBudget += credit;
         factory.writer.doWindow(acceptReply, acceptRouteId, acceptId, traceId, credit, padding);
