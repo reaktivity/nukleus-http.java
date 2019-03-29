@@ -107,11 +107,12 @@ final class ConnectionPool
 
     private Connection newConnection()
     {
-        final long correlationId = factory.supplyCorrelationId.getAsLong();
         final long connectInitialId = factory.supplyInitialId.applyAsLong(connectRouteId);
-        Connection connection = new Connection(connectInitialId, correlationId);
-        MessageConsumer connectInitial = factory.router.supplyReceiver(connectInitialId);
-        factory.writer.doBegin(connectInitial, connectRouteId, connectInitialId, factory.supplyTraceId, correlationId);
+        final long connectReplyId = factory.supplyReplyId.applyAsLong(connectInitialId);
+        final MessageConsumer connectInitial = factory.router.supplyReceiver(connectInitialId);
+
+        Connection connection = new Connection(connectInitialId, connectReplyId);
+        factory.writer.doBegin(connectInitial, connectRouteId, connectInitialId, factory.supplyTraceId);
         factory.router.setThrottle(connectInitialId, connection::handleThrottleDefault);
         connectionsInUse++;
         return connection;
@@ -124,7 +125,7 @@ final class ConnectionPool
 
     void release(Connection connection, CloseAction action)
     {
-        final Correlation<?> correlation = factory.correlations.remove(connection.correlationId);
+        final Correlation<?> correlation = factory.correlations.remove(connection.connectReplyId);
         if (correlation != null)
         {
             // We did not yet send response headers (high level begin) to the client accept reply stream.
@@ -140,10 +141,9 @@ final class ConnectionPool
             // count all responses
             factory.countResponses.getAsLong();
 
-            long acceptCorrelationId = correlation.id();
-            factory.writer.doHttpBegin(acceptReply, acceptRouteId, acceptReplyId, traceId, acceptCorrelationId,
-                                       hs -> hs.item(h -> h.name(":status").value("503"))
-                                               .item(h -> h.name("retry-after").value("0")));
+            factory.writer.doHttpBegin(acceptReply, acceptRouteId, acceptReplyId, traceId,
+                    hs -> hs.item(h -> h.name(":status").value("503"))
+                            .item(h -> h.name("retry-after").value("0")));
             factory.writer.doHttpEnd(acceptReply, acceptRouteId, acceptReplyId, factory.supplyTrace.getAsLong());
         }
         if (connection.persistent)
@@ -196,7 +196,8 @@ final class ConnectionPool
     {
         final long connectInitialId;
         final MessageConsumer connectInitial;
-        final long correlationId;
+        final long connectReplyId;
+
         int budget;
         int padding;
         boolean persistent = true;
@@ -204,25 +205,15 @@ final class ConnectionPool
         boolean released;
         private boolean endOrAbortSent;
 
-        private long connectReplyId;
-        private MessageConsumer connectReplyThrottle;
         int noRequests;
 
         Connection(
-            long outputStreamId,
-            long outputCorrelationId)
+            long connectInitialId,
+            long connectReplyId)
         {
-            this.connectInitialId = outputStreamId;
-            this.connectInitial = factory.router.supplyReceiver(outputStreamId);
-            this.correlationId = outputCorrelationId;
-        }
-
-        void setInput(
-            MessageConsumer connectReplyThrottle,
-            long connectReplyStreamId)
-        {
-            this.connectReplyThrottle = connectReplyThrottle;
-            this.connectReplyId = connectReplyStreamId;
+            this.connectInitialId = connectInitialId;
+            this.connectInitial = factory.router.supplyReceiver(connectInitialId);
+            this.connectReplyId = connectReplyId;
         }
 
         void handleThrottleDefault(
@@ -236,10 +227,10 @@ final class ConnectionPool
             case ResetFW.TYPE_ID:
                 persistent = false;
                 release(this);
-                if (connectReplyThrottle != null)
+                if (connectInitial != null)
                 {
                     ResetFW resetFW = factory.resetRO.wrap(buffer, index, index + length);
-                    factory.writer.doReset(connectReplyThrottle, connectRouteId, connectReplyId, resetFW.trace());
+                    factory.writer.doReset(connectInitial, connectRouteId, connectReplyId, resetFW.trace());
                 }
                 break;
             case WindowFW.TYPE_ID:

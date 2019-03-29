@@ -205,13 +205,13 @@ public final class ServerConnectReplyStream implements MessageConsumer
     {
         BeginFW begin = factory.beginRO.wrap(buffer, index, index + length);
 
-        final long targetCorrelationId = begin.correlationId();
+        final long replyId = begin.streamId();
         final OctetsFW extension = begin.extension();
         traceId = begin.trace();
 
         @SuppressWarnings("unchecked")
         final Correlation<ServerAcceptState> correlation =
-                     (Correlation<ServerAcceptState>) factory.correlations.remove(targetCorrelationId);
+                     (Correlation<ServerAcceptState>) factory.correlations.remove(replyId);
         if (correlation != null)
         {
             acceptState = correlation.state();

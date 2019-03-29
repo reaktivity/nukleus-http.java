@@ -46,8 +46,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
 
     private final MessageConsumer acceptReply;
     private final long acceptRouteId;
-    private final long acceptId;
-    private final long acceptCorrelationId;
+    private final long acceptInitialId;
     private final long acceptReplyId;
     private final long connectRouteId;
 
@@ -67,7 +66,6 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         MessageConsumer acceptReply,
         long acceptRouteId,
         long acceptId,
-        long acceptCorrelationId,
         long acceptReplyId,
         long connectRouteId,
         Map<String, String> headers)
@@ -75,9 +73,8 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         this.factory = factory;
         this.acceptReply = acceptReply;
         this.acceptRouteId = acceptRouteId;
-        this.acceptId = acceptId;
+        this.acceptInitialId = acceptId;
         this.acceptReplyId = acceptReplyId;
-        this.acceptCorrelationId = acceptCorrelationId;
         this.connectRouteId = connectRouteId;
         this.headers = headers;
         this.streamState = this::streamBeforeBegin;
@@ -199,7 +196,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         if (bytes.length > factory.bufferPool.slotCapacity())
         {
             // TODO: diagnostics (reset reason?)
-            factory.writer.doReset(acceptReply, acceptRouteId, acceptId, factory.supplyTrace.getAsLong());
+            factory.writer.doReset(acceptReply, acceptRouteId, acceptInitialId, factory.supplyTrace.getAsLong());
         }
         else
         {
@@ -218,7 +215,6 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
                 factory.countResponses.getAsLong();
 
                 factory.writer.doHttpBegin(acceptReply, acceptRouteId, acceptReplyId, factory.supplyTrace.getAsLong(),
-                        acceptCorrelationId,
                         hs -> hs.item(h -> h.name(":status").value("503"))
                                 .item(h -> h.name("retry-after").value("0")));
                 factory.writer.doHttpEnd(acceptReply, acceptRouteId, acceptReplyId, factory.supplyTrace.getAsLong());
@@ -478,7 +474,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         if (credit > 0)
         {
             sourceBudget += credit;
-            factory.writer.doWindow(acceptReply, acceptRouteId, acceptId, traceId, credit, padding);
+            factory.writer.doWindow(acceptReply, acceptRouteId, acceptInitialId, traceId, credit, padding);
         }
     }
 
@@ -496,7 +492,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         }
         else
         {
-            factory.correlations.remove(connection.correlationId);
+            factory.correlations.remove(connection.connectReplyId);
             connection.persistent = false;
             connectionPool.release(connection, CloseAction.ABORT);
         }
@@ -510,7 +506,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         ResetFW resetFW = factory.resetRO.wrap(buffer, index, index + length);
         connection.persistent = false;
         connectionPool.release(connection);
-        factory.writer.doReset(acceptReply, acceptRouteId, acceptId, resetFW.trace());
+        factory.writer.doReset(acceptReply, acceptRouteId, acceptInitialId, resetFW.trace());
     }
 
     @Override
@@ -526,8 +522,8 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         connection.persistent = persistent;
         ClientConnectReplyState state = new ClientConnectReplyState(connectionPool, connection);
         final Correlation<ClientConnectReplyState> correlation =
-                new Correlation<>(acceptReply, acceptCorrelationId, acceptRouteId, acceptReplyId, state);
-        factory.correlations.put(connection.correlationId, correlation);
+                new Correlation<>(acceptReply, acceptRouteId, acceptReplyId, state);
+        factory.correlations.put(connection.connectReplyId, correlation);
         factory.router.setThrottle(connection.connectInitialId, this::handleThrottle);
         if (connection.budget > 0)
         {

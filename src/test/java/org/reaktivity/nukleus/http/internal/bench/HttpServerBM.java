@@ -152,7 +152,6 @@ public class HttpServerBM
             BeginFW begin = beginRW.wrap(writeBuffer, 0, writeBuffer.capacity())
                     .routeId(sourceRouteId)
                     .streamId(sourceInputId)
-                    .correlationId(random.nextLong())
                     .extension(e -> e.reset())
                     .build();
 

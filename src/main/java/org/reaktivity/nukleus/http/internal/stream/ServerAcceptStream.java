@@ -61,8 +61,8 @@ final class ServerAcceptStream implements MessageConsumer
     private ServerStreamFactory factory;
     private final MessageConsumer acceptReply;
     private final long acceptRouteId;
-    private final long acceptId;
-    private final long acceptCorrelationId;
+    private final long acceptInitialId;
+    private final long acceptReplyId;
     private final long authorization;
 
     private MessageConsumer streamState;
@@ -86,7 +86,6 @@ final class ServerAcceptStream implements MessageConsumer
     private Correlation<ServerAcceptState> correlation;
     private boolean targetBeginIssued;
     private Runnable cleanupConnectReply;
-    private long acceptReplyId;
     private long throttleTraceId;
     private long streamTraceId;
 
@@ -95,16 +94,15 @@ final class ServerAcceptStream implements MessageConsumer
     public String toString()
     {
         return String.format("%s[sourceId=%016x, window=%d, targetId=%016x]",
-                getClass().getSimpleName(), acceptId, sourceBudget, targetId);
+                getClass().getSimpleName(), acceptInitialId, sourceBudget, targetId);
     }
 
     ServerAcceptStream(
         ServerStreamFactory factory,
         MessageConsumer acceptReply,
         long acceptRouteId,
-        long acceptId,
+        long acceptInitialId,
         long traceId,
-        long acceptCorrelationId,
         long authorization)
     {
         this.factory = factory;
@@ -112,9 +110,9 @@ final class ServerAcceptStream implements MessageConsumer
         this.throttleState = this::throttleIgnoreWindow;
         this.acceptReply = acceptReply;
         this.acceptRouteId = acceptRouteId;
-        this.acceptId = acceptId;
+        this.acceptInitialId = acceptInitialId;
+        this.acceptReplyId = factory.supplyReplyId.applyAsLong(acceptInitialId);
         this.streamTraceId = traceId;
-        this.acceptCorrelationId = acceptCorrelationId;
         this.authorization = authorization;
         this.temporarySlot = new UnsafeBuffer(ByteBuffer.allocateDirect(factory.bufferPool.slotCapacity()));
         this.maximumHeadersSize = factory.bufferPool.slotCapacity();
@@ -266,7 +264,7 @@ final class ServerAcceptStream implements MessageConsumer
             doSourceWindow(maximumHeadersSize, 0, 0);
 
             // We can't write back an HTTP error response because we already forwarded the request to the target
-            factory.writer.doReset(acceptReply, acceptRouteId, acceptId, factory.supplyTrace.getAsLong());
+            factory.writer.doReset(acceptReply, acceptRouteId, acceptInitialId, factory.supplyTrace.getAsLong());
             factory.writer.doAbort(target, targetRouteId, targetId, traceId);
             if (correlation != null)
             {
@@ -378,13 +376,11 @@ final class ServerAcceptStream implements MessageConsumer
         this.streamState = this::streamAfterBeginOrData;
         this.decoderState = this::decodeBeforeHttpBegin;
 
-        final long acceptReplyId = factory.supplyReplyId.applyAsLong(acceptId);
         final ServerAcceptState state = new ServerAcceptState(acceptRouteId, acceptReplyId, acceptReply,
                 factory.writer, this::loopBackThrottle, factory.router, this::setCleanupConnectReply);
-        factory.writer.doBegin(acceptReply, acceptRouteId, acceptReplyId, streamTraceId, acceptCorrelationId);
-        this.correlation = new Correlation<>(acceptReply, acceptCorrelationId, acceptRouteId, acceptReplyId, state);
+        factory.writer.doBegin(acceptReply, acceptRouteId, acceptReplyId, streamTraceId);
+        this.correlation = new Correlation<>(acceptReply, acceptRouteId, acceptReplyId, state);
         doSourceWindow(maximumHeadersSize, 0, factory.supplyTrace.getAsLong());
-        this.acceptReplyId = acceptReplyId;
     }
 
     void setCleanupConnectReply(Runnable cleanupConnectReply)
@@ -418,7 +414,7 @@ final class ServerAcceptStream implements MessageConsumer
             {
                 assert slotIndex == NO_SLOT;
                 slotOffset = slotPosition = 0;
-                slotIndex = factory.bufferPool.acquire(acceptId);
+                slotIndex = factory.bufferPool.acquire(acceptInitialId);
                 if (slotIndex == NO_SLOT)
                 {
                     // Out of factory.slab memory
@@ -463,7 +459,7 @@ final class ServerAcceptStream implements MessageConsumer
         else
         {
             final long streamId = end.streamId();
-            assert streamId == acceptId;
+            assert streamId == acceptInitialId;
             doEnd(streamTraceId);
         }
     }
@@ -475,7 +471,7 @@ final class ServerAcceptStream implements MessageConsumer
     {
         AbortFW abort = factory.abortRO.wrap(buffer, index, index + length);
         streamTraceId = abort.trace();
-        Correlation<?> correlation = factory.correlations.remove(acceptCorrelationId);
+        Correlation<?> correlation = factory.correlations.remove(acceptReplyId);
         factory.writer.doAbort(acceptReply, acceptRouteId, acceptReplyId, factory.supplyTrace.getAsLong());
         if (targetBeginIssued)
         {
@@ -559,7 +555,7 @@ final class ServerAcceptStream implements MessageConsumer
     {
         EndFW end = factory.endRO.wrap(buffer, index, index + length);
         final long streamId = end.streamId();
-        assert streamId == acceptId;
+        assert streamId == acceptInitialId;
 
         endDeferred = true;
     }
@@ -705,18 +701,17 @@ final class ServerAcceptStream implements MessageConsumer
                     // update headers with the matched route's :scheme, :authority
                     updateHeaders(route, headers);
 
-                    final long newTargetRouteId = route.correlationId();
-                    final long newTargetId = factory.supplyInitialId.applyAsLong(newTargetRouteId);
+                    final long newRouteId = route.correlationId();
+                    final long newInitialId = factory.supplyInitialId.applyAsLong(newRouteId);
+                    final long newReplyId = factory.supplyReplyId.applyAsLong(newInitialId);
 
-                    long newTargetCorrelationId = factory.supplyCorrelationId.getAsLong();
-                    factory.correlations.put(newTargetCorrelationId, correlation);
+                    factory.correlations.put(newReplyId, correlation);
                     correlation.state().pendingRequests++;
 
                     targetBudget = 0;
-                    switchTarget(newTargetRouteId, newTargetId);
-                    factory.writer.doHttpBegin(target, newTargetRouteId, newTargetId,
-                            streamTraceId, newTargetCorrelationId,
-                            hs -> headers.forEach((k, v) -> hs.item(i -> i.representation((byte)0).name(k).value(v))));
+                    switchTarget(newRouteId, newInitialId);
+                    factory.writer.doHttpBegin(target, newRouteId, newInitialId,
+                            streamTraceId, hs -> headers.forEach((k, v) -> hs.item(i -> i.name(k).value(v))));
                     targetBeginIssued = true;
 
                     hasUpgrade = headers.containsKey("upgrade");
@@ -1306,7 +1301,7 @@ final class ServerAcceptStream implements MessageConsumer
         long traceId)
     {
         sourceBudget += credit;
-        factory.writer.doWindow(acceptReply, acceptRouteId, acceptId, traceId, credit, padding);
+        factory.writer.doWindow(acceptReply, acceptRouteId, acceptInitialId, traceId, credit, padding);
     }
 
     private void processReset(
@@ -1314,7 +1309,13 @@ final class ServerAcceptStream implements MessageConsumer
     {
         throttleTraceId = reset.trace();
         releaseSlotIfNecessary();
-        factory.writer.doReset(acceptReply, acceptRouteId, acceptId, throttleTraceId);
+        factory.writer.doReset(acceptReply, acceptRouteId, acceptInitialId, throttleTraceId);
+
+        Correlation<?> correlation = factory.correlations.remove(acceptReplyId);
+        if (correlation != null)
+        {
+            factory.writer.doAbort(acceptReply, acceptRouteId, acceptReplyId, factory.supplyTrace.getAsLong());
+        }
     }
 
     private void switchTarget(

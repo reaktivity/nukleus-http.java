@@ -79,7 +79,6 @@ public final class ClientStreamFactory implements StreamFactory
     final RouteManager router;
     final LongUnaryOperator supplyInitialId;
     final LongUnaryOperator supplyReplyId;
-    final LongSupplier supplyCorrelationId;
     final LongSupplier enqueues;
     final LongSupplier dequeues;
     final LongSupplier supplyTrace;
@@ -110,7 +109,6 @@ public final class ClientStreamFactory implements StreamFactory
         BufferPool bufferPool,
         LongUnaryOperator supplyInitialId,
         LongUnaryOperator supplyReplyId,
-        LongSupplier supplyCorrelationId,
         Long2ObjectHashMap<Correlation<?>> correlations,
         Function<String, LongSupplier> supplyCounter,
         LongSupplier supplyTrace)
@@ -120,7 +118,6 @@ public final class ClientStreamFactory implements StreamFactory
         this.writer = new MessageWriter(requireNonNull(writeBuffer));
         this.bufferPool = requireNonNull(bufferPool);
         this.supplyInitialId = requireNonNull(supplyInitialId);
-        this.supplyCorrelationId = supplyCorrelationId;
         this.supplyReplyId = requireNonNull(supplyReplyId);
         this.correlations = requireNonNull(correlations);
         this.connectionPools = new Long2ObjectHashMap<>();
@@ -190,12 +187,11 @@ public final class ClientStreamFactory implements StreamFactory
         {
             final long acceptRouteId = begin.routeId();
             final long acceptId = begin.streamId();
-            final long acceptCorrelationId = begin.correlationId();
             final long connectRouteId = route.correlationId();
             final long acceptReplyId = supplyReplyId.applyAsLong(acceptId);
 
             newStream = new ClientAcceptStream(this,
-                    acceptReply, acceptRouteId, acceptId, acceptCorrelationId, acceptReplyId,
+                    acceptReply, acceptRouteId, acceptId, acceptReplyId,
                     connectRouteId, headers);
         }
 
@@ -225,8 +221,8 @@ public final class ClientStreamFactory implements StreamFactory
             if (extension.sizeof() > 0)
             {
                 final HttpRouteExFW routeEx = extension.get(routeExRO::wrap);
-                headersMatch = routeEx.headers().anyMatch(
-                        h -> !Objects.equals(h.value(), headers.get(h.name())));
+                headersMatch = !routeEx.headers().anyMatch(
+                        h -> !Objects.equals(h.value().asString(), headers.get(h.name().asString())));
             }
             return headersMatch;
         };
