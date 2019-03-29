@@ -37,9 +37,8 @@ public final class ClientStreamFactoryBuilder implements StreamFactoryBuilder
 
     private RouteManager router;
     private MutableDirectBuffer writeBuffer;
-    private LongUnaryOperator supplyStreamId;
+    private LongUnaryOperator supplyInitialId;
     private LongUnaryOperator supplyReplyId;
-    private LongSupplier supplyCorrelationId;
     private LongSupplier supplyTrace;
     private Supplier<BufferPool> supplyBufferPool;
     private Function<String, LongSupplier> supplyCounter;
@@ -69,9 +68,9 @@ public final class ClientStreamFactoryBuilder implements StreamFactoryBuilder
 
     @Override
     public ClientStreamFactoryBuilder setInitialIdSupplier(
-        LongUnaryOperator supplyStreamId)
+        LongUnaryOperator supplyInitialId)
     {
-        this.supplyStreamId = supplyStreamId;
+        this.supplyInitialId = supplyInitialId;
         return this;
     }
 
@@ -106,14 +105,6 @@ public final class ClientStreamFactoryBuilder implements StreamFactoryBuilder
     }
 
     @Override
-    public ClientStreamFactoryBuilder setTargetCorrelationIdSupplier(
-        LongSupplier supplyCorrelationId)
-    {
-        this.supplyCorrelationId = supplyCorrelationId;
-        return this;
-    }
-
-    @Override
     public StreamFactoryBuilder setBufferPoolSupplier(
         Supplier<BufferPool> supplyBufferPool)
     {
@@ -135,6 +126,6 @@ public final class ClientStreamFactoryBuilder implements StreamFactoryBuilder
         final BufferPool bufferPool = supplyBufferPool.get();
 
         return new ClientStreamFactory(config, router, writeBuffer, bufferPool,
-                supplyStreamId, supplyReplyId, supplyCorrelationId, correlations, supplyCounter, supplyTrace);
+                supplyInitialId, supplyReplyId, correlations, supplyCounter, supplyTrace);
     }
 }

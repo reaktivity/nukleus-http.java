@@ -292,8 +292,6 @@ public class HttpClientBM
         private SharedState sharedState;
         private BooleanSupplier measurementEnded;
 
-        private long nextCorrelationId;
-
         private final WindowFW windowRO = new WindowFW();
 
         private final BeginFW.Builder beginRW = new BeginFW.Builder();
@@ -344,7 +342,7 @@ public class HttpClientBM
         {
             streamId = sharedState.supplyStreamId().getAsLong();
             availableWindow = 0;
-            beginRW.streamId(streamId).correlationId(++nextCorrelationId);
+            beginRW.streamId(streamId);
             dataRW.streamId(streamId);
             endRW.streamId(streamId);
         }
@@ -524,9 +522,8 @@ public class HttpClientBM
             case BeginFW.TYPE_ID:
                 beginRO.wrap(buffer, index, index + length);
                 streamId = beginRO.streamId();
-                long correlationId = beginRO.correlationId();
                 doWindow(streamId, 8192);
-                writer.writeBegin(correlationId);
+                writer.writeBegin();
                 break;
             case DataFW.TYPE_ID:
                 dataRO.wrap(buffer, index, index + length);
@@ -602,11 +599,11 @@ public class HttpClientBM
                         .extension(e -> e.reset());
         }
 
-        boolean writeBegin(long correlationId)
+        boolean writeBegin()
         {
             streamId = supplyStreamId.getAsLong();
             availableWindow = 0;
-            beginRW.streamId(streamId).correlationId(correlationId);
+            beginRW.streamId(streamId);
             BeginFW begin = beginRW.build();
             boolean result = false;
             Writer clientConnectReplyStreams = sharedState.clientConnectReplyStreams;

@@ -72,7 +72,6 @@ final class ClientConnectReplyStream implements MessageConsumer
     private long acceptReplyId;
     private long traceId;
 
-    private long acceptCorrelationId;
     private int contentRemaining;
     private boolean isChunkedTransfer;
     private int chunkSizeRemaining;
@@ -298,17 +297,15 @@ final class ClientConnectReplyStream implements MessageConsumer
         BeginFW begin)
     {
         this.connectReplyId = begin.streamId();
-        long connectCorrelationId = begin.correlationId();
         traceId = begin.trace();
 
         @SuppressWarnings("unchecked")
         final Correlation<ClientConnectReplyState> correlation =
-                (Correlation<ClientConnectReplyState>) factory.correlations.get(connectCorrelationId);
+                (Correlation<ClientConnectReplyState>) factory.correlations.get(connectReplyId);
         if (correlation != null)
         {
             connection = correlation.state().connection;
             connectionPool = correlation.state().connectionPool;
-            connection.setInput(connectReplyThrottle, connectReplyId);
             httpResponseBegin();
         }
         else
@@ -350,7 +347,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         assert streamId == connectReplyId;
 
         if (responseState == ResponseState.BEFORE_HEADERS && acceptReply == null
-                && factory.correlations.get(connection.correlationId) == null)
+                && factory.correlations.get(connection.connectReplyId) == null)
         {
             responseState = ResponseState.FINAL;
         }
@@ -381,7 +378,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         assert streamId == connectReplyId;
 
         if (responseState == ResponseState.BEFORE_HEADERS && acceptReply == null
-                && factory.correlations.get(connection.correlationId) == null)
+                && factory.correlations.get(connection.connectReplyId) == null)
         {
             responseState = ResponseState.FINAL;
         }
@@ -588,7 +585,7 @@ final class ClientConnectReplyStream implements MessageConsumer
 
             final FrameFW frame = factory.frameRO.wrap(payload, offset, payload.capacity());
             factory.router.setThrottle(acceptReplyId, this::handleThrottle);
-            factory.writer.doHttpBegin(acceptReply, acceptRouteId, acceptReplyId, frame.trace(), acceptCorrelationId,
+            factory.writer.doHttpBegin(acceptReply, acceptRouteId, acceptReplyId, frame.trace(),
                     hs -> headers.forEach((k, v) -> hs.item(i -> i.name(k).value(v))));
 
             // count all responses
@@ -757,7 +754,6 @@ final class ClientConnectReplyStream implements MessageConsumer
             }
             else
             {
-                final int chunkHeaderLength = chunkHeaderLimit - offset;
                 contentRemaining += chunkSizeRemaining;
 
                 decoderState = this::decodeHttpChunkData;
@@ -901,10 +897,9 @@ final class ClientConnectReplyStream implements MessageConsumer
 
     private void resolveTarget()
     {
-        final Correlation<?> correlation = factory.correlations.remove(connection.correlationId);
+        final Correlation<?> correlation = factory.correlations.remove(connection.connectReplyId);
         this.acceptRouteId = correlation.routeId();
         this.acceptReplyId = correlation.replyId();
-        this.acceptCorrelationId = correlation.id();
         this.acceptReply = correlation.reply();
         this.acceptReplyBudget = 0;
     }

@@ -24,18 +24,15 @@ public class Correlation<S>
     private final MessageConsumer reply;
     private final long routeId;
     private final long replyId;
-    private final long id;
     private final S state;
 
     public Correlation(
         MessageConsumer reply,
-        long id,
         long routeId,
         long replyId,
         S state)
     {
         this.reply = reply;
-        this.id = id;
         this.routeId = routeId;
         this.replyId = replyId;
         this.state = state;
@@ -43,11 +40,10 @@ public class Correlation<S>
 
     public Correlation(
         MessageConsumer reply,
-        long id,
         long routeId,
         long sourceId)
     {
-        this(reply, id, routeId, sourceId, null);
+        this(reply, routeId, sourceId, null);
     }
 
     public MessageConsumer reply()
@@ -65,12 +61,6 @@ public class Correlation<S>
         return replyId;
     }
 
-    public long id()
-    {
-        return id;
-    }
-
-
     public S state()
     {
         return state;
@@ -79,7 +69,7 @@ public class Correlation<S>
     @Override
     public int hashCode()
     {
-        return Long.hashCode(id);
+        return Long.hashCode(replyId);
     }
 
     @Override
@@ -92,13 +82,13 @@ public class Correlation<S>
         }
 
         Correlation<?> that = (Correlation<?>) obj;
-        return this.id == that.id &&
+        return this.replyId == that.replyId &&
                 Objects.equals(this.state, that.state);
     }
 
     @Override
     public String toString()
     {
-        return String.format("[id=%s, state=%s]", id, state);
+        return String.format("[replyId=%s, state=%s]", replyId, state);
     }
 }
