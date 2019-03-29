@@ -322,7 +322,7 @@ public final class ServerConnectReplyStream implements MessageConsumer
                                                     acceptState.acceptReplyBudget,
                                                     payload.sizeof(),
                                                     acceptState.acceptReplyPadding);
-            assert acceptState.acceptReplyBudget < 0 : assertionErrorMessage;
+            assert acceptState.acceptReplyBudget >= 0 : assertionErrorMessage;
             factory.writer.doData(acceptState.acceptReply, acceptState.acceptRouteId, acceptState.replyStreamId, traceId,
                     acceptState.acceptReplyPadding, payload);
         }
