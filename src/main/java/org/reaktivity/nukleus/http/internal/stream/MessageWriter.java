@@ -57,14 +57,12 @@ final class MessageWriter
         MessageConsumer receiver,
         long routeId,
         long streamId,
-        long traceId,
-        long correlationId)
+        long traceId)
     {
         final BeginFW begin = beginRW.wrap(writeBuffer, 0, writeBuffer.capacity())
                 .routeId(routeId)
                 .streamId(streamId)
                 .trace(traceId)
-                .correlationId(correlationId)
                 .build();
 
         receiver.accept(begin.typeId(), begin.buffer(), begin.offset(), begin.sizeof());
@@ -147,14 +145,12 @@ final class MessageWriter
         long routeId,
         long streamId,
         long traceId,
-        long correlationId,
         Consumer<ListFW.Builder<HttpHeaderFW.Builder, HttpHeaderFW>> mutator)
     {
         final BeginFW begin = beginRW.wrap(writeBuffer, 0, writeBuffer.capacity())
                 .routeId(routeId)
                 .streamId(streamId)
                 .trace(traceId)
-                .correlationId(correlationId)
                 .extension(e -> e.set(visitHttpBeginEx(mutator)))
                 .build();
 

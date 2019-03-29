@@ -65,7 +65,6 @@ public final class ServerStreamFactory implements StreamFactory
     final RouteManager router;
     final LongUnaryOperator supplyInitialId;
     final LongUnaryOperator supplyReplyId;
-    final LongSupplier supplyCorrelationId;
     final LongSupplier supplyTrace;
     final BufferPool bufferPool;
 
@@ -78,7 +77,6 @@ public final class ServerStreamFactory implements StreamFactory
         BufferPool bufferPool,
         LongUnaryOperator supplyInitialId,
         LongUnaryOperator supplyReplyId,
-        LongSupplier supplyCorrelationId,
         Long2ObjectHashMap<Correlation<?>> correlations,
         LongSupplier supplyTrace)
     {
@@ -88,7 +86,6 @@ public final class ServerStreamFactory implements StreamFactory
         this.bufferPool = requireNonNull(bufferPool);
         this.supplyInitialId = requireNonNull(supplyInitialId);
         this.supplyReplyId = requireNonNull(supplyReplyId);
-        this.supplyCorrelationId = supplyCorrelationId;
         this.correlations = requireNonNull(correlations);
     }
 
@@ -132,12 +129,11 @@ public final class ServerStreamFactory implements StreamFactory
         if (route != null)
         {
             final long acceptRouteId = begin.routeId();
-            final long acceptId = begin.streamId();
+            final long acceptInitialId = begin.streamId();
             final long acceptTraceId = begin.trace();
-            final long acceptCorrelationId = begin.correlationId();
 
             newStream = new ServerAcceptStream(this, acceptReply,
-                    acceptRouteId, acceptId, acceptTraceId, acceptCorrelationId, authorization);
+                    acceptRouteId, acceptInitialId, acceptTraceId, authorization);
         }
 
         return newStream;
