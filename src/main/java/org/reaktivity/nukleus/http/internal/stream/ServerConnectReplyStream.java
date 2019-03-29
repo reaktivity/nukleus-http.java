@@ -15,6 +15,7 @@
  */
 package org.reaktivity.nukleus.http.internal.stream;
 
+import static java.lang.System.currentTimeMillis;
 import static java.nio.charset.StandardCharsets.US_ASCII;
 import static org.reaktivity.nukleus.buffer.BufferPool.NO_SLOT;
 import static org.reaktivity.nukleus.http.internal.util.HttpUtil.appendHeader;
@@ -92,8 +93,8 @@ public final class ServerConnectReplyStream implements MessageConsumer
     @Override
     public String toString()
     {
-        return String.format("%s[connectReplyId=%016x, window=%d, targetStream=%s]",
-                getClass().getSimpleName(), connectReplyId, acceptState);
+        return String.format("%s[connectReplyId=%016x, budget=%d, acceptState=%s]",
+                getClass().getSimpleName(), connectReplyId, connectReplyBudget, acceptState);
     }
 
     private void streamBeforeBegin(
@@ -315,7 +316,15 @@ public final class ServerConnectReplyStream implements MessageConsumer
         {
             final OctetsFW payload = data.payload();
             acceptState.acceptReplyBudget -= payload.sizeof() + acceptState.acceptReplyPadding;
-            assert acceptState.acceptReplyBudget >= 0;
+
+            if (acceptState.acceptReplyBudget < 0)
+            {
+                 String assertionErrorMessage = String.format("[%016x] %s, payload=%d",
+                                                        currentTimeMillis(),
+                                                        this,
+                                                        payload.sizeof());
+                throw new AssertionError(assertionErrorMessage);
+            }
             factory.writer.doData(acceptState.acceptReply, acceptState.acceptRouteId, acceptState.replyStreamId, traceId,
                     acceptState.acceptReplyPadding, payload);
         }
