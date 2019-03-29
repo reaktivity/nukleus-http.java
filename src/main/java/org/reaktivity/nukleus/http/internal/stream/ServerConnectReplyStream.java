@@ -316,15 +316,20 @@ public final class ServerConnectReplyStream implements MessageConsumer
         {
             final OctetsFW payload = data.payload();
             acceptState.acceptReplyBudget -= payload.sizeof() + acceptState.acceptReplyPadding;
-            String assertionErrorMessage = String.format("[%016x] %s acceptReplyBudget=%d, payload=%d, acceptReplyPadding=%d",
-                                                    currentTimeMillis(),
-                                                    this.toString(),
-                                                    acceptState.acceptReplyBudget,
-                                                    payload.sizeof(),
-                                                    acceptState.acceptReplyPadding);
-            assert acceptState.acceptReplyBudget >= 0 : assertionErrorMessage;
+
+            if (acceptState.acceptReplyBudget < 0)
+            {
+                 String assertionErrorMessage = String.format(
+                    "[%016x] %s acceptReplyBudget=%d, payload=%d, acceptReplyPadding=%d",
+                    currentTimeMillis(),
+                    this.toString(),
+                    acceptState.acceptReplyBudget,
+                    payload.sizeof(),
+                    acceptState.acceptReplyPadding);
+                throw new AssertionError(assertionErrorMessage);
+            }
             factory.writer.doData(acceptState.acceptReply, acceptState.acceptRouteId, acceptState.replyStreamId, traceId,
-                    acceptState.acceptReplyPadding, payload);
+                acceptState.acceptReplyPadding, payload);
         }
     }
 
