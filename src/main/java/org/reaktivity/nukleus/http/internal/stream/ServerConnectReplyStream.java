@@ -326,7 +326,7 @@ public final class ServerConnectReplyStream implements MessageConsumer
                 throw new AssertionError(assertionErrorMessage);
             }
             factory.writer.doData(acceptState.acceptReply, acceptState.acceptRouteId, acceptState.replyStreamId, traceId,
-                acceptState.acceptReplyPadding, payload);
+                    acceptState.acceptReplyPadding, payload);
         }
     }
 
