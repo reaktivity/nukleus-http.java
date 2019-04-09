@@ -163,26 +163,6 @@ public final class ServerConnectReplyStream implements MessageConsumer
         processUnexpected(buffer, index, length);
     }
 
-    private void streamAfterRejectOrReset(
-        int msgTypeId,
-        DirectBuffer buffer,
-        int index,
-        int length)
-    {
-        if (msgTypeId == DataFW.TYPE_ID)
-        {
-            DataFW data = factory.dataRO.wrap(buffer, index, index + length);
-            final long streamId = data.streamId();
-            connectReplyBudget += data.length();
-            factory.writer.doWindow(connectReplyThrottle, connectRouteId, streamId, factory.supplyTrace.getAsLong(),
-                    data.length() + data.padding(), 0);
-        }
-        else if (msgTypeId == EndFW.TYPE_ID)
-        {
-            this.streamState = this::streamAfterEnd;
-        }
-    }
-
     private void processAbort(
         DirectBuffer buffer,
         int index,
@@ -195,7 +175,7 @@ public final class ServerConnectReplyStream implements MessageConsumer
     {
         factory.writer.doReset(connectReplyThrottle, connectRouteId, connectReplyId, factory.supplyTrace.getAsLong());
         acceptState.doAbort(factory.writer, 0);
-        this.streamState = this::streamAfterRejectOrReset;
+        this.streamState = null;
         releaseSlotIfNecessary();
     }
 
@@ -262,7 +242,7 @@ public final class ServerConnectReplyStream implements MessageConsumer
             if (slotIndex == NO_SLOT)
             {
                 factory.writer.doReset(connectReplyThrottle, connectRouteId, connectReplyId, factory.supplyTrace.getAsLong());
-                this.streamState = this::streamAfterRejectOrReset;
+                this.streamState = null;
             }
             else
             {
@@ -367,7 +347,7 @@ public final class ServerConnectReplyStream implements MessageConsumer
 
         factory.writer.doReset(connectReplyThrottle, routeId, streamId, factory.supplyTrace.getAsLong());
 
-        this.streamState = this::streamAfterRejectOrReset;
+        this.streamState = null;
     }
 
     private void throttleBeforeBegin(
