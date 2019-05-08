@@ -26,7 +26,7 @@ import org.junit.rules.TestRule;
 import org.junit.rules.Timeout;
 import org.kaazing.k3po.junit.annotation.Specification;
 import org.kaazing.k3po.junit.rules.K3poRule;
-import org.reaktivity.reaktor.internal.ReaktorConfiguration;
+import org.reaktivity.reaktor.ReaktorConfiguration;
 import org.reaktivity.reaktor.test.ReaktorRule;
 import org.reaktivity.reaktor.test.annotation.Configure;
 
@@ -44,7 +44,7 @@ public class FlowControlLimitsIT
         .directory("target/nukleus-itests")
         .commandBufferCapacity(1024)
         .responseBufferCapacity(1024)
-        .counterValuesBufferCapacity(4096)
+        .counterValuesBufferCapacity(8192)
         // Maximum headers size is limited to the size of each slot in the buffer pool:
         .configure(ReaktorConfiguration.REAKTOR_BUFFER_SLOT_CAPACITY, 64)
         // Overall buffer pool size:
