@@ -23,8 +23,8 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.agrona.BitUtil.SIZE_OF_INT;
 import static org.agrona.BitUtil.SIZE_OF_LONG;
 import static org.agrona.IoUtil.ensureDirectoryExists;
-import static org.reaktivity.reaktor.internal.ReaktorConfiguration.REAKTOR_DIRECTORY;
-import static org.reaktivity.reaktor.internal.ReaktorConfiguration.REAKTOR_STREAMS_BUFFER_CAPACITY;
+import static org.reaktivity.reaktor.ReaktorConfiguration.REAKTOR_DIRECTORY;
+import static org.reaktivity.reaktor.ReaktorConfiguration.REAKTOR_STREAMS_BUFFER_CAPACITY;
 
 import java.io.File;
 import java.io.IOException;
