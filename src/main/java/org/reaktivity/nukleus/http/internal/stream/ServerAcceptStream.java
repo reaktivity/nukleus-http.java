@@ -1062,7 +1062,7 @@ final class ServerAcceptStream implements MessageConsumer
 
             if (headersMatch[0])
             {
-                String requestValue = requestHeaders.get(name);
+                String requestValue = requestHeaders.get(name).toLowerCase();
                 if (name.equals(":scheme"))
                 {
                     // skip as request headers don't contain :scheme
@@ -1073,7 +1073,7 @@ final class ServerAcceptStream implements MessageConsumer
                 }
                 else
                 {
-                    headersMatch[0] = Objects.equals(routeValue.toLowerCase(), requestValue.toLowerCase());
+                    headersMatch[0] = Objects.equals(routeValue, requestValue);
                 }
             }
         });
