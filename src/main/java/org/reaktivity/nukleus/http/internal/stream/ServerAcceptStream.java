@@ -1073,7 +1073,7 @@ final class ServerAcceptStream implements MessageConsumer
                 }
                 else
                 {
-                    headersMatch[0] = Objects.equals(routeValue, requestValue);
+                    headersMatch[0] = Objects.equals(routeValue.toLowerCase(), requestValue.toLowerCase());
                 }
             }
         });
