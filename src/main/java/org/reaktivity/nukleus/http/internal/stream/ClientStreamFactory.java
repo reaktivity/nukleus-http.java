@@ -24,6 +24,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.Function;
+import java.util.function.LongConsumer;
 import java.util.function.LongSupplier;
 import java.util.function.LongUnaryOperator;
 
@@ -101,6 +102,7 @@ public final class ClientStreamFactory implements StreamFactory
     final LongSupplier countRequestsAbandoned;
     final LongSupplier countResponses;
     final LongSupplier countResponsesAbandoned;
+    public final LongConsumer connectionInUse;
 
     public ClientStreamFactory(
         HttpConfiguration configuration,
@@ -111,7 +113,8 @@ public final class ClientStreamFactory implements StreamFactory
         LongUnaryOperator supplyReplyId,
         Long2ObjectHashMap<Correlation<?>> correlations,
         Function<String, LongSupplier> supplyCounter,
-        LongSupplier supplyTrace)
+        LongSupplier supplyTrace,
+        Function<String, LongConsumer> supplyAccumulator)
     {
         this.supplyTrace = requireNonNull(supplyTrace);
         this.router = requireNonNull(router);
@@ -132,6 +135,7 @@ public final class ClientStreamFactory implements StreamFactory
         this.countResponsesAbandoned = supplyCounter.apply("http.responses.abandoned");
         this.enqueues = supplyCounter.apply("http.enqueues");
         this.dequeues = supplyCounter.apply("http.dequeues");
+        this.connectionInUse = supplyAccumulator.apply("http.connections.in.use");
     }
 
     @Override
