@@ -102,7 +102,7 @@ public final class ClientStreamFactory implements StreamFactory
     final LongSupplier countRequestsAbandoned;
     final LongSupplier countResponses;
     final LongSupplier countResponsesAbandoned;
-    public final LongConsumer connectionInUse;
+    final LongConsumer connectionInUse;
 
     public ClientStreamFactory(
         HttpConfiguration configuration,
