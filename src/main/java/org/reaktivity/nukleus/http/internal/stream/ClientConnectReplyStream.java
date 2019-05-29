@@ -70,7 +70,7 @@ final class ClientConnectReplyStream implements MessageConsumer
     private MessageConsumer acceptReply;
     private long acceptRouteId;
     private long acceptReplyId;
-    private long acceptReplyTraceId;
+    private long traceId;
 
     private int contentRemaining;
     private boolean isChunkedTransfer;
@@ -297,7 +297,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         BeginFW begin)
     {
         this.connectReplyId = begin.streamId();
-        acceptReplyTraceId = begin.trace();
+        traceId = begin.trace();
 
         @SuppressWarnings("unchecked")
         final Correlation<ClientConnectReplyState> correlation =
@@ -310,19 +310,19 @@ final class ClientConnectReplyStream implements MessageConsumer
         }
         else
         {
-            handleUnexpected(connectReplyId, acceptReplyTraceId);
+            handleUnexpected(connectReplyId, traceId);
         }
     }
 
     private void handleDataWhenNotBuffering(
         DataFW data)
     {
-        acceptReplyTraceId = data.trace();
+        traceId = data.trace();
         connectReplyBudget -= data.length() + data.padding();
 
         if (connectReplyBudget < 0)
         {
-            handleUnexpected(data.streamId(), acceptReplyTraceId);
+            handleUnexpected(data.streamId(), traceId);
         }
         else
         {
@@ -438,12 +438,12 @@ final class ClientConnectReplyStream implements MessageConsumer
     private void handleDataWhenBuffering(
         DataFW data)
     {
-        acceptReplyTraceId = data.trace();
+        traceId = data.trace();
         connectReplyBudget -= data.length() + data.padding();
 
         if (connectReplyBudget < 0)
         {
-            handleUnexpected(data.streamId(), acceptReplyTraceId);
+            handleUnexpected(data.streamId(), traceId);
         }
         else
         {
@@ -583,8 +583,9 @@ final class ClientConnectReplyStream implements MessageConsumer
 
             resolveTarget();
 
+            final FrameFW frame = factory.frameRO.wrap(payload, offset, payload.capacity());
             factory.router.setThrottle(acceptReplyId, this::handleThrottle);
-            factory.writer.doHttpBegin(acceptReply, acceptRouteId, acceptReplyId, acceptReplyTraceId,
+            factory.writer.doHttpBegin(acceptReply, acceptRouteId, acceptReplyId, frame.trace(),
                 hs -> headers.forEach((k, v) -> hs.item(i -> i.name(k).value(v))));
 
             // count all responses
@@ -705,7 +706,7 @@ final class ClientConnectReplyStream implements MessageConsumer
 
         if (writableBytes > 0)
         {
-            factory.writer.doHttpData(acceptReply, acceptRouteId, acceptReplyId, acceptReplyTraceId, acceptReplyPadding, payload,
+            factory.writer.doHttpData(acceptReply, acceptRouteId, acceptReplyId, traceId, acceptReplyPadding, payload,
                 offset, writableBytes);
             acceptReplyBudget -= writableBytes + acceptReplyPadding;
             contentRemaining -= writableBytes;
@@ -800,7 +801,7 @@ final class ClientConnectReplyStream implements MessageConsumer
 
         if (writableBytes > 0)
         {
-            factory.writer.doHttpData(acceptReply, acceptRouteId, acceptReplyId, acceptReplyTraceId, acceptReplyPadding,
+            factory.writer.doHttpData(acceptReply, acceptRouteId, acceptReplyId, traceId, acceptReplyPadding,
                 payload, offset, writableBytes);
             acceptReplyBudget -= writableBytes + acceptReplyPadding;
             chunkSizeRemaining -= writableBytes;
@@ -826,7 +827,7 @@ final class ClientConnectReplyStream implements MessageConsumer
 
         if (writableBytes > 0)
         {
-            factory.writer.doData(acceptReply, acceptRouteId, acceptReplyId, acceptReplyTraceId, acceptReplyPadding,
+            factory.writer.doData(acceptReply, acceptRouteId, acceptReplyId, traceId, acceptReplyPadding,
                 payload, offset, writableBytes);
             acceptReplyBudget -= writableBytes + acceptReplyPadding;
         }
@@ -851,7 +852,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         int limit)
     {
         // TODO: consider chunks, trailers
-        factory.writer.doHttpEnd(acceptReply, acceptRouteId, acceptReplyId, acceptReplyTraceId);
+        factory.writer.doHttpEnd(acceptReply, acceptRouteId, acceptReplyId, traceId);
         connectionPool.release(connection, CloseAction.END);
         return limit;
     }
