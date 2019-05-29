@@ -88,7 +88,7 @@ final class ClientConnectReplyStream implements MessageConsumer
     public String toString()
     {
         return String.format("%s[connectReplyId=%016x, sourceBudget=%d, targetId=%016x]",
-            getClass().getSimpleName(), connectReplyId, connectReplyBudget, acceptReplyId);
+                getClass().getSimpleName(), connectReplyId, connectReplyBudget, acceptReplyId);
     }
 
     ClientConnectReplyStream(
@@ -137,20 +137,20 @@ final class ClientConnectReplyStream implements MessageConsumer
     {
         switch (msgTypeId)
         {
-            case DataFW.TYPE_ID:
-                final DataFW data = this.factory.dataRO.wrap(buffer, index, index + length);
-                handleDataWhenBuffering(data);
-                break;
-            case EndFW.TYPE_ID:
-                handleEndWhenBuffering(buffer, index, length);
-                break;
-            case AbortFW.TYPE_ID:
-                final AbortFW abort = this.factory.abortRO.wrap(buffer, index, index + length);
-                handleAbort(abort);
-                break;
-            default:
-                handleUnexpected(buffer, index, length);
-                break;
+        case DataFW.TYPE_ID:
+            final DataFW data = this.factory.dataRO.wrap(buffer, index, index + length);
+            handleDataWhenBuffering(data);
+            break;
+        case EndFW.TYPE_ID:
+            handleEndWhenBuffering(buffer, index, length);
+            break;
+        case AbortFW.TYPE_ID:
+            final AbortFW abort = this.factory.abortRO.wrap(buffer, index, index + length);
+            handleAbort(abort);
+            break;
+        default:
+            handleUnexpected(buffer, index, length);
+            break;
         }
     }
 
@@ -162,21 +162,21 @@ final class ClientConnectReplyStream implements MessageConsumer
     {
         switch (msgTypeId)
         {
-            case DataFW.TYPE_ID:
-                final DataFW data = this.factory.dataRO.wrap(buffer, index, index + length);
-                handleDataWhenNotBuffering(data);
-                break;
-            case EndFW.TYPE_ID:
-                final EndFW end = this.factory.endRO.wrap(buffer, index, index + length);
-                handleEnd(end);
-                break;
-            case AbortFW.TYPE_ID:
-                final AbortFW abort = this.factory.abortRO.wrap(buffer, index, index + length);
-                handleAbort(abort);
-                break;
-            default:
-                handleUnexpected(buffer, index, length);
-                break;
+        case DataFW.TYPE_ID:
+            final DataFW data = this.factory.dataRO.wrap(buffer, index, index + length);
+            handleDataWhenNotBuffering(data);
+            break;
+        case EndFW.TYPE_ID:
+            final EndFW end = this.factory.endRO.wrap(buffer, index, index + length);
+            handleEnd(end);
+            break;
+        case AbortFW.TYPE_ID:
+            final AbortFW abort = this.factory.abortRO.wrap(buffer, index, index + length);
+            handleAbort(abort);
+            break;
+        default:
+            handleUnexpected(buffer, index, length);
+            break;
         }
     }
 
@@ -188,17 +188,17 @@ final class ClientConnectReplyStream implements MessageConsumer
     {
         switch (msgTypeId)
         {
-            case EndFW.TYPE_ID:
-                final EndFW end = this.factory.endRO.wrap(buffer, index, index + length);
-                handleEnd(end);
-                break;
-            case AbortFW.TYPE_ID:
-                final AbortFW abort = this.factory.abortRO.wrap(buffer, index, index + length);
-                handleAbort(abort);
-                break;
-            default:
-                handleUnexpected(buffer, index, length);
-                break;
+        case EndFW.TYPE_ID:
+            final EndFW end = this.factory.endRO.wrap(buffer, index, index + length);
+            handleEnd(end);
+            break;
+        case AbortFW.TYPE_ID:
+            final AbortFW abort = this.factory.abortRO.wrap(buffer, index, index + length);
+            handleAbort(abort);
+            break;
+        default:
+            handleUnexpected(buffer, index, length);
+            break;
         }
     }
 
@@ -219,20 +219,20 @@ final class ClientConnectReplyStream implements MessageConsumer
     {
         switch (msgTypeId)
         {
-            case DataFW.TYPE_ID:
-                final DataFW data = this.factory.dataRO.wrap(buffer, index, index + length);
-                factory.writer.doWindow(connectReplyThrottle, connectRouteId, data.streamId(), 0, data.length(), 0);
-                break;
-            case EndFW.TYPE_ID:
-                this.factory.endRO.wrap(buffer, index, index + length);
-                this.streamState = this::handleStreamAfterEnd;
-                break;
-            case AbortFW.TYPE_ID:
-                this.factory.abortRO.wrap(buffer, index, index + length);
-                this.streamState = this::handleStreamAfterEnd;
-                break;
-            default:
-                break;
+        case DataFW.TYPE_ID:
+            final DataFW data = this.factory.dataRO.wrap(buffer, index, index + length);
+            factory.writer.doWindow(connectReplyThrottle, connectRouteId, data.streamId(), 0, data.length(), 0);
+            break;
+        case EndFW.TYPE_ID:
+            this.factory.endRO.wrap(buffer, index, index + length);
+            this.streamState = this::handleStreamAfterEnd;
+            break;
+        case AbortFW.TYPE_ID:
+            this.factory.abortRO.wrap(buffer, index, index + length);
+            this.streamState = this::handleStreamAfterEnd;
+            break;
+        default:
+            break;
         }
     }
 
@@ -269,7 +269,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         // Drain data from source before resetting to allow its writes to complete
         int window = factory.maximumHeadersSize;
         factory.writer.doWindow(connectReplyThrottle, connectRouteId, connectReplyId, factory.supplyTrace.getAsLong(),
-            window, 0);
+                window, 0);
         factory.writer.doReset(connectReplyThrottle, connectRouteId, connectReplyId, factory.supplyTrace.getAsLong());
 
         connection.persistent = false;
@@ -301,7 +301,7 @@ final class ClientConnectReplyStream implements MessageConsumer
 
         @SuppressWarnings("unchecked")
         final Correlation<ClientConnectReplyState> correlation =
-            (Correlation<ClientConnectReplyState>) factory.correlations.get(connectReplyId);
+                (Correlation<ClientConnectReplyState>) factory.correlations.get(connectReplyId);
         if (correlation != null)
         {
             connection = correlation.state().connection;
@@ -347,7 +347,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         assert streamId == connectReplyId;
 
         if (responseState == ResponseState.BEFORE_HEADERS && acceptReply == null
-            && factory.correlations.get(connection.connectReplyId) == null)
+                && factory.correlations.get(connection.connectReplyId) == null)
         {
             responseState = ResponseState.FINAL;
         }
@@ -359,15 +359,15 @@ final class ClientConnectReplyStream implements MessageConsumer
 
         switch (responseState)
         {
-            case BEFORE_HEADERS:
-            case HEADERS:
-            case DATA:
-                // Incomplete response
-                handleInvalidResponse(CloseAction.END, end.trace());
-                break;
-            case FINAL:
-                connection.persistent = false;
-                doCleanup(CloseAction.END);
+        case BEFORE_HEADERS:
+        case HEADERS:
+        case DATA:
+            // Incomplete response
+            handleInvalidResponse(CloseAction.END, end.trace());
+            break;
+        case FINAL:
+            connection.persistent = false;
+            doCleanup(CloseAction.END);
         }
     }
 
@@ -378,7 +378,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         assert streamId == connectReplyId;
 
         if (responseState == ResponseState.BEFORE_HEADERS && acceptReply == null
-            && factory.correlations.get(connection.connectReplyId) == null)
+                && factory.correlations.get(connection.connectReplyId) == null)
         {
             responseState = ResponseState.FINAL;
         }
@@ -390,15 +390,15 @@ final class ClientConnectReplyStream implements MessageConsumer
 
         switch (responseState)
         {
-            case BEFORE_HEADERS:
-            case HEADERS:
-            case DATA:
-                // Incomplete response
-                handleInvalidResponse(CloseAction.ABORT, abort.trace());
-                break;
-            case FINAL:
-                connection.persistent = false;
-                doCleanup(CloseAction.ABORT);
+        case BEFORE_HEADERS:
+        case HEADERS:
+        case DATA:
+            // Incomplete response
+            handleInvalidResponse(CloseAction.ABORT, abort.trace());
+            break;
+        case FINAL:
+            connection.persistent = false;
+            doCleanup(CloseAction.ABORT);
         }
     }
 
@@ -500,13 +500,13 @@ final class ClientConnectReplyStream implements MessageConsumer
 
         switch (responseState)
         {
-            case BEFORE_HEADERS:
-            case DATA:
-                // Waiting for window to finish writing response to application
-                endDeferred = true;
-                break;
-            default:
-                handleEnd(this.factory.endRO);
+        case BEFORE_HEADERS:
+        case DATA:
+            // Waiting for window to finish writing response to application
+            endDeferred = true;
+            break;
+        default:
+            handleEnd(this.factory.endRO);
         }
     }
 
@@ -586,7 +586,7 @@ final class ClientConnectReplyStream implements MessageConsumer
             final FrameFW frame = factory.frameRO.wrap(payload, offset, payload.capacity());
             factory.router.setThrottle(acceptReplyId, this::handleThrottle);
             factory.writer.doHttpBegin(acceptReply, acceptRouteId, acceptReplyId, frame.trace(),
-                hs -> headers.forEach((k, v) -> hs.item(i -> i.name(k).value(v))));
+                    hs -> headers.forEach((k, v) -> hs.item(i -> i.name(k).value(v))));
 
             // count all responses
             factory.countResponses.getAsLong();
@@ -707,7 +707,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         if (writableBytes > 0)
         {
             factory.writer.doHttpData(acceptReply, acceptRouteId, acceptReplyId, traceId, acceptReplyPadding, payload,
-                offset, writableBytes);
+                    offset, writableBytes);
             acceptReplyBudget -= writableBytes + acceptReplyPadding;
             contentRemaining -= writableBytes;
         }
@@ -802,7 +802,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         if (writableBytes > 0)
         {
             factory.writer.doHttpData(acceptReply, acceptRouteId, acceptReplyId, traceId, acceptReplyPadding,
-                payload, offset, writableBytes);
+                                      payload, offset, writableBytes);
             acceptReplyBudget -= writableBytes + acceptReplyPadding;
             chunkSizeRemaining -= writableBytes;
             contentRemaining -= writableBytes;
@@ -817,9 +817,9 @@ final class ClientConnectReplyStream implements MessageConsumer
     }
 
     private int decodeHttpDataAfterUpgrade(
-        final DirectBuffer payload,
-        final int offset,
-        final int limit)
+            final DirectBuffer payload,
+            final int offset,
+            final int limit)
     {
         final int length = limit - offset;
 
@@ -828,7 +828,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         if (writableBytes > 0)
         {
             factory.writer.doData(acceptReply, acceptRouteId, acceptReplyId, traceId, acceptReplyPadding,
-                payload, offset, writableBytes);
+                    payload, offset, writableBytes);
             acceptReplyBudget -= writableBytes + acceptReplyPadding;
         }
 
@@ -841,7 +841,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         final int limit)
     {
         factory.writer.doWindow(connectReplyThrottle, connectRouteId, connectReplyId, factory.supplyTrace.getAsLong(),
-            limit - offset, 0);
+                limit - offset, 0);
         return limit;
     };
 
@@ -870,7 +870,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         {
             this.connectReplyBudget += connectReplyCredit;
             factory.writer.doWindow(connectReplyThrottle, connectRouteId, connectReplyId, factory.supplyTrace.getAsLong(),
-                connectReplyCredit, 0);
+                    connectReplyCredit, 0);
         }
 
         // TODO: Support HTTP/1.1 Pipelined Responses (may be buffered already)
@@ -921,13 +921,13 @@ final class ClientConnectReplyStream implements MessageConsumer
     {
         switch (msgTypeId)
         {
-            case ResetFW.TYPE_ID:
-                final ResetFW reset = this.factory.resetRO.wrap(buffer, index, index + length);
-                handleReset(reset);
-                break;
-            default:
-                // ignore
-                break;
+        case ResetFW.TYPE_ID:
+            final ResetFW reset = this.factory.resetRO.wrap(buffer, index, index + length);
+            handleReset(reset);
+            break;
+        default:
+            // ignore
+            break;
         }
     }
 
@@ -939,17 +939,17 @@ final class ClientConnectReplyStream implements MessageConsumer
     {
         switch (msgTypeId)
         {
-            case WindowFW.TYPE_ID:
-                final WindowFW window = this.factory.windowRO.wrap(buffer, index, index + length);
-                windowHandler.accept(window);
-                break;
-            case ResetFW.TYPE_ID:
-                final ResetFW reset = this.factory.resetRO.wrap(buffer, index, index + length);
-                handleReset(reset);
-                break;
-            default:
-                // ignore
-                break;
+        case WindowFW.TYPE_ID:
+            final WindowFW window = this.factory.windowRO.wrap(buffer, index, index + length);
+            windowHandler.accept(window);
+            break;
+        case ResetFW.TYPE_ID:
+            final ResetFW reset = this.factory.resetRO.wrap(buffer, index, index + length);
+            handleReset(reset);
+            break;
+        default:
+            // ignore
+            break;
         }
     }
 
@@ -966,14 +966,14 @@ final class ClientConnectReplyStream implements MessageConsumer
 
         int slotRemaining = slotPosition - slotOffset;
         final int connectReplyCredit = Math.min(acceptReplyBudget, factory.bufferPool.slotCapacity())
-            - connectReplyBudget - slotRemaining;
+                - connectReplyBudget - slotRemaining;
         if (connectReplyCredit > 0)
         {
             connectReplyBudget += connectReplyCredit;
             int connectReplyPadding = acceptReplyPadding;
             final long connectReplyTraceId = window.trace();
             factory.writer.doWindow(connectReplyThrottle, connectRouteId, connectReplyId,
-                connectReplyTraceId, connectReplyCredit, connectReplyPadding);
+                    connectReplyTraceId, connectReplyCredit, connectReplyPadding);
         }
     }
 
