@@ -70,7 +70,7 @@ final class ClientConnectReplyStream implements MessageConsumer
     private MessageConsumer acceptReply;
     private long acceptRouteId;
     private long acceptReplyId;
-    private long traceId;
+    private long acceptReplyTraceId;
 
     private int contentRemaining;
     private boolean isChunkedTransfer;
@@ -87,8 +87,10 @@ final class ClientConnectReplyStream implements MessageConsumer
     @Override
     public String toString()
     {
-        return String.format("%s[connectReplyId=%016x, sourceBudget=%d, targetId=%016x]",
-                getClass().getSimpleName(), connectReplyId, connectReplyBudget, acceptReplyId);
+        return String.format("%s[connectReplyId=%016x, sourceBudget=%d, targetId=%016x, acceptReplyBudget=%d," +
+                " acceptReplyPadding=%d]",
+                getClass().getSimpleName(), connectReplyId, connectReplyBudget, acceptReplyId, acceptReplyBudget,
+                acceptReplyPadding);
     }
 
     ClientConnectReplyStream(
@@ -109,6 +111,10 @@ final class ClientConnectReplyStream implements MessageConsumer
     @Override
     public void accept(int msgTypeId, DirectBuffer buffer, int index, int length)
     {
+        if (msgTypeId == 0x00000003 && connectRouteId == 28429411002876014L)
+        {
+            System.out.printf("EndFrame got called \n");
+        }
         streamState.accept(msgTypeId, buffer, index, length);
     }
 
@@ -243,7 +249,6 @@ final class ClientConnectReplyStream implements MessageConsumer
     {
         FrameFW frame = this.factory.frameRO.wrap(buffer, index, index + length);
         long streamId = frame.streamId();
-
         handleUnexpected(streamId, frame.trace());
     }
 
@@ -297,7 +302,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         BeginFW begin)
     {
         this.connectReplyId = begin.streamId();
-        traceId = begin.trace();
+        acceptReplyTraceId = begin.trace();
 
         @SuppressWarnings("unchecked")
         final Correlation<ClientConnectReplyState> correlation =
@@ -310,19 +315,19 @@ final class ClientConnectReplyStream implements MessageConsumer
         }
         else
         {
-            handleUnexpected(connectReplyId, traceId);
+            handleUnexpected(connectReplyId, acceptReplyTraceId);
         }
     }
 
     private void handleDataWhenNotBuffering(
         DataFW data)
     {
-        traceId = data.trace();
+        acceptReplyTraceId = data.trace();
         connectReplyBudget -= data.length() + data.padding();
 
         if (connectReplyBudget < 0)
         {
-            handleUnexpected(data.streamId(), traceId);
+            handleUnexpected(data.streamId(), acceptReplyTraceId);
         }
         else
         {
@@ -343,6 +348,11 @@ final class ClientConnectReplyStream implements MessageConsumer
     private void handleEnd(
         EndFW end)
     {
+        if (connectRouteId == 28429411002876014L)
+        {
+            System.out.printf("handleEnd is called \n");
+        }
+
         final long streamId = end.streamId();
         assert streamId == connectReplyId;
 
@@ -438,12 +448,12 @@ final class ClientConnectReplyStream implements MessageConsumer
     private void handleDataWhenBuffering(
         DataFW data)
     {
-        traceId = data.trace();
+        acceptReplyTraceId = data.trace();
         connectReplyBudget -= data.length() + data.padding();
 
         if (connectReplyBudget < 0)
         {
-            handleUnexpected(data.streamId(), traceId);
+            handleUnexpected(data.streamId(), acceptReplyTraceId);
         }
         else
         {
@@ -472,6 +482,11 @@ final class ClientConnectReplyStream implements MessageConsumer
     {
         MutableDirectBuffer slot = factory.bufferPool.buffer(slotIndex);
         slotOffset = decode(slot, slotOffset, slotPosition);
+        if(connectRouteId == 28429411002876014L)
+        {
+            System.out.printf("%s slotIndex = %d, slotOffset = %d, slotPosition = %d \n", this.toString(),
+                slotIndex, slotOffset, slotPosition);
+        }
         if (slotOffset == slotPosition)
         {
             releaseSlotIfNecessary();
@@ -502,6 +517,11 @@ final class ClientConnectReplyStream implements MessageConsumer
         {
         case BEFORE_HEADERS:
         case DATA:
+            if(connectRouteId == 28429411002876014L)
+            {
+                System.out.printf("%s endDeferred = true slotIndex = %d, slotOffset = %d, slotPosition = %d \n",
+                   this.toString(), slotIndex, slotOffset, slotPosition);
+            }
             // Waiting for window to finish writing response to application
             endDeferred = true;
             break;
@@ -583,9 +603,8 @@ final class ClientConnectReplyStream implements MessageConsumer
 
             resolveTarget();
 
-            final FrameFW frame = factory.frameRO.wrap(payload, offset, payload.capacity());
             factory.router.setThrottle(acceptReplyId, this::handleThrottle);
-            factory.writer.doHttpBegin(acceptReply, acceptRouteId, acceptReplyId, frame.trace(),
+            factory.writer.doHttpBegin(acceptReply, acceptRouteId, acceptReplyId, acceptReplyTraceId,
                     hs -> headers.forEach((k, v) -> hs.item(i -> i.name(k).value(v))));
 
             // count all responses
@@ -706,7 +725,7 @@ final class ClientConnectReplyStream implements MessageConsumer
 
         if (writableBytes > 0)
         {
-            factory.writer.doHttpData(acceptReply, acceptRouteId, acceptReplyId, traceId, acceptReplyPadding, payload,
+            factory.writer.doHttpData(acceptReply, acceptRouteId, acceptReplyId, acceptReplyTraceId, acceptReplyPadding, payload,
                     offset, writableBytes);
             acceptReplyBudget -= writableBytes + acceptReplyPadding;
             contentRemaining -= writableBytes;
@@ -801,7 +820,7 @@ final class ClientConnectReplyStream implements MessageConsumer
 
         if (writableBytes > 0)
         {
-            factory.writer.doHttpData(acceptReply, acceptRouteId, acceptReplyId, traceId, acceptReplyPadding,
+            factory.writer.doHttpData(acceptReply, acceptRouteId, acceptReplyId, acceptReplyTraceId, acceptReplyPadding,
                                       payload, offset, writableBytes);
             acceptReplyBudget -= writableBytes + acceptReplyPadding;
             chunkSizeRemaining -= writableBytes;
@@ -827,7 +846,7 @@ final class ClientConnectReplyStream implements MessageConsumer
 
         if (writableBytes > 0)
         {
-            factory.writer.doData(acceptReply, acceptRouteId, acceptReplyId, traceId, acceptReplyPadding,
+            factory.writer.doData(acceptReply, acceptRouteId, acceptReplyId, acceptReplyTraceId, acceptReplyPadding,
                     payload, offset, writableBytes);
             acceptReplyBudget -= writableBytes + acceptReplyPadding;
         }
@@ -852,7 +871,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         int limit)
     {
         // TODO: consider chunks, trailers
-        factory.writer.doHttpEnd(acceptReply, acceptRouteId, acceptReplyId, traceId);
+        factory.writer.doHttpEnd(acceptReply, acceptRouteId, acceptReplyId, acceptReplyTraceId);
         connectionPool.release(connection, CloseAction.END);
         return limit;
     }

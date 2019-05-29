@@ -115,7 +115,10 @@ final class ConnectionPool
         factory.writer.doBegin(connectInitial, connectRouteId, connectInitialId, factory.supplyTraceId);
         factory.router.setThrottle(connectInitialId, connection::handleThrottleDefault);
         connectionsInUse++;
-        factory.connectionInUse.accept(1);
+        if (connectRouteId == 28429411002876014L)
+        {
+            factory.connectionInUse.accept(1);
+        }
         return connection;
     }
 
@@ -159,7 +162,10 @@ final class ConnectionPool
             {
                 connection.released = true;
                 connectionsInUse--;
-                factory.connectionInUse.accept(-1);
+                if (connectRouteId == 28429411002876014L)
+                {
+                    factory.connectionInUse.accept(-1);
+                }
                 assert connectionsInUse >= 0;
             }
 
