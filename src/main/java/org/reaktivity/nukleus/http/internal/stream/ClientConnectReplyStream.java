@@ -87,10 +87,8 @@ final class ClientConnectReplyStream implements MessageConsumer
     @Override
     public String toString()
     {
-        return String.format("%s[connectReplyId=%016x, sourceBudget=%d, targetId=%016x, acceptReplyBudget=%d," +
-                " acceptReplyPadding=%d]",
-            getClass().getSimpleName(), connectReplyId, connectReplyBudget, acceptReplyId, acceptReplyBudget,
-            acceptReplyPadding);
+        return String.format("%s[connectReplyId=%016x, sourceBudget=%d, targetId=%016x]",
+            getClass().getSimpleName(), connectReplyId, connectReplyBudget, acceptReplyId);
     }
 
     ClientConnectReplyStream(
@@ -111,10 +109,6 @@ final class ClientConnectReplyStream implements MessageConsumer
     @Override
     public void accept(int msgTypeId, DirectBuffer buffer, int index, int length)
     {
-        if (msgTypeId == 0x00000003 && connectRouteId == 28429411002876014L)
-        {
-            System.out.printf("EndFrame got called \n");
-        }
         streamState.accept(msgTypeId, buffer, index, length);
     }
 
@@ -249,6 +243,7 @@ final class ClientConnectReplyStream implements MessageConsumer
     {
         FrameFW frame = this.factory.frameRO.wrap(buffer, index, index + length);
         long streamId = frame.streamId();
+
         handleUnexpected(streamId, frame.trace());
     }
 
@@ -348,11 +343,6 @@ final class ClientConnectReplyStream implements MessageConsumer
     private void handleEnd(
         EndFW end)
     {
-        if (connectRouteId == 28429411002876014L)
-        {
-            System.out.printf("handleEnd is called \n");
-        }
-
         final long streamId = end.streamId();
         assert streamId == connectReplyId;
 
@@ -482,11 +472,6 @@ final class ClientConnectReplyStream implements MessageConsumer
     {
         MutableDirectBuffer slot = factory.bufferPool.buffer(slotIndex);
         slotOffset = decode(slot, slotOffset, slotPosition);
-        if(connectRouteId == 28429411002876014L)
-        {
-            System.out.printf("%s slotIndex = %d, slotOffset = %d, slotPosition = %d \n", this.toString(),
-                slotIndex, slotOffset, slotPosition);
-        }
         if (slotOffset == slotPosition)
         {
             releaseSlotIfNecessary();
@@ -517,11 +502,6 @@ final class ClientConnectReplyStream implements MessageConsumer
         {
             case BEFORE_HEADERS:
             case DATA:
-                if(connectRouteId == 28429411002876014L)
-                {
-                    System.out.printf("%s endDeferred = true slotIndex = %d, slotOffset = %d, slotPosition = %d \n",
-                        this.toString(), slotIndex, slotOffset, slotPosition);
-                }
                 // Waiting for window to finish writing response to application
                 endDeferred = true;
                 break;
