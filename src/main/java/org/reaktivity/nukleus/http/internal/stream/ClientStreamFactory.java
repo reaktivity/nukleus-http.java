@@ -27,6 +27,7 @@ import java.util.function.Function;
 import java.util.function.LongConsumer;
 import java.util.function.LongSupplier;
 import java.util.function.LongUnaryOperator;
+import java.util.function.ToIntFunction;
 
 import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
@@ -111,14 +112,15 @@ public final class ClientStreamFactory implements StreamFactory
         BufferPool bufferPool,
         LongUnaryOperator supplyInitialId,
         LongUnaryOperator supplyReplyId,
-        Long2ObjectHashMap<Correlation<?>> correlations,
-        Function<String, LongSupplier> supplyCounter,
         LongSupplier supplyTrace,
-        Function<String, LongConsumer> supplyAccumulator)
+        ToIntFunction<String> supplyTypeId,
+        Function<String, LongSupplier> supplyCounter,
+        Function<String, LongConsumer> supplyAccumulator,
+        Long2ObjectHashMap<Correlation<?>> correlations)
     {
         this.supplyTrace = requireNonNull(supplyTrace);
         this.router = requireNonNull(router);
-        this.writer = new MessageWriter(requireNonNull(writeBuffer));
+        this.writer = new MessageWriter(supplyTypeId, requireNonNull(writeBuffer));
         this.bufferPool = requireNonNull(bufferPool);
         this.supplyInitialId = requireNonNull(supplyInitialId);
         this.supplyReplyId = requireNonNull(supplyReplyId);
