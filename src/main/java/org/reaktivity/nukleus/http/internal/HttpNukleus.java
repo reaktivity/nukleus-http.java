@@ -17,9 +17,9 @@ package org.reaktivity.nukleus.http.internal;
 
 import org.reaktivity.nukleus.Nukleus;
 
-final class HttpNukleus implements Nukleus
+public final class HttpNukleus implements Nukleus
 {
-    static final String NAME = "http";
+    public static final String NAME = "http";
 
     private final HttpConfiguration config;
 

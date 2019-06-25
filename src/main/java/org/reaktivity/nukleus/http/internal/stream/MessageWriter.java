@@ -16,10 +16,12 @@
 package org.reaktivity.nukleus.http.internal.stream;
 
 import java.util.function.Consumer;
+import java.util.function.ToIntFunction;
 
 import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
 import org.reaktivity.nukleus.function.MessageConsumer;
+import org.reaktivity.nukleus.http.internal.HttpNukleus;
 import org.reaktivity.nukleus.http.internal.types.Flyweight;
 import org.reaktivity.nukleus.http.internal.types.HttpHeaderFW;
 import org.reaktivity.nukleus.http.internal.types.ListFW;
@@ -45,11 +47,14 @@ final class MessageWriter
     private final WindowFW.Builder windowRW = new WindowFW.Builder();
     private final ResetFW.Builder resetRW = new ResetFW.Builder();
 
+    private final int httpTypeId;
     private MutableDirectBuffer writeBuffer;
 
     MessageWriter(
+        ToIntFunction<String> supplyTypeId,
         MutableDirectBuffer writeBuffer)
     {
+        this.httpTypeId = supplyTypeId.applyAsInt(HttpNukleus.NAME);
         this.writeBuffer = writeBuffer;
     }
 
@@ -234,6 +239,7 @@ final class MessageWriter
     {
         return (buffer, offset, limit) ->
             httpBeginExRW.wrap(buffer, offset, limit)
+                         .typeId(httpTypeId)
                          .headers(headers)
                          .build()
                          .sizeof();

@@ -20,6 +20,7 @@ import static java.util.Objects.requireNonNull;
 import java.nio.charset.StandardCharsets;
 import java.util.function.LongSupplier;
 import java.util.function.LongUnaryOperator;
+import java.util.function.ToIntFunction;
 
 import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
@@ -77,12 +78,13 @@ public final class ServerStreamFactory implements StreamFactory
         BufferPool bufferPool,
         LongUnaryOperator supplyInitialId,
         LongUnaryOperator supplyReplyId,
-        Long2ObjectHashMap<Correlation<?>> correlations,
-        LongSupplier supplyTrace)
+        LongSupplier supplyTrace,
+        ToIntFunction<String> supplyTypeId,
+        Long2ObjectHashMap<Correlation<?>> correlations)
     {
         this.supplyTrace = requireNonNull(supplyTrace);
         this.router = requireNonNull(router);
-        this.writer = new MessageWriter(requireNonNull(writeBuffer));
+        this.writer = new MessageWriter(supplyTypeId, requireNonNull(writeBuffer));
         this.bufferPool = requireNonNull(bufferPool);
         this.supplyInitialId = requireNonNull(supplyInitialId);
         this.supplyReplyId = requireNonNull(supplyReplyId);

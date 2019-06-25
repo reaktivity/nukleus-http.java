@@ -20,6 +20,7 @@ import java.util.function.LongFunction;
 import java.util.function.LongSupplier;
 import java.util.function.LongUnaryOperator;
 import java.util.function.Supplier;
+import java.util.function.ToIntFunction;
 
 import org.agrona.MutableDirectBuffer;
 import org.agrona.collections.Long2ObjectHashMap;
@@ -39,6 +40,7 @@ public final class ServerStreamFactoryBuilder implements StreamFactoryBuilder
     private LongUnaryOperator supplyInitialId;
     private LongUnaryOperator supplyReplyId;
     private LongSupplier supplyTrace;
+    private ToIntFunction<String> supplyTypeId;
     private Supplier<BufferPool> supplyBufferPool;
 
     public ServerStreamFactoryBuilder(
@@ -65,13 +67,6 @@ public final class ServerStreamFactoryBuilder implements StreamFactoryBuilder
     }
 
     @Override
-    public StreamFactoryBuilder setTraceSupplier(LongSupplier supplyTrace)
-    {
-        this.supplyTrace = supplyTrace;
-        return this;
-    }
-
-    @Override
     public ServerStreamFactoryBuilder setInitialIdSupplier(
         LongUnaryOperator supplyStreamId)
     {
@@ -84,6 +79,21 @@ public final class ServerStreamFactoryBuilder implements StreamFactoryBuilder
         LongUnaryOperator supplyReplyId)
     {
         this.supplyReplyId = supplyReplyId;
+        return this;
+    }
+
+    @Override
+    public StreamFactoryBuilder setTraceSupplier(LongSupplier supplyTrace)
+    {
+        this.supplyTrace = supplyTrace;
+        return this;
+    }
+
+    @Override
+    public StreamFactoryBuilder setTypeIdSupplier(
+        ToIntFunction<String> supplyTypeId)
+    {
+        this.supplyTypeId = supplyTypeId;
         return this;
     }
 
@@ -114,7 +124,15 @@ public final class ServerStreamFactoryBuilder implements StreamFactoryBuilder
     {
         final BufferPool bufferPool = supplyBufferPool.get();
 
-        return new ServerStreamFactory(config, router, writeBuffer,
-                bufferPool, supplyInitialId, supplyReplyId, correlations, supplyTrace);
+        return new ServerStreamFactory(
+                config,
+                router,
+                writeBuffer,
+                bufferPool,
+                supplyInitialId,
+                supplyReplyId,
+                supplyTrace,
+                supplyTypeId,
+                correlations);
     }
 }
