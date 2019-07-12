@@ -52,6 +52,7 @@ final class ClientConnectReplyStream implements MessageConsumer
     private MessageConsumer streamState;
     private MessageConsumer throttleState;
     private DecoderState decoderState;
+    private int chunkSize;
 
     private enum ResponseState
     {
@@ -87,8 +88,8 @@ final class ClientConnectReplyStream implements MessageConsumer
     @Override
     public String toString()
     {
-        return String.format("%s[connectReplyId=%016x, sourceBudget=%d, targetId=%016x]",
-                getClass().getSimpleName(), connectReplyId, connectReplyBudget, acceptReplyId);
+        return String.format("%s[connectReplyId=%016x, sourceBudget=%d, targetBudget=%d targetId=%016x]",
+                getClass().getSimpleName(), connectReplyId, connectReplyBudget, acceptReplyBudget, acceptReplyId);
     }
 
     ClientConnectReplyStream(
@@ -377,8 +378,8 @@ final class ClientConnectReplyStream implements MessageConsumer
         final long streamId = abort.streamId();
         assert streamId == connectReplyId;
 
-        if (responseState == ResponseState.BEFORE_HEADERS && acceptReply == null
-                && factory.correlations.get(connection.connectReplyId) == null)
+        if (responseState == ResponseState.BEFORE_HEADERS && acceptReply == null &&
+                factory.correlations.get(connection.connectReplyId) == null)
         {
             responseState = ResponseState.FINAL;
         }
@@ -405,7 +406,7 @@ final class ClientConnectReplyStream implements MessageConsumer
     private int decode(DirectBuffer buffer, int offset, int limit)
     {
         boolean decoderStateChanged = true;
-        while (offset < limit && decoderStateChanged)
+        while (offset <= limit && decoderStateChanged)
         {
             DecoderState previous = decoderState;
             offset = decoderState.decode(buffer, offset, limit);
@@ -630,7 +631,7 @@ final class ClientConnectReplyStream implements MessageConsumer
             else
             {
                 // no content
-                httpResponseComplete();
+                decoderState = this::decodeHttpResponseComplete;
                 windowHandler = this::handleWindow;
             }
         }
@@ -713,25 +714,21 @@ final class ClientConnectReplyStream implements MessageConsumer
 
         if (contentRemaining == 0)
         {
-            httpResponseComplete();
+            decoderState = this::decodeHttpResponseComplete;
         }
 
         return offset + Math.max(writableBytes, 0);
-    };
+    }
 
     private int decodeHttpChunk(
         final DirectBuffer payload,
         final int offset,
         final int limit)
     {
-        int result = limit;
+        int result = offset;
 
         final int chunkHeaderLimit = limitOfBytes(payload, offset, limit, CRLF_BYTES);
-        if (chunkHeaderLimit == -1)
-        {
-            result = offset;
-        }
-        else
+        if (chunkHeaderLimit != -1)
         {
             final int semicolonAt = limitOfBytes(payload, offset, chunkHeaderLimit, SEMICOLON_BYTES);
             final int chunkSizeLimit = semicolonAt == -1 ? chunkHeaderLimit - 2 : semicolonAt - 1;
@@ -740,23 +737,16 @@ final class ClientConnectReplyStream implements MessageConsumer
             try
             {
                 final String chunkSizeHex = payload.getStringWithoutLengthUtf8(offset, chunkSizeLength);
-                chunkSizeRemaining = Integer.parseInt(chunkSizeHex, 16);
+                chunkSize = Integer.parseInt(chunkSizeHex, 16);
+                chunkSizeRemaining = chunkSize;
+
+                contentRemaining += chunkSizeRemaining;
+                decoderState = this::decodeHttpChunkData;
+                result = chunkHeaderLimit;
             }
             catch (NumberFormatException ex)
             {
                 handleInvalidResponseAndReset();
-            }
-
-            if (chunkSizeRemaining == 0)
-            {
-                httpResponseComplete();
-            }
-            else
-            {
-                contentRemaining += chunkSizeRemaining;
-
-                decoderState = this::decodeHttpChunkData;
-                result = chunkHeaderLimit;
             }
         }
 
@@ -785,6 +775,10 @@ final class ClientConnectReplyStream implements MessageConsumer
             }
         }
 
+        if (chunkSize == 0)
+        {
+            decoderState = this::decodeHttpResponseComplete;
+        }
         return result;
     };
 
@@ -876,7 +870,10 @@ final class ClientConnectReplyStream implements MessageConsumer
         this.contentRemaining = 0;
     }
 
-    private void httpResponseComplete()
+    private int decodeHttpResponseComplete(
+        DirectBuffer buffer,
+        int offset,
+        int limit)
     {
         factory.writer.doHttpEnd(acceptReply, acceptRouteId, acceptReplyId, factory.supplyTrace.getAsLong());
         acceptReply = null;
@@ -892,6 +889,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         }
 
         connectionPool.release(connection, CloseAction.END);
+        return offset;
     }
 
     private void resolveTarget()
@@ -998,5 +996,5 @@ final class ClientConnectReplyStream implements MessageConsumer
     {
         int decode(DirectBuffer buffer, int offset, int limit);
     }
-
 }
+
