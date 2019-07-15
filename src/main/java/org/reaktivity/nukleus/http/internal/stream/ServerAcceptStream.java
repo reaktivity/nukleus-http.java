@@ -1115,6 +1115,12 @@ final class ServerAcceptStream implements MessageConsumer
                     requestHeaders.put(name, value);
                 }
             });
+            routeEx.overrides().forEach(h ->
+            {
+                String name = h.name().asString();
+                String value = h.value().asString();
+                requestHeaders.put(name, value);
+            });
         }
     }
 
