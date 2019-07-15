@@ -37,6 +37,8 @@ import org.reaktivity.nukleus.buffer.BufferPool;
 import org.reaktivity.nukleus.function.MessageConsumer;
 import org.reaktivity.nukleus.function.MessagePredicate;
 import org.reaktivity.nukleus.http.internal.HttpConfiguration;
+import org.reaktivity.nukleus.http.internal.types.HttpHeaderFW;
+import org.reaktivity.nukleus.http.internal.types.ListFW;
 import org.reaktivity.nukleus.http.internal.types.OctetsFW;
 import org.reaktivity.nukleus.http.internal.types.control.HttpRouteExFW;
 import org.reaktivity.nukleus.http.internal.types.control.RouteFW;
@@ -195,6 +197,18 @@ public final class ClientStreamFactory implements StreamFactory
             final long acceptId = begin.streamId();
             final long connectRouteId = route.correlationId();
             final long acceptReplyId = supplyReplyId.applyAsLong(acceptId);
+
+            final HttpRouteExFW routeEx = route.extension().get(routeExRO::tryWrap);
+            if (routeEx != null)
+            {
+                final ListFW<HttpHeaderFW> overrides = routeEx.overrides();
+                if (!overrides.isEmpty())
+                {
+                    Map<String, String> headers0 = headers == EMPTY_HEADERS ? new LinkedHashMap<>() : headers;
+                    overrides.forEach(h -> headers0.put(h.name().asString(), h.value().asString()));
+                    headers = headers0;
+                }
+            }
 
             newStream = new ClientAcceptStream(this,
                     acceptReply, acceptRouteId, acceptId, acceptReplyId,

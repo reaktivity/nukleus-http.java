@@ -64,7 +64,29 @@ public class ControllerIT
         k3po.start();
 
         final JsonObject extension = new JsonObject();
-        extension.addProperty(":authority", "localhost:8080");
+        final JsonObject headers = new JsonObject();
+        headers.addProperty(":authority", "localhost:8080");
+        extension.add("headers", headers);
+
+        reaktor.controller(HttpController.class)
+               .route(SERVER, "http#0", "target#0", gson.toJson(extension))
+               .get();
+
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/server.override/nukleus"
+    })
+    public void shouldRouteServerWithRequestHeaderOverride() throws Exception
+    {
+        k3po.start();
+
+        final JsonObject extension = new JsonObject();
+        final JsonObject overrides = new JsonObject();
+        overrides.addProperty(":authority", "otherhost:8181");
+        extension.add("overrides", overrides);
 
         reaktor.controller(HttpController.class)
                .route(SERVER, "http#0", "target#0", gson.toJson(extension))
@@ -82,7 +104,29 @@ public class ControllerIT
         k3po.start();
 
         final JsonObject extension = new JsonObject();
-        extension.addProperty(":authority", "localhost:8080");
+        final JsonObject headers = new JsonObject();
+        headers.addProperty(":authority", "localhost:8080");
+        extension.add("headers", headers);
+
+        reaktor.controller(HttpController.class)
+               .route(CLIENT, "http#0", "target#0", gson.toJson(extension))
+               .get();
+
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/client.override/nukleus"
+    })
+    public void shouldRouteClientWithRequestHeaderOverride() throws Exception
+    {
+        k3po.start();
+
+        final JsonObject extension = new JsonObject();
+        final JsonObject overrides = new JsonObject();
+        overrides.addProperty(":authority", "localhost:8080");
+        extension.add("overrides", overrides);
 
         reaktor.controller(HttpController.class)
                .route(CLIENT, "http#0", "target#0", gson.toJson(extension))
@@ -101,7 +145,9 @@ public class ControllerIT
         k3po.start();
 
         final JsonObject extension = new JsonObject();
-        extension.addProperty(":authority", "localhost:8080");
+        final JsonObject headers = new JsonObject();
+        headers.addProperty(":authority", "localhost:8080");
+        extension.add("headers", headers);
 
         long routeId = reaktor.controller(HttpController.class)
               .route(SERVER, "http#0", "target#0", gson.toJson(extension))
@@ -126,7 +172,9 @@ public class ControllerIT
         k3po.start();
 
         final JsonObject extension = new JsonObject();
-        extension.addProperty(":authority", "localhost:8080");
+        final JsonObject headers = new JsonObject();
+        headers.addProperty(":authority", "localhost:8080");
+        extension.add("headers", headers);
 
         long routeId = reaktor.controller(HttpController.class)
               .route(CLIENT, "http#0", "target#0", gson.toJson(extension))
