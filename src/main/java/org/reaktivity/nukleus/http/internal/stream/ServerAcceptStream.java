@@ -718,7 +718,7 @@ final class ServerAcceptStream implements MessageConsumer
                     String connectionOptions = headers.get("connection");
                     if (connectionOptions != null)
                     {
-                        Arrays.asList(connectionOptions.toLowerCase().split(",")).stream().forEach((element) ->
+                        Arrays.asList(connectionOptions.toLowerCase().split(",")).stream().forEach(element ->
                         {
                             if (element.equals("close"))
                             {
@@ -928,8 +928,8 @@ final class ServerAcceptStream implements MessageConsumer
         FrameFW frame = factory.frameRO.wrap(payload, offset, payload.capacity());
         if (length > 1)
         {
-            if (payload.getByte(offset) != '\r'
-                || payload.getByte(offset + 1) != '\n')
+            if (payload.getByte(offset) != '\r' ||
+                payload.getByte(offset + 1) != '\n')
             {
                 processInvalidRequest(400,  "Bad Request", frame.trace());
             }
@@ -1063,11 +1063,11 @@ final class ServerAcceptStream implements MessageConsumer
             if (headersMatch[0])
             {
                 String requestValue = requestHeaders.get(name);
-                if (name.equals(":scheme"))
+                if (":scheme".equals(name))
                 {
                     // skip as request headers don't contain :scheme
                 }
-                else if (name.equals(":authority"))
+                else if (":authority".equals(name))
                 {
                     headersMatch[0] = matchAuthority(requestValue, routeValue, routeScheme);
                 }
@@ -1110,7 +1110,7 @@ final class ServerAcceptStream implements MessageConsumer
             {
                 String name = h.name().asString();
                 String value = h.value().asString();
-                if (name.equals(":scheme") || name.equals(":authority"))
+                if (":scheme".equals(name) || ":authority".equals(name))
                 {
                     requestHeaders.put(name, value);
                 }

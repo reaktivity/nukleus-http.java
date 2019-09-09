@@ -217,8 +217,8 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
                 factory.writer.doWindow(acceptReply, acceptRouteId, acceptInitialId, traceId, 0, 0);
 
                 factory.writer.doHttpBegin(acceptReply, acceptRouteId, acceptReplyId, factory.supplyTrace.getAsLong(),
-                        hs -> hs.item(h -> h.name(":status").value("503"))
-                                .item(h -> h.name("retry-after").value("0")));
+                    hs -> hs.item(h -> h.name(":status").value("503"))
+                            .item(h -> h.name("retry-after").value("0")));
                 factory.writer.doHttpEnd(acceptReply, acceptRouteId, acceptReplyId, factory.supplyTrace.getAsLong());
 
                 // count rejected requests (no connection or no space in the queue)
@@ -269,7 +269,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
                 }
                 break;
             case "connection":
-                Arrays.asList(value.toLowerCase().split(",")).stream().forEach((element) ->
+                Arrays.asList(value.toLowerCase().split(",")).stream().forEach(element ->
                 {
                     switch(element)
                     {

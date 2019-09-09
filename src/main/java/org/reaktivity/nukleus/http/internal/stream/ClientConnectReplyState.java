@@ -22,11 +22,12 @@ final class ClientConnectReplyState
     final ConnectionPool connectionPool;
     final Connection connection;
 
-    ClientConnectReplyState(ConnectionPool connectionPool,
-                            Connection connection)
+    ClientConnectReplyState(
+        ConnectionPool connectionPool,
+        Connection connection)
     {
-       this.connectionPool = connectionPool;
-       this.connection = connection;
+        this.connectionPool = connectionPool;
+        this.connection = connection;
     }
 
     @Override

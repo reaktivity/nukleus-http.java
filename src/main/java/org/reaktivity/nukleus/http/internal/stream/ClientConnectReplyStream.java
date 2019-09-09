@@ -40,9 +40,9 @@ import org.reaktivity.nukleus.http.internal.types.stream.AbortFW;
 import org.reaktivity.nukleus.http.internal.types.stream.BeginFW;
 import org.reaktivity.nukleus.http.internal.types.stream.DataFW;
 import org.reaktivity.nukleus.http.internal.types.stream.EndFW;
+import org.reaktivity.nukleus.http.internal.types.stream.FrameFW;
 import org.reaktivity.nukleus.http.internal.types.stream.ResetFW;
 import org.reaktivity.nukleus.http.internal.types.stream.WindowFW;
-import org.reaktivity.nukleus.http.internal.types.stream.FrameFW;
 
 final class ClientConnectReplyStream implements MessageConsumer
 {
@@ -347,8 +347,8 @@ final class ClientConnectReplyStream implements MessageConsumer
         final long streamId = end.streamId();
         assert streamId == connectReplyId;
 
-        if (responseState == ResponseState.BEFORE_HEADERS && acceptReply == null
-                && factory.correlations.get(connection.connectReplyId) == null)
+        if (responseState == ResponseState.BEFORE_HEADERS && acceptReply == null &&
+                factory.correlations.get(connection.connectReplyId) == null)
         {
             responseState = ResponseState.FINAL;
         }
@@ -586,7 +586,7 @@ final class ClientConnectReplyStream implements MessageConsumer
 
             factory.router.setThrottle(acceptReplyId, this::handleThrottle);
             factory.writer.doHttpBegin(acceptReply, acceptRouteId, acceptReplyId, acceptReplyTraceId,
-                    hs -> headers.forEach((k, v) -> hs.item(i -> i.name(k).value(v))));
+                hs -> headers.forEach((k, v) -> hs.item(i -> i.name(k).value(v))));
 
             // count all responses
             factory.countResponses.getAsLong();
@@ -595,7 +595,7 @@ final class ClientConnectReplyStream implements MessageConsumer
             String connectionOptions = headers.get("connection");
             if (connectionOptions != null)
             {
-                Arrays.stream(connectionOptions.split("\\s*,\\s*")).forEach((element) ->
+                Arrays.stream(connectionOptions.split("\\s*,\\s*")).forEach(element ->
                 {
                     if (element.equalsIgnoreCase("close"))
                     {
@@ -763,8 +763,8 @@ final class ClientConnectReplyStream implements MessageConsumer
 
         if (length > 1)
         {
-            if (payload.getByte(offset) != '\r'
-                || payload.getByte(offset + 1) != '\n')
+            if (payload.getByte(offset) != '\r' ||
+                payload.getByte(offset + 1) != '\n')
             {
                 handleInvalidResponseAndReset();
             }
