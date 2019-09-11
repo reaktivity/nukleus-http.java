@@ -162,9 +162,6 @@ public class HttpClientBM
             this.clientConnect = "target#0";
             this.clientRouteId = controller.routeClient(clientAccept, clientConnect, emptyMap()).get();
 
-//            this.clientAcceptStreams = controller.supplySource("source", Writer::new);
-//            this.clientConnectReplyStreams = controller.supplySource("target", Writer::new);
-
             // Map file streams/source/http#target created by routeOutputNew TODO: the following may not do this
             // TODO: clientConnectStreams = controller.supplyTarget("target", Reader::new);
 
@@ -312,20 +309,18 @@ public class HttpClientBM
 
             final AtomicBuffer outputBeginBuffer = new UnsafeBuffer(new byte[256]);
             beginRW.wrap(outputBeginBuffer, 0, outputBeginBuffer.capacity())
-            .routeId(state.clientRouteId)
-            .streamId(0L)
-            .extension(e -> e.set((buffer, offset, limit) ->
-                    new HttpBeginExFW.Builder().wrap(buffer, offset, limit)
-                        .headers(hs -> hs
-                            .item(h -> h.name(":scheme").value("http"))
-                            .item(h -> h.name(":method").value("post"))
-                            .item(h -> h.name(":path").value("/"))
-                            .item(h -> h.name(":authority").value("localhost:8080"))
-                            .item(h -> h.name("content-length").value(Integer.toString(PAYLOAD.length)))
-                         )
-                        .build()
-                    .sizeof())
-                .build());
+                   .routeId(state.clientRouteId)
+                   .streamId(0L)
+                   .extension(e -> e.set((buffer, offset, limit) -> new HttpBeginExFW.Builder().wrap(buffer, offset, limit)
+                       .headers(hs -> hs
+                           .item(h -> h.name(":scheme").value("http"))
+                           .item(h -> h.name(":method").value("post"))
+                           .item(h -> h.name(":path").value("/"))
+                           .item(h -> h.name(":authority").value("localhost:8080"))
+                           .item(h -> h.name("content-length").value(Integer.toString(PAYLOAD.length))))
+                       .build()
+                       .sizeof())
+                   .build());
 
             final AtomicBuffer outputDataBuffer = new UnsafeBuffer(new byte[256]);
             dataRW.wrap(outputDataBuffer, 0, outputDataBuffer.capacity())
@@ -585,18 +580,18 @@ public class HttpClientBM
 
             final AtomicBuffer outputBeginBuffer = new UnsafeBuffer(new byte[256]);
             beginRW.wrap(outputBeginBuffer, 0, outputBeginBuffer.capacity())
-            .routeId(state.clientRouteId)
-            .streamId(0L)
-            .extension(e -> e.reset());
+                   .routeId(state.clientRouteId)
+                   .streamId(0L)
+                   .extension(e -> e.reset());
 
             final AtomicBuffer outputDataBuffer = new UnsafeBuffer(new byte[256]);
             dataRW.wrap(outputDataBuffer, 0, outputDataBuffer.capacity())
-                        .payload(p -> p.set(RESPONSE_BYTES))
-                        .extension(e -> e.reset());
+                   .payload(p -> p.set(RESPONSE_BYTES))
+                   .extension(e -> e.reset());
 
             final AtomicBuffer outputEndBuffer = new UnsafeBuffer(new byte[20]);
             endRW.wrap(outputDataBuffer, 0, outputEndBuffer.capacity())
-                        .extension(e -> e.reset());
+                 .extension(e -> e.reset());
         }
 
         boolean writeBegin()

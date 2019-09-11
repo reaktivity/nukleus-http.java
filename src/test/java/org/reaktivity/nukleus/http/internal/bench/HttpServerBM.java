@@ -142,8 +142,6 @@ public class HttpServerBM
 
             this.sourceRouteId = controller.routeServer("http#0", "echo", emptyMap()).get();
 
-//            this.sourceInput = controller.supplySource("source", Writer::new);
-
             this.sourceInputId = random.nextLong();
             this.sourceOutputEstHandler = this::processBegin;
 

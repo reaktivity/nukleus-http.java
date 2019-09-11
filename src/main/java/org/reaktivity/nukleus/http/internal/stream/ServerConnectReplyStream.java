@@ -28,6 +28,7 @@ import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
 import org.reaktivity.nukleus.function.MessageConsumer;
 import org.reaktivity.nukleus.http.internal.types.OctetsFW;
+import org.reaktivity.nukleus.http.internal.types.stream.AbortFW;
 import org.reaktivity.nukleus.http.internal.types.stream.BeginFW;
 import org.reaktivity.nukleus.http.internal.types.stream.DataFW;
 import org.reaktivity.nukleus.http.internal.types.stream.EndFW;
@@ -35,7 +36,6 @@ import org.reaktivity.nukleus.http.internal.types.stream.FrameFW;
 import org.reaktivity.nukleus.http.internal.types.stream.HttpBeginExFW;
 import org.reaktivity.nukleus.http.internal.types.stream.ResetFW;
 import org.reaktivity.nukleus.http.internal.types.stream.WindowFW;
-import org.reaktivity.nukleus.http.internal.types.stream.AbortFW;
 
 public final class ServerConnectReplyStream implements MessageConsumer
 {
@@ -299,7 +299,7 @@ public final class ServerConnectReplyStream implements MessageConsumer
 
             if (acceptState.acceptReplyBudget < 0)
             {
-                 String assertionErrorMessage = String.format("[%016x] %s, payload=%d",
+                String assertionErrorMessage = String.format("[%016x] %s, payload=%d",
                                                         currentTimeMillis(),
                                                         this,
                                                         payload.sizeof());

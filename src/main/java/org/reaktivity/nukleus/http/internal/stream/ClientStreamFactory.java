@@ -242,7 +242,7 @@ public final class ClientStreamFactory implements StreamFactory
             {
                 final HttpRouteExFW routeEx = extension.get(routeExRO::wrap);
                 headersMatch = !routeEx.headers().anyMatch(
-                        h -> !Objects.equals(h.value().asString(), headers.get(h.name().asString())));
+                    h -> !Objects.equals(h.value().asString(), headers.get(h.name().asString())));
             }
             return headersMatch;
         };

@@ -143,8 +143,8 @@ final class ConnectionPool
             factory.countResponses.getAsLong();
 
             factory.writer.doHttpBegin(acceptReply, acceptRouteId, acceptReplyId, traceId,
-                    hs -> hs.item(h -> h.name(":status").value("503"))
-                            .item(h -> h.name("retry-after").value("0")));
+                hs -> hs.item(h -> h.name(":status").value("503"))
+                        .item(h -> h.name("retry-after").value("0")));
             factory.writer.doHttpEnd(acceptReply, acceptRouteId, acceptReplyId, factory.supplyTrace.getAsLong());
         }
         if (connection.persistent)

@@ -6,7 +6,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>org.reaktivity</groupId>
   <artifactId>nukleus-http</artifactId>
-  <version>0.88</version>
+  <version>0.89</version>
   <name>HTTP Nukleus Implementation</name>
   <description>HTTP Nukleus Implementation</description>
   <url>https://github.com/reaktivity/nukleus-http.java</url>
@@ -43,7 +43,7 @@
     <checkstyle.config.location>src/conf/checkstyle/configuration.xml</checkstyle.config.location>
     <checkstyle.suppressions.location>src/conf/checkstyle/suppressions.xml</checkstyle.suppressions.location>
     <jacoco.coverage.ratio>0.84</jacoco.coverage.ratio>
-    <jacoco.missed.count>28</jacoco.missed.count>
+    <jacoco.missed.count>2</jacoco.missed.count>
 
     <junit.version>4.12</junit.version>
     <jmh.version>1.17.4</jmh.version>
@@ -51,12 +51,12 @@
     <jmock.version>2.6.0</jmock.version>
 
     <k3po.version>3.0.0-alpha-102</k3po.version>
-    <k3po.nukleus.ext.version>0.46</k3po.nukleus.ext.version>
+    <k3po.nukleus.ext.version>0.48</k3po.nukleus.ext.version>
 
-    <nukleus.plugin.version>0.33</nukleus.plugin.version>
+    <nukleus.plugin.version>0.40</nukleus.plugin.version>
 
-    <nukleus.http.spec.version>0.75</nukleus.http.spec.version>
-    <reaktor.version>0.95</reaktor.version>
+    <nukleus.http.spec.version>0.76</nukleus.http.spec.version>
+    <reaktor.version>0.96</reaktor.version>
   </properties>
 
   <dependencies>
@@ -180,7 +180,7 @@
       </plugin>
       <plugin>
         <artifactId>maven-checkstyle-plugin</artifactId>
-        <version>3.0.0</version>
+        <version>3.1.0</version>
         <configuration>
           <sourceDirectories>
             <sourceDirectory>${project.build.sourceDirectory}</sourceDirectory>
@@ -199,7 +199,7 @@
           <dependency>
             <groupId>com.puppycrawl.tools</groupId>
             <artifactId>checkstyle</artifactId>
-            <version>8.18</version>
+            <version>8.23</version>
           </dependency>
         </dependencies>
       </plugin>

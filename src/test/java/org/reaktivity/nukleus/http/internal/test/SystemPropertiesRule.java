@@ -42,12 +42,12 @@ public class SystemPropertiesRule implements TestRule
             {
                 try
                 {
-                    properties.forEach((name, value) -> System.setProperty(name, value));
+                    properties.forEach(System::setProperty);
                     base.evaluate();
                 }
                 finally
                 {
-                    properties.keySet().forEach((name) -> System.clearProperty(name));
+                    properties.keySet().forEach(System::clearProperty);
                 }
             }
 
