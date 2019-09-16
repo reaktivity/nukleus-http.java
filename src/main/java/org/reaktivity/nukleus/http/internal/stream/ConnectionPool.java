@@ -169,7 +169,7 @@ final class ConnectionPool
             if (action != null && !connection.endOrAbortSent)
             {
                 MessageConsumer connect = factory.router.supplyReceiver(connection.connectInitialId);
-                switch(action)
+                switch (action)
                 {
                 case END:
                     factory.writer.doEnd(connect, connectRouteId, connection.connectInitialId, factory.supplyTrace.getAsLong());

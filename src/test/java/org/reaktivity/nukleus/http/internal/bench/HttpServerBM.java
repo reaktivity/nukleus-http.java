@@ -172,7 +172,7 @@ public class HttpServerBM
             this.throttleBuffer = new UnsafeBuffer(allocateDirect(SIZE_OF_LONG + SIZE_OF_INT));
 
             boolean writeSucceeded = false;
-            for (int i=0; i < 100 && !writeSucceeded; i++)
+            for (int i = 0; i < 100 && !writeSucceeded; i++)
             {
                 Thread.sleep(100);
                 writeSucceeded = write();
@@ -180,7 +180,7 @@ public class HttpServerBM
 
             if (writeSucceeded)
             {
-                for (int i=0; i < 100 && sourceOutputEst == null; i++)
+                for (int i = 0; i < 100 && sourceOutputEst == null; i++)
                 {
                     try
                     {

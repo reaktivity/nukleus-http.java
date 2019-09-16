@@ -19,15 +19,17 @@ import static java.lang.Character.toUpperCase;
 
 public final class HttpUtil
 {
-
-    public static void appendHeader(StringBuilder payload, String name, String value)
+    public static void appendHeader(
+        StringBuilder payload,
+        String name,
+        String value)
     {
         int pos = name.indexOf('-');
-        if (pos > -1 && pos+1 < name.length())
+        if (pos > -1 && pos + 1 < name.length())
         {
-            payload.append(toUpperCase(name.charAt(0))).append(name.substring(1, pos+1))
-            .append(toUpperCase(name.charAt(pos+1)))
-            .append(name.substring(pos+2))
+            payload.append(toUpperCase(name.charAt(0))).append(name.substring(1, pos + 1))
+            .append(toUpperCase(name.charAt(pos + 1)))
+            .append(name.substring(pos + 2))
             .append(": ").append(value).append("\r\n");
         }
         else

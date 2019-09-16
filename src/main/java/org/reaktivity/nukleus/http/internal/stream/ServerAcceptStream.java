@@ -620,15 +620,15 @@ final class ServerAcceptStream implements MessageConsumer
     };
 
     private int decodeBeforeHttpBegin(
-            final DirectBuffer payload,
-            final int offset,
-            final int limit)
+        final DirectBuffer payload,
+        final int offset,
+        final int limit)
     {
         int length = limit - offset;
         int result = offset;
         if (payload.getByte(offset) == '\r')
         {
-            if (length > 1 && payload.getByte(offset+1) == '\n')
+            if (length > 1 && payload.getByte(offset + 1) == '\n')
             {
                 // RFC 3270 3.5.  Message Parsing Robustness: skip empty line (CRLF) before request-line
                 result = offset + 2;

@@ -238,11 +238,11 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         StringBuilder headersChars = new StringBuilder();
         headers.forEach((name, value) ->
         {
-            switch(name.toLowerCase())
+            switch (name.toLowerCase())
             {
             case ":method":
                 pseudoHeaders[ClientStreamFactory.METHOD] = value;
-                switch(value.toLowerCase())
+                switch (value.toLowerCase())
                 {
                 case "post":
                 case "insert":
@@ -271,7 +271,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
             case "connection":
                 Arrays.asList(value.toLowerCase().split(",")).stream().forEach(element ->
                 {
-                    switch(element)
+                    switch (element)
                     {
                     case "close":
                         this.persistent = false;
