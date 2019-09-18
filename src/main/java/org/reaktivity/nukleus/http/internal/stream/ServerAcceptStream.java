@@ -37,8 +37,8 @@ import org.reaktivity.nukleus.function.MessagePredicate;
 import org.reaktivity.nukleus.http.internal.stream.ServerStreamFactory.DecoderState;
 import org.reaktivity.nukleus.http.internal.stream.ServerStreamFactory.HttpStatus;
 import org.reaktivity.nukleus.http.internal.stream.ServerStreamFactory.StandardMethods;
+import org.reaktivity.nukleus.http.internal.types.ArrayFW;
 import org.reaktivity.nukleus.http.internal.types.HttpHeaderFW;
-import org.reaktivity.nukleus.http.internal.types.ListFW;
 import org.reaktivity.nukleus.http.internal.types.OctetsFW;
 import org.reaktivity.nukleus.http.internal.types.control.HttpRouteExFW;
 import org.reaktivity.nukleus.http.internal.types.control.RouteFW;
@@ -1046,7 +1046,7 @@ final class ServerAcceptStream implements MessageConsumer
     }
 
     private boolean headersMatch(
-        ListFW<HttpHeaderFW> routeHeaders,
+        ArrayFW<HttpHeaderFW> routeHeaders,
         Map<String, String> requestHeaders)
     {
         boolean[] headersMatch = new boolean[1];

@@ -37,8 +37,8 @@ import org.reaktivity.nukleus.buffer.BufferPool;
 import org.reaktivity.nukleus.function.MessageConsumer;
 import org.reaktivity.nukleus.function.MessagePredicate;
 import org.reaktivity.nukleus.http.internal.HttpConfiguration;
+import org.reaktivity.nukleus.http.internal.types.ArrayFW;
 import org.reaktivity.nukleus.http.internal.types.HttpHeaderFW;
-import org.reaktivity.nukleus.http.internal.types.ListFW;
 import org.reaktivity.nukleus.http.internal.types.OctetsFW;
 import org.reaktivity.nukleus.http.internal.types.control.HttpRouteExFW;
 import org.reaktivity.nukleus.http.internal.types.control.RouteFW;
@@ -201,7 +201,7 @@ public final class ClientStreamFactory implements StreamFactory
             final HttpRouteExFW routeEx = route.extension().get(routeExRO::tryWrap);
             if (routeEx != null)
             {
-                final ListFW<HttpHeaderFW> overrides = routeEx.overrides();
+                final ArrayFW<HttpHeaderFW> overrides = routeEx.overrides();
                 if (!overrides.isEmpty())
                 {
                     Map<String, String> headers0 = headers == EMPTY_HEADERS ? new LinkedHashMap<>() : headers;
