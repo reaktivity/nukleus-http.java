@@ -485,7 +485,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         int index,
         int length)
     {
-        factory.abortRO.wrap(buffer, index, index + length);
+        AbortFW abort = factory.abortRO.wrap(buffer, index, index + length);
 
         if (connection == null)
         {
@@ -494,9 +494,15 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         }
         else
         {
-            factory.correlations.remove(connection.connectReplyId);
+            Correlation correlation = factory.correlations.remove(connection.connectReplyId);
             connection.persistent = false;
             connectionPool.release(connection, CloseAction.ABORT);
+            MessageConsumer connect = factory.router.supplyReceiver(connection.connectInitialId);
+            factory.writer.doReset(connect, connectRouteId, connection.connectReplyId, abort.trace());
+            if (correlation == null)
+            {
+                factory.writer.doAbort(acceptReply, acceptRouteId, acceptReplyId, abort.trace());
+            }
         }
     }
 
