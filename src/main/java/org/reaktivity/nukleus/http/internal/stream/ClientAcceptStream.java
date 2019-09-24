@@ -485,7 +485,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         int index,
         int length)
     {
-        factory.abortRO.wrap(buffer, index, index + length);
+        AbortFW abort = factory.abortRO.wrap(buffer, index, index + length);
 
         if (connection == null)
         {
