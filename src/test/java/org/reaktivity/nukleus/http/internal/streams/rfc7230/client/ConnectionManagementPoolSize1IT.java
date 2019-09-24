@@ -247,4 +247,14 @@ public class ConnectionManagementPoolSize1IT
         k3po.finish();
         assertEquals(1, counters.requestsRejected());
     }
+
+    @Test
+    @Specification({
+        "${route}/client/controller",
+        "${client}/request.send.abort.after.response.received/client",
+        "${server}/request.send.abort.after.response.received/server"})
+    public void shouldSendAbortAndResetOnAbortedRequestAfterResponseHeaderReceived() throws Exception
+    {
+        k3po.finish();
+    }
 }

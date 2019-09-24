@@ -95,7 +95,7 @@ public class BufferUtilTest
         assertEquals(4, BufferUtil.limitOfBytes(buffer1, 0, 3, buffer2, 0, buffer2.capacity(), CRLFCRLF));
     }
 
-    @Test(expected=IllegalArgumentException.class)
+    @Test(expected = IllegalArgumentException.class)
     public void shouldRejectValueWhollyInFragment()
     {
         DirectBuffer buffer1 = new UnsafeBuffer("\r\n\r\n".getBytes(US_ASCII));

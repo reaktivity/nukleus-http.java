@@ -238,11 +238,11 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         StringBuilder headersChars = new StringBuilder();
         headers.forEach((name, value) ->
         {
-            switch(name.toLowerCase())
+            switch (name.toLowerCase())
             {
             case ":method":
                 pseudoHeaders[ClientStreamFactory.METHOD] = value;
-                switch(value.toLowerCase())
+                switch (value.toLowerCase())
                 {
                 case "post":
                 case "insert":
@@ -271,7 +271,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
             case "connection":
                 Arrays.asList(value.toLowerCase().split(",")).stream().forEach(element ->
                 {
-                    switch(element)
+                    switch (element)
                     {
                     case "close":
                         this.persistent = false;
@@ -485,7 +485,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         int index,
         int length)
     {
-        factory.abortRO.wrap(buffer, index, index + length);
+        AbortFW abort = factory.abortRO.wrap(buffer, index, index + length);
 
         if (connection == null)
         {
@@ -494,9 +494,15 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         }
         else
         {
-            factory.correlations.remove(connection.connectReplyId);
+            Correlation correlation = factory.correlations.remove(connection.connectReplyId);
             connection.persistent = false;
             connectionPool.release(connection, CloseAction.ABORT);
+            MessageConsumer connect = factory.router.supplyReceiver(connection.connectInitialId);
+            factory.writer.doReset(connect, connectRouteId, connection.connectReplyId, abort.trace());
+            if (correlation == null)
+            {
+                factory.writer.doAbort(acceptReply, acceptRouteId, acceptReplyId, abort.trace());
+            }
         }
     }
 

@@ -168,7 +168,7 @@ public class HttpClientBM
             RequestWriterState writer = new RequestWriterState();
             writer.reinit(this,  control);
             boolean done = false;
-            for (int i=0; i < 10 && !done; i++)
+            for (int i = 0; i < 10 && !done; i++)
             {
                 Thread.sleep(100);
                 done = writer.writeRequestBegin();
@@ -183,7 +183,7 @@ public class HttpClientBM
             RemoteWriterState echoWriter = new RemoteWriterState();
             echoWriter.reinit(this, control);
             int rawRequestFramesProcessed = 0;
-            for (int i=0; i < 10 && rawRequestFramesProcessed < 1; i++)
+            for (int i = 0; i < 10 && rawRequestFramesProcessed < 1; i++)
             {
                 Thread.sleep(100);
                 rawRequestFramesProcessed += echoReader.processRequests(echoWriter);
@@ -194,7 +194,7 @@ public class HttpClientBM
                 throw new RuntimeException("SharedState.reinit: writer.writeRequest() failed");
             }
             rawRequestFramesProcessed = 0;
-            for (int i=0; i < 10 && rawRequestFramesProcessed < 1; i++)
+            for (int i = 0; i < 10 && rawRequestFramesProcessed < 1; i++)
             {
                 Thread.sleep(100);
                 rawRequestFramesProcessed += echoReader.processRequests(echoWriter);
@@ -204,7 +204,7 @@ public class HttpClientBM
                 throw new RuntimeException("SharedState.reinit: echoReader.processRequests() failed");
             }
 
-            for (int i=0; i < 100 && clientAcceptReplyStreams == null; i++)
+            for (int i = 0; i < 100 && clientAcceptReplyStreams == null; i++)
             {
                 try
                 {
@@ -219,7 +219,7 @@ public class HttpClientBM
             ResponseReaderState reader = new ResponseReaderState();
             reader.reinit(this, control);
             int result = 0;
-            for (int i=0; i < 10 && result < 1; i++)
+            for (int i = 0; i < 10 && result < 1; i++)
             {
                 Thread.sleep(100);
                 result = reader.readResponse();
@@ -240,7 +240,7 @@ public class HttpClientBM
             {
                 controller.unroute(clientRouteId).get();
             }
-            catch(Exception e)
+            catch (Exception e)
             {
                 System.out.println(format("\nException from unrouteOutputNew in reset(): %s\n", e));
                 e.printStackTrace();
