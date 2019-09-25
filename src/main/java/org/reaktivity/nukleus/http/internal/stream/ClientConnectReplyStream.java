@@ -309,9 +309,9 @@ final class ClientConnectReplyStream implements MessageConsumer
         }
         else
         {
+            final OctetsFW payload = data.payload();
             if (slotIndex == NO_SLOT)
             {
-                final OctetsFW payload = data.payload();
                 final int limit = payload.limit();
                 int offset = payload.offset();
                 offset = decode(payload.buffer(), offset, limit);
@@ -324,7 +324,7 @@ final class ClientConnectReplyStream implements MessageConsumer
             }
             else
             {
-                handleDataPayloadWhenBuffering(data.payload());
+                bufferPayload(payload);
                 decodeBufferedData();
             }
         }
@@ -419,11 +419,11 @@ final class ClientConnectReplyStream implements MessageConsumer
         }
         else
         {
-            handleDataPayloadWhenBuffering(payload);
+            bufferPayload(payload);
         }
     }
 
-    private void handleDataPayloadWhenBuffering(
+    private void bufferPayload(
         final OctetsFW payload)
     {
         final int payloadSize = payload.sizeof();
