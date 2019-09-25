@@ -130,7 +130,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         }
     }
 
-    private void handleStreamWhenBuffering(
+    private void handleStream(
         int msgTypeId,
         DirectBuffer buffer,
         int index,
@@ -140,36 +140,18 @@ final class ClientConnectReplyStream implements MessageConsumer
         {
         case DataFW.TYPE_ID:
             final DataFW data = this.factory.dataRO.wrap(buffer, index, index + length);
-            handleDataWhenBuffering(data);
-            break;
-        case EndFW.TYPE_ID:
-            handleEndWhenBuffering(buffer, index, length);
-            break;
-        case AbortFW.TYPE_ID:
-            final AbortFW abort = this.factory.abortRO.wrap(buffer, index, index + length);
-            handleAbort(abort);
-            break;
-        default:
-            handleUnexpected(buffer, index, length);
-            break;
-        }
-    }
-
-    private void handleStreamWhenNotBuffering(
-        int msgTypeId,
-        DirectBuffer buffer,
-        int index,
-        int length)
-    {
-        switch (msgTypeId)
-        {
-        case DataFW.TYPE_ID:
-            final DataFW data = this.factory.dataRO.wrap(buffer, index, index + length);
-            handleDataWhenNotBuffering(data);
+            handleData(data);
             break;
         case EndFW.TYPE_ID:
             final EndFW end = this.factory.endRO.wrap(buffer, index, index + length);
-            handleEnd(end);
+            if (slotIndex == NO_SLOT)
+            {
+                handleEnd(end);
+            }
+            else
+            {
+                handleEndWhenBuffering(buffer, index, length);
+            }
             break;
         case AbortFW.TYPE_ID:
             final AbortFW abort = this.factory.abortRO.wrap(buffer, index, index + length);
@@ -315,7 +297,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         }
     }
 
-    private void handleDataWhenNotBuffering(
+    private void handleData(
         DataFW data)
     {
         acceptReplyTraceId = data.trace();
@@ -327,16 +309,23 @@ final class ClientConnectReplyStream implements MessageConsumer
         }
         else
         {
-            final OctetsFW payload = data.payload();
-            final int limit = payload.limit();
-            int offset = payload.offset();
-
-            offset = decode(payload.buffer(), offset, limit);
-
-            if (offset < limit)
+            if (slotIndex == NO_SLOT)
             {
-                payload.wrap(payload.buffer(), offset, limit);
-                handleDataPayloadWhenDecodeIncomplete(payload);
+                final OctetsFW payload = data.payload();
+                final int limit = payload.limit();
+                int offset = payload.offset();
+                offset = decode(payload.buffer(), offset, limit);
+
+                if (offset < limit)
+                {
+                    payload.wrap(payload.buffer(), offset, limit);
+                    handleDataPayloadWhenDecodeIncomplete(payload);
+                }
+            }
+            else
+            {
+                handleDataPayloadWhenBuffering(data.payload());
+                decodeBufferedData();
             }
         }
     }
@@ -430,27 +419,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         }
         else
         {
-            streamState = this::handleStreamWhenBuffering;
-
             handleDataPayloadWhenBuffering(payload);
-        }
-    }
-
-    private void handleDataWhenBuffering(
-        DataFW data)
-    {
-        acceptReplyTraceId = data.trace();
-        connectReplyBudget -= data.length() + data.padding();
-
-        if (connectReplyBudget < 0)
-        {
-            handleUnexpected(data.streamId(), acceptReplyTraceId);
-        }
-        else
-        {
-            handleDataPayloadWhenBuffering(data.payload());
-
-            decodeBufferedData();
         }
     }
 
@@ -477,7 +446,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         {
             releaseSlotIfNecessary();
             slotIndex = NO_SLOT;
-            streamState = this::handleStreamWhenNotBuffering;
+            streamState = this::handleStream;
             if (endDeferred)
             {
                 connection.persistent = false;
@@ -852,7 +821,7 @@ final class ClientConnectReplyStream implements MessageConsumer
 
     private void httpResponseBegin()
     {
-        this.streamState = this::handleStreamWhenNotBuffering;
+        this.streamState = this::handleStream;
         this.decoderState = this::decodeHttpBegin;
         this.responseState = ResponseState.BEFORE_HEADERS;
         this.acceptReplyPadding = 0;
