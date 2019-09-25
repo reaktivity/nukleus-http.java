@@ -49,7 +49,6 @@ final class ClientConnectReplyStream implements MessageConsumer
     private final ClientStreamFactory factory;
     private final MessageConsumer connectReplyThrottle;
 
-    private MessageConsumer streamState;
     private MessageConsumer throttleState;
     private DecoderState decoderState;
     private int chunkSize;
@@ -101,7 +100,6 @@ final class ClientConnectReplyStream implements MessageConsumer
         this.connectReplyThrottle = connectReplyThrottle;
         this.connectRouteId = connectRouteId;
         this.connectReplyId = connectReplyId;
-        this.streamState = this::handleStream;
         this.throttleState = this::handleThrottleBeforeBegin;
         this.windowHandler = this::handleWindow;
     }
@@ -109,7 +107,7 @@ final class ClientConnectReplyStream implements MessageConsumer
     @Override
     public void accept(int msgTypeId, DirectBuffer buffer, int index, int length)
     {
-        streamState.accept(msgTypeId, buffer, index, length);
+        handleStream(msgTypeId, buffer, index, length);
     }
 
     private void handleStream(
@@ -149,27 +147,6 @@ final class ClientConnectReplyStream implements MessageConsumer
         }
     }
 
-    private void handleStreamBeforeEnd(
-        int msgTypeId,
-        DirectBuffer buffer,
-        int index,
-        int length)
-    {
-        switch (msgTypeId)
-        {
-        case EndFW.TYPE_ID:
-            final EndFW end = this.factory.endRO.wrap(buffer, index, index + length);
-            handleEnd(end);
-            break;
-        case AbortFW.TYPE_ID:
-            final AbortFW abort = this.factory.abortRO.wrap(buffer, index, index + length);
-            handleAbort(abort);
-            break;
-        default:
-            handleUnexpected(buffer, index, length);
-            break;
-        }
-    }
 
     private void handleStreamAfterEnd(
         int msgTypeId,
@@ -180,30 +157,6 @@ final class ClientConnectReplyStream implements MessageConsumer
         handleUnexpected(buffer, index, length);
     }
 
-    private void handleStreamAfterReset(
-        int msgTypeId,
-        DirectBuffer buffer,
-        int index,
-        int length)
-    {
-        switch (msgTypeId)
-        {
-        case DataFW.TYPE_ID:
-            final DataFW data = this.factory.dataRO.wrap(buffer, index, index + length);
-            factory.writer.doWindow(connectReplyThrottle, connectRouteId, data.streamId(), 0, data.length(), 0);
-            break;
-        case EndFW.TYPE_ID:
-            this.factory.endRO.wrap(buffer, index, index + length);
-            this.streamState = this::handleStreamAfterEnd;
-            break;
-        case AbortFW.TYPE_ID:
-            this.factory.abortRO.wrap(buffer, index, index + length);
-            this.streamState = this::handleStreamAfterEnd;
-            break;
-        default:
-            break;
-        }
-    }
 
     private void handleUnexpected(
         DirectBuffer buffer,
@@ -226,14 +179,12 @@ final class ClientConnectReplyStream implements MessageConsumer
             factory.writer.doAbort(acceptReply, acceptRouteId, acceptReplyId, traceId);
         }
 
-        this.streamState = this::handleStreamAfterReset;
         doCleanup(CloseAction.ABORT);
     }
 
     private void handleInvalidResponseAndReset()
     {
         this.decoderState = this::decodeSkipData;
-        this.streamState = this::handleStreamAfterReset;
 
         // Drain data from source before resetting to allow its writes to complete
         int window = factory.maximumHeadersSize;
@@ -256,7 +207,6 @@ final class ClientConnectReplyStream implements MessageConsumer
         }
 
         this.decoderState = this::decodeSkipData;
-        this.streamState = this::handleStreamAfterReset;
 
         connection.persistent = false;
         doCleanup(action);
@@ -419,7 +369,6 @@ final class ClientConnectReplyStream implements MessageConsumer
         decode(slot, 0, slotOffset);
         if (slotOffset == 0 && endDeferred)
         {
-            streamState = this::handleStream;
             connection.persistent = false;
             if (contentRemaining > 0)
             {
@@ -453,7 +402,6 @@ final class ClientConnectReplyStream implements MessageConsumer
     private void doCleanup(CloseAction action)
     {
         decoderState = (b, o, l) -> o;
-        streamState = this::handleStreamAfterEnd;
         responseState = ResponseState.FINAL;
         releaseSlotIfNecessary();
         if (connection != null)
@@ -781,7 +729,6 @@ final class ClientConnectReplyStream implements MessageConsumer
 
     private void httpResponseBegin()
     {
-        this.streamState = this::handleStream;
         this.decoderState = this::decodeHttpBegin;
         this.responseState = ResponseState.BEFORE_HEADERS;
         this.acceptReplyPadding = 0;
@@ -813,7 +760,6 @@ final class ClientConnectReplyStream implements MessageConsumer
         }
         else
         {
-            this.streamState = this::handleStreamBeforeEnd;
             this.responseState = ResponseState.FINAL;
         }
 
