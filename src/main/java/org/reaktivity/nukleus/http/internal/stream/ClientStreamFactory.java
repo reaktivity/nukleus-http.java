@@ -225,7 +225,7 @@ public final class ClientStreamFactory implements StreamFactory
         final long connectRouteId = begin.routeId();
         final long connectReplyId = begin.streamId();
 
-        return new ClientConnectReplyStream(this, connectReplyThrottle, connectRouteId, connectReplyId);
+        return new ClientConnectReplyStream(this, connectReplyThrottle, connectRouteId, connectReplyId)::handleStream;
     }
 
     private RouteFW resolveTarget(

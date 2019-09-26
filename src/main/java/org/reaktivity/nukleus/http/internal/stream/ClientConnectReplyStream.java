@@ -44,12 +44,11 @@ import org.reaktivity.nukleus.http.internal.types.stream.FrameFW;
 import org.reaktivity.nukleus.http.internal.types.stream.ResetFW;
 import org.reaktivity.nukleus.http.internal.types.stream.WindowFW;
 
-final class ClientConnectReplyStream implements MessageConsumer
+final class ClientConnectReplyStream
 {
     private final ClientStreamFactory factory;
     private final MessageConsumer connectReplyThrottle;
 
-    private MessageConsumer streamState;
     private MessageConsumer throttleState;
     private DecoderState decoderState;
     private int chunkSize;
@@ -62,7 +61,6 @@ final class ClientConnectReplyStream implements MessageConsumer
 
     private int slotIndex = BufferPool.NO_SLOT;
     private int slotOffset = 0;
-    private int slotPosition;
     private boolean endDeferred;
 
     private long connectRouteId;
@@ -102,70 +100,25 @@ final class ClientConnectReplyStream implements MessageConsumer
         this.connectReplyThrottle = connectReplyThrottle;
         this.connectRouteId = connectRouteId;
         this.connectReplyId = connectReplyId;
-        this.streamState = this::handleStreamBeforeBegin;
         this.throttleState = this::handleThrottleBeforeBegin;
         this.windowHandler = this::handleWindow;
     }
 
-    @Override
-    public void accept(int msgTypeId, DirectBuffer buffer, int index, int length)
-    {
-        streamState.accept(msgTypeId, buffer, index, length);
-    }
-
-    private void handleStreamBeforeBegin(
+    public void handleStream(
         int msgTypeId,
         DirectBuffer buffer,
         int index,
         int length)
     {
-        if (msgTypeId == BeginFW.TYPE_ID)
+        switch (msgTypeId)
         {
+        case BeginFW.TYPE_ID:
             final BeginFW begin = this.factory.beginRO.wrap(buffer, index, index + length);
             handleBegin(begin);
-        }
-        else
-        {
-            handleUnexpected(buffer, index, length);
-        }
-    }
-
-    private void handleStreamWhenBuffering(
-        int msgTypeId,
-        DirectBuffer buffer,
-        int index,
-        int length)
-    {
-        switch (msgTypeId)
-        {
+            break;
         case DataFW.TYPE_ID:
             final DataFW data = this.factory.dataRO.wrap(buffer, index, index + length);
-            handleDataWhenBuffering(data);
-            break;
-        case EndFW.TYPE_ID:
-            handleEndWhenBuffering(buffer, index, length);
-            break;
-        case AbortFW.TYPE_ID:
-            final AbortFW abort = this.factory.abortRO.wrap(buffer, index, index + length);
-            handleAbort(abort);
-            break;
-        default:
-            handleUnexpected(buffer, index, length);
-            break;
-        }
-    }
-
-    private void handleStreamWhenNotBuffering(
-        int msgTypeId,
-        DirectBuffer buffer,
-        int index,
-        int length)
-    {
-        switch (msgTypeId)
-        {
-        case DataFW.TYPE_ID:
-            final DataFW data = this.factory.dataRO.wrap(buffer, index, index + length);
-            handleDataWhenNotBuffering(data);
+            handleData(data);
             break;
         case EndFW.TYPE_ID:
             final EndFW end = this.factory.endRO.wrap(buffer, index, index + length);
@@ -177,62 +130,6 @@ final class ClientConnectReplyStream implements MessageConsumer
             break;
         default:
             handleUnexpected(buffer, index, length);
-            break;
-        }
-    }
-
-    private void handleStreamBeforeEnd(
-        int msgTypeId,
-        DirectBuffer buffer,
-        int index,
-        int length)
-    {
-        switch (msgTypeId)
-        {
-        case EndFW.TYPE_ID:
-            final EndFW end = this.factory.endRO.wrap(buffer, index, index + length);
-            handleEnd(end);
-            break;
-        case AbortFW.TYPE_ID:
-            final AbortFW abort = this.factory.abortRO.wrap(buffer, index, index + length);
-            handleAbort(abort);
-            break;
-        default:
-            handleUnexpected(buffer, index, length);
-            break;
-        }
-    }
-
-    private void handleStreamAfterEnd(
-        int msgTypeId,
-        DirectBuffer buffer,
-        int index,
-        int length)
-    {
-        handleUnexpected(buffer, index, length);
-    }
-
-    private void handleStreamAfterReset(
-        int msgTypeId,
-        DirectBuffer buffer,
-        int index,
-        int length)
-    {
-        switch (msgTypeId)
-        {
-        case DataFW.TYPE_ID:
-            final DataFW data = this.factory.dataRO.wrap(buffer, index, index + length);
-            factory.writer.doWindow(connectReplyThrottle, connectRouteId, data.streamId(), 0, data.length(), 0);
-            break;
-        case EndFW.TYPE_ID:
-            this.factory.endRO.wrap(buffer, index, index + length);
-            this.streamState = this::handleStreamAfterEnd;
-            break;
-        case AbortFW.TYPE_ID:
-            this.factory.abortRO.wrap(buffer, index, index + length);
-            this.streamState = this::handleStreamAfterEnd;
-            break;
-        default:
             break;
         }
     }
@@ -258,14 +155,12 @@ final class ClientConnectReplyStream implements MessageConsumer
             factory.writer.doAbort(acceptReply, acceptRouteId, acceptReplyId, traceId);
         }
 
-        this.streamState = this::handleStreamAfterReset;
         doCleanup(CloseAction.ABORT);
     }
 
     private void handleInvalidResponseAndReset()
     {
         this.decoderState = this::decodeSkipData;
-        this.streamState = this::handleStreamAfterReset;
 
         // Drain data from source before resetting to allow its writes to complete
         int window = factory.maximumHeadersSize;
@@ -288,7 +183,6 @@ final class ClientConnectReplyStream implements MessageConsumer
         }
 
         this.decoderState = this::decodeSkipData;
-        this.streamState = this::handleStreamAfterReset;
 
         connection.persistent = false;
         doCleanup(action);
@@ -315,7 +209,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         }
     }
 
-    private void handleDataWhenNotBuffering(
+    private void handleData(
         DataFW data)
     {
         acceptReplyTraceId = data.trace();
@@ -328,16 +222,20 @@ final class ClientConnectReplyStream implements MessageConsumer
         else
         {
             final OctetsFW payload = data.payload();
-            final int limit = payload.limit();
+            DirectBuffer buffer = payload.buffer();
             int offset = payload.offset();
+            int limit = payload.limit();
 
-            offset = decode(payload.buffer(), offset, limit);
-
-            if (offset < limit)
+            if (slotIndex != NO_SLOT)
             {
-                payload.wrap(payload.buffer(), offset, limit);
-                handleDataPayloadWhenDecodeIncomplete(payload);
+                final MutableDirectBuffer slotBuffer = factory.bufferPool.buffer(slotIndex);
+                slotBuffer.putBytes(slotOffset, buffer, offset, limit - offset);
+                slotOffset += limit - offset;
+                buffer = slotBuffer;
+                offset = 0;
+                limit = slotOffset;
             }
+            decode(buffer, offset, limit);
         }
     }
 
@@ -347,28 +245,35 @@ final class ClientConnectReplyStream implements MessageConsumer
         final long streamId = end.streamId();
         assert streamId == connectReplyId;
 
-        if (responseState == ResponseState.BEFORE_HEADERS && acceptReply == null &&
+        if (slotIndex != NO_SLOT && (responseState == ResponseState.BEFORE_HEADERS || responseState == ResponseState.DATA))
+        {
+            endDeferred = true;
+        }
+        else
+        {
+            if (responseState == ResponseState.BEFORE_HEADERS && acceptReply == null &&
                 factory.correlations.get(connection.connectReplyId) == null)
-        {
-            responseState = ResponseState.FINAL;
-        }
-        else if (responseState == ResponseState.DATA && !connection.persistent)
-        {
-            factory.writer.doEnd(acceptReply, acceptRouteId, acceptReplyId, end.trace());
-            responseState = ResponseState.FINAL;
-        }
+            {
+                responseState = ResponseState.FINAL;
+            }
+            else if (responseState == ResponseState.DATA && !connection.persistent)
+            {
+                factory.writer.doEnd(acceptReply, acceptRouteId, acceptReplyId, end.trace());
+                responseState = ResponseState.FINAL;
+            }
 
-        switch (responseState)
-        {
-        case BEFORE_HEADERS:
-        case HEADERS:
-        case DATA:
-            // Incomplete response
-            handleInvalidResponse(CloseAction.END, end.trace());
-            break;
-        case FINAL:
-            connection.persistent = false;
-            doCleanup(CloseAction.END);
+            switch (responseState)
+            {
+            case BEFORE_HEADERS:
+            case HEADERS:
+            case DATA:
+                // Incomplete response
+                handleInvalidResponse(CloseAction.END, end.trace());
+                break;
+            case FINAL:
+                connection.persistent = false;
+                doCleanup(CloseAction.END);
+            }
         }
     }
 
@@ -403,128 +308,47 @@ final class ClientConnectReplyStream implements MessageConsumer
         }
     }
 
-    private int decode(DirectBuffer buffer, int offset, int limit)
+    private void decode(
+        DirectBuffer buffer,
+        int offset,
+        int limit)
     {
-        boolean decoderStateChanged = true;
-        while (offset <= limit && decoderStateChanged)
+        DecoderState previous = null;
+        while (offset <= limit && previous != decoderState)
         {
-            DecoderState previous = decoderState;
+            previous = decoderState;
             offset = decoderState.decode(buffer, offset, limit);
-            decoderStateChanged = previous != decoderState;
-        }
-        return offset;
-    }
-
-    private void handleDataPayloadWhenDecodeIncomplete(
-        final OctetsFW payload)
-    {
-        assert slotIndex == NO_SLOT;
-        slotOffset = slotPosition = 0;
-        slotIndex = factory.bufferPool.acquire(connectReplyId);
-        if (slotIndex == NO_SLOT)
-        {
-            // Out of slab memory
-            factory.writer.doReset(connectReplyThrottle, connectRouteId, connectReplyId, factory.supplyTrace.getAsLong());
-            connection.persistent = false;
-            doCleanup(CloseAction.ABORT);
-        }
-        else
-        {
-            streamState = this::handleStreamWhenBuffering;
-
-            handleDataPayloadWhenBuffering(payload);
-        }
-    }
-
-    private void handleDataWhenBuffering(
-        DataFW data)
-    {
-        acceptReplyTraceId = data.trace();
-        connectReplyBudget -= data.length() + data.padding();
-
-        if (connectReplyBudget < 0)
-        {
-            handleUnexpected(data.streamId(), acceptReplyTraceId);
-        }
-        else
-        {
-            handleDataPayloadWhenBuffering(data.payload());
-
-            decodeBufferedData();
-        }
-    }
-
-    private void handleDataPayloadWhenBuffering(
-        final OctetsFW payload)
-    {
-        final int payloadSize = payload.sizeof();
-
-        if (slotPosition + payloadSize > factory.bufferPool.slotCapacity())
-        {
-            alignSlotData();
         }
 
-        MutableDirectBuffer slot = factory.bufferPool.buffer(slotIndex);
-        slot.putBytes(slotPosition, payload.buffer(), payload.offset(), payloadSize);
-        slotPosition += payloadSize;
-    }
-
-    private void decodeBufferedData()
-    {
-        MutableDirectBuffer slot = factory.bufferPool.buffer(slotIndex);
-        slotOffset = decode(slot, slotOffset, slotPosition);
-        if (slotOffset == slotPosition)
+        if (offset < limit)
         {
-            releaseSlotIfNecessary();
-            slotIndex = NO_SLOT;
-            streamState = this::handleStreamWhenNotBuffering;
-            if (endDeferred)
+            if (slotIndex == NO_SLOT)
             {
+                slotIndex = factory.bufferPool.acquire(connectReplyId);
+            }
+
+            if (slotIndex == NO_SLOT)
+            {
+                factory.writer.doReset(connectReplyThrottle, connectRouteId, connectReplyId, factory.supplyTrace.getAsLong());
                 connection.persistent = false;
-                if (contentRemaining > 0)
-                {
-                    factory.writer.doAbort(acceptReply, acceptRouteId, acceptReplyId, factory.supplyTrace.getAsLong());
-                }
-                doCleanup(CloseAction.END);
+                doCleanup(CloseAction.ABORT);
+            }
+            else
+            {
+                final MutableDirectBuffer slotBuffer = factory.bufferPool.buffer(slotIndex);
+                slotBuffer.putBytes(0, buffer, offset, limit - offset);
+                slotOffset = limit - offset;
             }
         }
-    }
-
-    private void handleEndWhenBuffering(
-        DirectBuffer buffer,
-        int index,
-        int length)
-    {
-        this.factory.endRO.wrap(buffer, index, index + length);
-        final long streamId = this.factory.endRO.streamId();
-        assert streamId == connectReplyId;
-
-        switch (responseState)
+        else if (slotIndex != NO_SLOT)
         {
-        case BEFORE_HEADERS:
-        case DATA:
-            // Waiting for window to finish writing response to application
-            endDeferred = true;
-            break;
-        default:
-            handleEnd(this.factory.endRO);
+            releaseSlotIfNecessary();
         }
-    }
-
-    private void alignSlotData()
-    {
-        int dataLength = slotPosition - slotOffset;
-        MutableDirectBuffer slot = factory.bufferPool.buffer(slotIndex);
-        factory.temporarySlot.putBytes(0, slot, slotOffset, dataLength);
-        slot.putBytes(0, factory.temporarySlot, 0, dataLength);
-        slotOffset = 0;
-        slotPosition = dataLength;
     }
 
     private void doCleanup(CloseAction action)
     {
         decoderState = (b, o, l) -> o;
-        streamState = this::handleStreamAfterEnd;
         responseState = ResponseState.FINAL;
         releaseSlotIfNecessary();
         if (connection != null)
@@ -852,7 +676,6 @@ final class ClientConnectReplyStream implements MessageConsumer
 
     private void httpResponseBegin()
     {
-        this.streamState = this::handleStreamWhenNotBuffering;
         this.decoderState = this::decodeHttpBegin;
         this.responseState = ResponseState.BEFORE_HEADERS;
         this.acceptReplyPadding = 0;
@@ -884,7 +707,6 @@ final class ClientConnectReplyStream implements MessageConsumer
         }
         else
         {
-            this.streamState = this::handleStreamBeforeEnd;
             this.responseState = ResponseState.FINAL;
         }
 
@@ -958,12 +780,21 @@ final class ClientConnectReplyStream implements MessageConsumer
 
         if (slotIndex != NO_SLOT)
         {
-            decodeBufferedData();
+            MutableDirectBuffer slot = factory.bufferPool.buffer(slotIndex);
+            decode(slot, 0, slotOffset);
+            if (slotIndex == NO_SLOT && endDeferred)
+            {
+                connection.persistent = false;
+                if (contentRemaining > 0)
+                {
+                    factory.writer.doAbort(acceptReply, acceptRouteId, acceptReplyId, factory.supplyTrace.getAsLong());
+                }
+                doCleanup(CloseAction.END);
+            }
         }
 
-        int slotRemaining = slotPosition - slotOffset;
         final int connectReplyCredit = Math.min(acceptReplyBudget, factory.bufferPool.slotCapacity())
-                - connectReplyBudget - slotRemaining;
+                                       - connectReplyBudget - slotOffset;
         if (connectReplyCredit > 0)
         {
             connectReplyBudget += connectReplyCredit;
@@ -989,6 +820,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         {
             factory.bufferPool.release(slotIndex);
             slotIndex = NO_SLOT;
+            slotOffset = 0;
         }
     }
 
