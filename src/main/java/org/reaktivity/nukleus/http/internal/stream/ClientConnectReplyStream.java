@@ -128,14 +128,7 @@ final class ClientConnectReplyStream implements MessageConsumer
             break;
         case EndFW.TYPE_ID:
             final EndFW end = this.factory.endRO.wrap(buffer, index, index + length);
-            if (slotIndex == NO_SLOT)
-            {
-                handleEnd(end);
-            }
-            else
-            {
-                handleEndWhenBuffering(buffer, index, length);
-            }
+            handleEnd(end);
             break;
         case AbortFW.TYPE_ID:
             final AbortFW abort = this.factory.abortRO.wrap(buffer, index, index + length);
@@ -258,28 +251,35 @@ final class ClientConnectReplyStream implements MessageConsumer
         final long streamId = end.streamId();
         assert streamId == connectReplyId;
 
-        if (responseState == ResponseState.BEFORE_HEADERS && acceptReply == null &&
+        if (slotIndex != NO_SLOT && (responseState == ResponseState.BEFORE_HEADERS || responseState == ResponseState.DATA))
+        {
+            endDeferred = true;
+        }
+        else
+        {
+            if (responseState == ResponseState.BEFORE_HEADERS && acceptReply == null &&
                 factory.correlations.get(connection.connectReplyId) == null)
-        {
-            responseState = ResponseState.FINAL;
-        }
-        else if (responseState == ResponseState.DATA && !connection.persistent)
-        {
-            factory.writer.doEnd(acceptReply, acceptRouteId, acceptReplyId, end.trace());
-            responseState = ResponseState.FINAL;
-        }
+            {
+                responseState = ResponseState.FINAL;
+            }
+            else if (responseState == ResponseState.DATA && !connection.persistent)
+            {
+                factory.writer.doEnd(acceptReply, acceptRouteId, acceptReplyId, end.trace());
+                responseState = ResponseState.FINAL;
+            }
 
-        switch (responseState)
-        {
-        case BEFORE_HEADERS:
-        case HEADERS:
-        case DATA:
-            // Incomplete response
-            handleInvalidResponse(CloseAction.END, end.trace());
-            break;
-        case FINAL:
-            connection.persistent = false;
-            doCleanup(CloseAction.END);
+            switch (responseState)
+            {
+            case BEFORE_HEADERS:
+            case HEADERS:
+            case DATA:
+                // Incomplete response
+                handleInvalidResponse(CloseAction.END, end.trace());
+                break;
+            case FINAL:
+                connection.persistent = false;
+                doCleanup(CloseAction.END);
+            }
         }
     }
 
@@ -349,27 +349,6 @@ final class ClientConnectReplyStream implements MessageConsumer
         else if (slotIndex != NO_SLOT)
         {
             releaseSlotIfNecessary();
-        }
-    }
-
-    private void handleEndWhenBuffering(
-        DirectBuffer buffer,
-        int index,
-        int length)
-    {
-        this.factory.endRO.wrap(buffer, index, index + length);
-        final long streamId = this.factory.endRO.streamId();
-        assert streamId == connectReplyId;
-
-        switch (responseState)
-        {
-        case BEFORE_HEADERS:
-        case DATA:
-            // Waiting for window to finish writing response to application
-            endDeferred = true;
-            break;
-        default:
-            handleEnd(this.factory.endRO);
         }
     }
 
@@ -809,7 +788,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         {
             MutableDirectBuffer slot = factory.bufferPool.buffer(slotIndex);
             decode(slot, 0, slotOffset);
-            if (slotOffset == 0 && endDeferred)
+            if (slotIndex == NO_SLOT && endDeferred)
             {
                 connection.persistent = false;
                 if (contentRemaining > 0)
