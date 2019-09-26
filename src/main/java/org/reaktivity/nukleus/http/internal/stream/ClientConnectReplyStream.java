@@ -44,7 +44,7 @@ import org.reaktivity.nukleus.http.internal.types.stream.FrameFW;
 import org.reaktivity.nukleus.http.internal.types.stream.ResetFW;
 import org.reaktivity.nukleus.http.internal.types.stream.WindowFW;
 
-final class ClientConnectReplyStream implements MessageConsumer
+final class ClientConnectReplyStream
 {
     private final ClientStreamFactory factory;
     private final MessageConsumer connectReplyThrottle;
@@ -104,13 +104,7 @@ final class ClientConnectReplyStream implements MessageConsumer
         this.windowHandler = this::handleWindow;
     }
 
-    @Override
-    public void accept(int msgTypeId, DirectBuffer buffer, int index, int length)
-    {
-        handleStream(msgTypeId, buffer, index, length);
-    }
-
-    private void handleStream(
+    public void handleStream(
         int msgTypeId,
         DirectBuffer buffer,
         int index,
