@@ -147,17 +147,6 @@ final class ClientConnectReplyStream implements MessageConsumer
         }
     }
 
-
-    private void handleStreamAfterEnd(
-        int msgTypeId,
-        DirectBuffer buffer,
-        int index,
-        int length)
-    {
-        handleUnexpected(buffer, index, length);
-    }
-
-
     private void handleUnexpected(
         DirectBuffer buffer,
         int index,
@@ -360,21 +349,6 @@ final class ClientConnectReplyStream implements MessageConsumer
         else if (slotIndex != NO_SLOT)
         {
             releaseSlotIfNecessary();
-        }
-    }
-
-    private void decodeBufferedData()
-    {
-        MutableDirectBuffer slot = factory.bufferPool.buffer(slotIndex);
-        decode(slot, 0, slotOffset);
-        if (slotOffset == 0 && endDeferred)
-        {
-            connection.persistent = false;
-            if (contentRemaining > 0)
-            {
-                factory.writer.doAbort(acceptReply, acceptRouteId, acceptReplyId, factory.supplyTrace.getAsLong());
-            }
-            doCleanup(CloseAction.END);
         }
     }
 
@@ -833,7 +807,17 @@ final class ClientConnectReplyStream implements MessageConsumer
 
         if (slotIndex != NO_SLOT)
         {
-            decodeBufferedData();
+            MutableDirectBuffer slot = factory.bufferPool.buffer(slotIndex);
+            decode(slot, 0, slotOffset);
+            if (slotOffset == 0 && endDeferred)
+            {
+                connection.persistent = false;
+                if (contentRemaining > 0)
+                {
+                    factory.writer.doAbort(acceptReply, acceptRouteId, acceptReplyId, factory.supplyTrace.getAsLong());
+                }
+                doCleanup(CloseAction.END);
+            }
         }
 
         final int connectReplyCredit = Math.min(acceptReplyBudget, factory.bufferPool.slotCapacity())
