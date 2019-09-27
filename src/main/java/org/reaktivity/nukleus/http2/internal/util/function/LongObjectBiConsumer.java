@@ -13,20 +13,31 @@
  * License for the specific language governing permissions and limitations
  * under the License.
  */
-module org.reaktivity.nukleus.http
+package org.reaktivity.nukleus.http2.internal.util.function;
+
+import java.util.Objects;
+import java.util.function.BiConsumer;
+
+@FunctionalInterface
+public interface LongObjectBiConsumer<T> extends BiConsumer<Long, T>
 {
-    requires org.reaktivity.nukleus;
-    requires com.google.gson;
+    void accept(long value, T t);
 
-    provides org.reaktivity.nukleus.NukleusFactorySpi
-        with org.reaktivity.nukleus.http.internal.HttpNukleusFactorySpi;
+    @Override
+    default void accept(Long value, T t)
+    {
+        this.accept(value.longValue(), t);
+    }
 
-    provides org.reaktivity.nukleus.NukleusFactorySpi
-        with org.reaktivity.nukleus.http2.internal.Http2NukleusFactorySpi;
+    default LongObjectBiConsumer<T> andThen(
+        LongObjectBiConsumer<? super T> after)
+    {
+        Objects.requireNonNull(after);
 
-    provides org.reaktivity.nukleus.ControllerFactorySpi
-        with org.reaktivity.nukleus.http.internal.HttpControllerFactorySpi;
-
-    provides org.reaktivity.nukleus.ControllerFactorySpi
-        with org.reaktivity.nukleus.http2.internal.Http2ControllerFactorySpi;
+        return (l, r) ->
+        {
+            accept(l, r);
+            after.accept(l, r);
+        };
+    }
 }

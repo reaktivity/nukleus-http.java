@@ -13,20 +13,13 @@
  * License for the specific language governing permissions and limitations
  * under the License.
  */
-module org.reaktivity.nukleus.http
+package org.reaktivity.nukleus.http2.internal;
+
+import org.reaktivity.nukleus.http.internal.types.ArrayFW;
+import org.reaktivity.nukleus.http.internal.types.HttpHeaderFW;
+
+@FunctionalInterface
+public interface PromisedRequestHandler
 {
-    requires org.reaktivity.nukleus;
-    requires com.google.gson;
-
-    provides org.reaktivity.nukleus.NukleusFactorySpi
-        with org.reaktivity.nukleus.http.internal.HttpNukleusFactorySpi;
-
-    provides org.reaktivity.nukleus.NukleusFactorySpi
-        with org.reaktivity.nukleus.http2.internal.Http2NukleusFactorySpi;
-
-    provides org.reaktivity.nukleus.ControllerFactorySpi
-        with org.reaktivity.nukleus.http.internal.HttpControllerFactorySpi;
-
-    provides org.reaktivity.nukleus.ControllerFactorySpi
-        with org.reaktivity.nukleus.http2.internal.Http2ControllerFactorySpi;
+    void accept(int promisedStreamId, long authorization, ArrayFW<HttpHeaderFW> headers);
 }
