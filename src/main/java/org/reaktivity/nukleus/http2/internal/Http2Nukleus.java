@@ -13,20 +13,37 @@
  * License for the specific language governing permissions and limitations
  * under the License.
  */
-module org.reaktivity.nukleus.http
+package org.reaktivity.nukleus.http2.internal;
+
+import org.reaktivity.nukleus.Nukleus;
+
+final class Http2Nukleus implements Nukleus
 {
-    requires org.reaktivity.nukleus;
-    requires com.google.gson;
+    static final String NAME = "http2";
 
-    provides org.reaktivity.nukleus.NukleusFactorySpi
-        with org.reaktivity.nukleus.http.internal.HttpNukleusFactorySpi;
+    private final Http2Configuration config;
 
-    provides org.reaktivity.nukleus.NukleusFactorySpi
-        with org.reaktivity.nukleus.http2.internal.Http2NukleusFactorySpi;
+    Http2Nukleus(
+        Http2Configuration config)
+    {
+        this.config = config;
+    }
 
-    provides org.reaktivity.nukleus.ControllerFactorySpi
-        with org.reaktivity.nukleus.http.internal.HttpControllerFactorySpi;
+    @Override
+    public String name()
+    {
+        return Http2Nukleus.NAME;
+    }
 
-    provides org.reaktivity.nukleus.ControllerFactorySpi
-        with org.reaktivity.nukleus.http2.internal.Http2ControllerFactorySpi;
+    @Override
+    public Http2Configuration config()
+    {
+        return config;
+    }
+
+    @Override
+    public Http2Elektron supplyElektron()
+    {
+        return new Http2Elektron(config);
+    }
 }

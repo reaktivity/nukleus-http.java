@@ -13,20 +13,23 @@
  * License for the specific language governing permissions and limitations
  * under the License.
  */
-module org.reaktivity.nukleus.http
+package org.reaktivity.nukleus.http2.internal;
+
+import org.reaktivity.nukleus.Configuration;
+import org.reaktivity.nukleus.NukleusFactorySpi;
+
+public final class Http2NukleusFactorySpi implements NukleusFactorySpi
 {
-    requires org.reaktivity.nukleus;
-    requires com.google.gson;
+    @Override
+    public String name()
+    {
+        return Http2Nukleus.NAME;
+    }
 
-    provides org.reaktivity.nukleus.NukleusFactorySpi
-        with org.reaktivity.nukleus.http.internal.HttpNukleusFactorySpi;
-
-    provides org.reaktivity.nukleus.NukleusFactorySpi
-        with org.reaktivity.nukleus.http2.internal.Http2NukleusFactorySpi;
-
-    provides org.reaktivity.nukleus.ControllerFactorySpi
-        with org.reaktivity.nukleus.http.internal.HttpControllerFactorySpi;
-
-    provides org.reaktivity.nukleus.ControllerFactorySpi
-        with org.reaktivity.nukleus.http2.internal.Http2ControllerFactorySpi;
+    @Override
+    public Http2Nukleus create(
+        Configuration config)
+    {
+        return new Http2Nukleus(new Http2Configuration(config));
+    }
 }

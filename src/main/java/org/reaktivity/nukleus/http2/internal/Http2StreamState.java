@@ -13,20 +13,15 @@
  * License for the specific language governing permissions and limitations
  * under the License.
  */
-module org.reaktivity.nukleus.http
+package org.reaktivity.nukleus.http2.internal;
+
+public enum Http2StreamState
 {
-    requires org.reaktivity.nukleus;
-    requires com.google.gson;
-
-    provides org.reaktivity.nukleus.NukleusFactorySpi
-        with org.reaktivity.nukleus.http.internal.HttpNukleusFactorySpi;
-
-    provides org.reaktivity.nukleus.NukleusFactorySpi
-        with org.reaktivity.nukleus.http2.internal.Http2NukleusFactorySpi;
-
-    provides org.reaktivity.nukleus.ControllerFactorySpi
-        with org.reaktivity.nukleus.http.internal.HttpControllerFactorySpi;
-
-    provides org.reaktivity.nukleus.ControllerFactorySpi
-        with org.reaktivity.nukleus.http2.internal.Http2ControllerFactorySpi;
+    UNKNOWN,
+    RESERVED_LOCAL,
+    RESERVED_REMOTE,
+    OPEN,
+    HALF_CLOSED_LOCAL,
+    HALF_CLOSED_REMOTE,
+    CLOSED
 }
