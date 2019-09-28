@@ -88,7 +88,7 @@ final class MessageWriter
                 .streamId(streamId)
                 .trace(traceId)
                 .groupId(0)
-                .padding(padding)
+                .reserved(length + padding)
                 .payload(p -> p.set(payload, offset, length))
                 .build();
 
@@ -108,7 +108,7 @@ final class MessageWriter
                 .streamId(streamId)
                 .trace(traceId)
                 .groupId(0)
-                .padding(padding)
+                .reserved(payload.sizeof() + padding)
                 .payload(p -> p.set(payload))
                 .build();
 
@@ -177,7 +177,7 @@ final class MessageWriter
                 .streamId(streamId)
                 .trace(traceId)
                 .groupId(0)
-                .padding(padding)
+                .reserved(length + padding)
                 .payload(p -> p.set(payload, offset, length))
                 .build();
 

@@ -213,7 +213,7 @@ final class ClientConnectReplyStream
         DataFW data)
     {
         acceptReplyTraceId = data.trace();
-        connectReplyBudget -= data.length() + data.padding();
+        connectReplyBudget -= data.reserved();
 
         if (connectReplyBudget < 0)
         {

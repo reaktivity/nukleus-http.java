@@ -396,7 +396,7 @@ final class ServerAcceptStream implements MessageConsumer
         DataFW data = factory.dataRO.wrap(buffer, index, index + length);
         streamTraceId = data.trace();
 
-        sourceBudget -= data.length() + data.padding();
+        sourceBudget -= data.reserved();
 
         if (sourceBudget < 0)
         {
@@ -503,7 +503,7 @@ final class ServerAcceptStream implements MessageConsumer
         int length)
     {
         DataFW data = factory.dataRO.wrap(buffer, index, index + length);
-        sourceBudget -= data.length() + data.padding();
+        sourceBudget -= data.reserved();
 
         if (sourceBudget < 0)
         {

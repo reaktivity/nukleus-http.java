@@ -315,7 +315,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         DataFW data = factory.dataRO.wrap(buffer, index, index + length);
         final long traceId = data.trace();
 
-        sourceBudget -= data.length() + data.padding();
+        sourceBudget -= data.reserved();
         if (sourceBudget < 0)
         {
             processUnexpected(buffer, index, length);

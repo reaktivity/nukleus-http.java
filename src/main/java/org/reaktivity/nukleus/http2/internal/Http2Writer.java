@@ -75,7 +75,7 @@ class Http2Writer
                 .streamId(streamId)
                 .trace(traceId)
                 .groupId(0)
-                .padding(padding)
+                .reserved(length + padding)
                 .payload(p -> p.set((b, o, l) -> length))
                 .build();
 

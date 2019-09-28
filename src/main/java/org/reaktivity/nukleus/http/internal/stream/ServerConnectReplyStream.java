@@ -285,7 +285,7 @@ public final class ServerConnectReplyStream implements MessageConsumer
         int length)
     {
         DataFW data = factory.dataRO.wrap(buffer, index, index + length);
-        connectReplyBudget -= data.length() + data.padding();
+        connectReplyBudget -= data.reserved();
         long traceId = data.trace();
 
         if (connectReplyBudget < 0)
