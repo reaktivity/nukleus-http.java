@@ -1857,7 +1857,7 @@ final class Http2Connection
             Http2Stream stream = http2Streams.get(correlation.http2StreamId);
             if (stream != null)
             {
-                stream.applicationReplyBudget -= data.length() + data.padding();
+                stream.applicationReplyBudget -= data.reserved();
                 if (stream.applicationReplyBudget < 0)
                 {
                     doRstByUs(stream, Http2ErrorCode.INTERNAL_ERROR);

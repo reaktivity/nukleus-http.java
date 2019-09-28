@@ -18,8 +18,6 @@ package org.reaktivity.nukleus.http2.internal;
 import static java.util.Objects.requireNonNull;
 
 import java.util.function.Function;
-import java.util.function.IntUnaryOperator;
-import java.util.function.LongFunction;
 import java.util.function.LongSupplier;
 import java.util.function.LongUnaryOperator;
 import java.util.function.ToIntFunction;
@@ -126,8 +124,6 @@ public final class ServerStreamFactory implements StreamFactory
     final Long2ObjectHashMap<Correlation> correlations;
     private final MessageFunction<RouteFW> wrapRoute;
     final LongSupplier supplyGroupId;
-    final LongFunction<IntUnaryOperator> groupBudgetClaimer;
-    final LongFunction<IntUnaryOperator> groupBudgetReleaser;
     final Http2Counters counters;
 
     ServerStreamFactory(
@@ -141,9 +137,7 @@ public final class ServerStreamFactory implements StreamFactory
         LongSupplier supplyTrace,
         ToIntFunction<String> supplyTypeId,
         Function<String, LongSupplier> supplyCounter,
-        Long2ObjectHashMap<Correlation> correlations,
-        LongFunction<IntUnaryOperator> groupBudgetClaimer,
-        LongFunction<IntUnaryOperator> groupBudgetReleaser)
+        Long2ObjectHashMap<Correlation> correlations)
     {
         this.config = config;
         this.router = requireNonNull(router);
@@ -158,8 +152,6 @@ public final class ServerStreamFactory implements StreamFactory
         this.correlations = requireNonNull(correlations);
         this.supplyGroupId = requireNonNull(supplyGroupId);
         this.supplyTrace = requireNonNull(supplyTrace);
-        this.groupBudgetClaimer = requireNonNull(groupBudgetClaimer);
-        this.groupBudgetReleaser = requireNonNull(groupBudgetReleaser);
 
         this.httpWriter = new HttpWriter(supplyTypeId, writeBuffer);
         this.http2Writer = new Http2Writer(writeBuffer);
@@ -330,7 +322,7 @@ public final class ServerStreamFactory implements StreamFactory
         private void handleData(
             DataFW data)
         {
-            window -= dataRO.length() + dataRO.padding();
+            window -= data.reserved();
             if (window < 0)
             {
                 doReset(networkReply, networkRouteId, networkInitialId, supplyTrace.getAsLong());

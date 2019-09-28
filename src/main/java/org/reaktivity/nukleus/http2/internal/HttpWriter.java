@@ -107,7 +107,7 @@ class HttpWriter
                 .streamId(streamId)
                 .trace(traceId)
                 .groupId(0)
-                .padding(padding)
+                .reserved(length + padding)
                 .payload(payload, offset, length)
                 .build();
 

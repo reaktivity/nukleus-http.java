@@ -16,8 +16,6 @@
 package org.reaktivity.nukleus.http2.internal;
 
 import java.util.function.Function;
-import java.util.function.IntUnaryOperator;
-import java.util.function.LongFunction;
 import java.util.function.LongSupplier;
 import java.util.function.LongUnaryOperator;
 import java.util.function.Supplier;
@@ -43,8 +41,6 @@ public final class ServerStreamFactoryBuilder implements StreamFactoryBuilder
     private ToIntFunction<String> supplyTypeId;
     private LongSupplier supplyGroupId;
     private Supplier<BufferPool> supplyBufferPool;
-    private LongFunction<IntUnaryOperator> groupBudgetClaimer;
-    private LongFunction<IntUnaryOperator> groupBudgetReleaser;
     private Function<String, LongSupplier> supplyCounter;
 
     ServerStreamFactoryBuilder(
@@ -111,22 +107,6 @@ public final class ServerStreamFactoryBuilder implements StreamFactoryBuilder
     }
 
     @Override
-    public StreamFactoryBuilder setGroupBudgetClaimer(
-        LongFunction<IntUnaryOperator> groupBudgetClaimer)
-    {
-        this.groupBudgetClaimer = groupBudgetClaimer;
-        return this;
-    }
-
-    @Override
-    public StreamFactoryBuilder setGroupBudgetReleaser(
-        LongFunction<IntUnaryOperator> groupBudgetReleaser)
-    {
-        this.groupBudgetReleaser = groupBudgetReleaser;
-        return this;
-    }
-
-    @Override
     public StreamFactoryBuilder setBufferPoolSupplier(
         Supplier<BufferPool> supplyBufferPool)
     {
@@ -158,8 +138,6 @@ public final class ServerStreamFactoryBuilder implements StreamFactoryBuilder
                 supplyTrace,
                 supplyTypeId,
                 supplyCounter,
-                correlations,
-                groupBudgetClaimer,
-                groupBudgetReleaser);
+                correlations);
     }
 }
