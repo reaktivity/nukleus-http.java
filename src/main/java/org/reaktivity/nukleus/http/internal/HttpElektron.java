@@ -23,7 +23,7 @@ import java.util.Map;
 
 import org.reaktivity.nukleus.Elektron;
 import org.reaktivity.nukleus.http.internal.stream.ClientStreamFactoryBuilder;
-import org.reaktivity.nukleus.http.internal.stream.ServerStreamFactoryBuilder;
+import org.reaktivity.nukleus.http.internal.stream.HttpServerFactoryBuilder;
 import org.reaktivity.nukleus.route.RouteKind;
 import org.reaktivity.nukleus.stream.StreamFactoryBuilder;
 
@@ -36,7 +36,7 @@ final class HttpElektron implements Elektron
     {
         Map<RouteKind, StreamFactoryBuilder> streamFactoryBuilders = new EnumMap<>(RouteKind.class);
         streamFactoryBuilders.put(CLIENT, new ClientStreamFactoryBuilder(config));
-        streamFactoryBuilders.put(SERVER, new ServerStreamFactoryBuilder(config));
+        streamFactoryBuilders.put(SERVER, new HttpServerFactoryBuilder(config));
         this.streamFactoryBuilders = streamFactoryBuilders;
     }
 

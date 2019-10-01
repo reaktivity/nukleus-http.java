@@ -19,6 +19,23 @@ import org.agrona.DirectBuffer;
 
 public final class BufferUtil
 {
+    public static int indexOfByte(
+        DirectBuffer buffer,
+        int offset,
+        int limit,
+        byte value)
+    {
+        for (int cursor = offset; cursor < limit; cursor++)
+        {
+            if (buffer.getByte(cursor) == value)
+            {
+                return cursor;
+            }
+        }
+
+        return -1;
+    }
+
     public static int limitOfBytes(
         DirectBuffer buffer,
         int offset,
