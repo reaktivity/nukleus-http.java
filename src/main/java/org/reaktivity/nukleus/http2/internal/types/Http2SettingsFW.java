@@ -13,16 +13,16 @@
  * License for the specific language governing permissions and limitations
  * under the License.
  */
-package org.reaktivity.nukleus.http2.internal.types.stream;
+package org.reaktivity.nukleus.http2.internal.types;
 
 import static org.reaktivity.nukleus.http2.internal.stream.Http2Flags.ACK;
-import static org.reaktivity.nukleus.http2.internal.types.stream.Http2FrameType.SETTINGS;
-import static org.reaktivity.nukleus.http2.internal.types.stream.Http2Setting.ENABLE_PUSH;
-import static org.reaktivity.nukleus.http2.internal.types.stream.Http2Setting.HEADER_TABLE_SIZE;
-import static org.reaktivity.nukleus.http2.internal.types.stream.Http2Setting.INITIAL_WINDOW_SIZE;
-import static org.reaktivity.nukleus.http2.internal.types.stream.Http2Setting.MAX_CONCURRENT_STREAMS;
-import static org.reaktivity.nukleus.http2.internal.types.stream.Http2Setting.MAX_FRAME_SIZE;
-import static org.reaktivity.nukleus.http2.internal.types.stream.Http2Setting.MAX_HEADER_LIST_SIZE;
+import static org.reaktivity.nukleus.http2.internal.types.Http2FrameType.SETTINGS;
+import static org.reaktivity.nukleus.http2.internal.types.Http2Setting.ENABLE_PUSH;
+import static org.reaktivity.nukleus.http2.internal.types.Http2Setting.HEADER_TABLE_SIZE;
+import static org.reaktivity.nukleus.http2.internal.types.Http2Setting.INITIAL_WINDOW_SIZE;
+import static org.reaktivity.nukleus.http2.internal.types.Http2Setting.MAX_CONCURRENT_STREAMS;
+import static org.reaktivity.nukleus.http2.internal.types.Http2Setting.MAX_FRAME_SIZE;
+import static org.reaktivity.nukleus.http2.internal.types.Http2Setting.MAX_HEADER_LIST_SIZE;
 
 import java.util.function.Consumer;
 

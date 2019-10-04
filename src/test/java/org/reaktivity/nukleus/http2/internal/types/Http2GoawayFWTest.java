@@ -13,17 +13,17 @@
  * License for the specific language governing permissions and limitations
  * under the License.
  */
-package org.reaktivity.nukleus.http2.internal.types.stream;
+package org.reaktivity.nukleus.http2.internal.types;
 
 import static org.junit.Assert.assertEquals;
-import static org.reaktivity.nukleus.http2.internal.types.stream.Http2ErrorCode.PROTOCOL_ERROR;
-import static org.reaktivity.nukleus.http2.internal.types.stream.Http2FrameType.RST_STREAM;
+import static org.reaktivity.nukleus.http2.internal.types.Http2ErrorCode.PROTOCOL_ERROR;
+import static org.reaktivity.nukleus.http2.internal.types.Http2FrameType.GO_AWAY;
 
 import org.agrona.MutableDirectBuffer;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.junit.Test;
 
-public class Http2RstStreamFWTest
+public class Http2GoawayFWTest
 {
 
     @Test
@@ -32,19 +32,20 @@ public class Http2RstStreamFWTest
         byte[] bytes = new byte[100];
         MutableDirectBuffer buf = new UnsafeBuffer(bytes);
 
-        Http2RstStreamFW reset = new Http2RstStreamFW.Builder()
+        Http2GoawayFW goaway = new Http2GoawayFW.Builder()
                 .wrap(buf, 1, buf.capacity())       // non-zero offset
-                .streamId(3)
+                .lastStreamId(3)
                 .errorCode(PROTOCOL_ERROR)
                 .build();
 
-        assertEquals(4, reset.length());
-        assertEquals(1, reset.offset());
-        assertEquals(14, reset.limit());
-        assertEquals(RST_STREAM, reset.type());
-        assertEquals(0, reset.flags());
-        assertEquals(3, reset.streamId());
-        Http2ErrorCode errorCode = Http2ErrorCode.from(reset.errorCode());
+        assertEquals(8, goaway.length());
+        assertEquals(1, goaway.offset());
+        assertEquals(18, goaway.limit());
+        assertEquals(GO_AWAY, goaway.type());
+        assertEquals(0, goaway.flags());
+        assertEquals(0, goaway.streamId());
+        assertEquals(3, goaway.lastStreamId());
+        Http2ErrorCode errorCode = Http2ErrorCode.from(goaway.errorCode());
         assertEquals(PROTOCOL_ERROR, errorCode);
     }
 

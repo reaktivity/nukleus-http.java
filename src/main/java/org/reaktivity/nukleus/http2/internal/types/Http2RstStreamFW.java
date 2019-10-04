@@ -13,10 +13,10 @@
  * License for the specific language governing permissions and limitations
  * under the License.
  */
-package org.reaktivity.nukleus.http2.internal.types.stream;
+package org.reaktivity.nukleus.http2.internal.types;
 
 import static java.nio.ByteOrder.BIG_ENDIAN;
-import static org.reaktivity.nukleus.http2.internal.types.stream.Http2FrameType.WINDOW_UPDATE;
+import static org.reaktivity.nukleus.http2.internal.types.Http2FrameType.RST_STREAM;
 
 import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
@@ -31,35 +31,35 @@ import org.agrona.MutableDirectBuffer;
     |   Type (8)    |   Flags (8)   |
     +-+-------------+---------------+-------------------------------+
     |R|                 Stream Identifier (31)                      |
-    +=+=============================================================+
-    |R|              Window Size Increment (31)                     |
-    +-+-------------------------------------------------------------+
+    +=+=============+===============================================+
+    |                        Error Code (32)                        |
+    +---------------------------------------------------------------+
 
  */
-public class Http2WindowUpdateFW extends Http2FrameFW
+public class Http2RstStreamFW extends Http2FrameFW
 {
-
     private static final int PAYLOAD_OFFSET = 9;
 
     @Override
     public Http2FrameType type()
     {
-        return WINDOW_UPDATE;
+        return RST_STREAM;
     }
 
-    public int size()
+    public int errorCode()
     {
-        return payload().getInt(0, BIG_ENDIAN) & 0x7F_FF_FF_FF;
+        return buffer().getInt(offset() + PAYLOAD_OFFSET, BIG_ENDIAN);
     }
 
-    public Http2WindowUpdateFW tryWrap(
+    public Http2RstStreamFW tryWrap(
         DirectBuffer buffer,
         int offset,
         int maxLimit)
     {
         boolean wrappable = super.wrap(buffer, offset, maxLimit) != null;
 
-        wrappable &= super.type() == WINDOW_UPDATE;
+        wrappable &= super.streamId() != 0;
+        wrappable &= super.type() == RST_STREAM;
         wrappable &= super.length() == 4;
         wrappable &= limit() <= maxLimit;
 
@@ -67,25 +67,30 @@ public class Http2WindowUpdateFW extends Http2FrameFW
     }
 
     @Override
-    public Http2WindowUpdateFW wrap(
+    public Http2RstStreamFW wrap(
         DirectBuffer buffer,
         int offset,
         int maxLimit)
     {
         super.wrap(buffer, offset, maxLimit);
 
-        Http2FrameType type = super.type();
-        if (type != WINDOW_UPDATE)
+        int streamId = super.streamId();
+        if (streamId == 0)
         {
-            throw new IllegalArgumentException(String.format("Invalid type=%s for WINDOW_UPDATE frame", type));
+            throw new IllegalArgumentException(String.format("Invalid RST_STREAM frame stream-id=%d (must not be 0)", streamId));
+        }
+
+        Http2FrameType type = super.type();
+        if (type != RST_STREAM)
+        {
+            throw new IllegalArgumentException(String.format("Invalid RST_STREAM frame type=%s", type));
         }
 
         int payloadLength = super.length();
         if (payloadLength != 4)
         {
-            throw new IllegalArgumentException(String.format("Invalid WINDOW_UPDATE frame length=%d (must be 4)", payloadLength));
+            throw new IllegalArgumentException(String.format("Invalid RST_STREAM frame length=%d (must be 4)", payloadLength));
         }
-
         checkLimit(limit(), maxLimit);
         return this;
     }
@@ -97,12 +102,12 @@ public class Http2WindowUpdateFW extends Http2FrameFW
                 type(), length(), type(), flags(), streamId());
     }
 
-    public static final class Builder extends Http2FrameFW.Builder<Builder, Http2WindowUpdateFW>
+    public static final class Builder extends Http2FrameFW.Builder<Builder, Http2RstStreamFW>
     {
 
         public Builder()
         {
-            super(new Http2WindowUpdateFW());
+            super(new Http2RstStreamFW());
         }
 
         @Override
@@ -113,14 +118,9 @@ public class Http2WindowUpdateFW extends Http2FrameFW
             return this;
         }
 
-        public Builder size(int size)
+        public Builder errorCode(Http2ErrorCode errorCode)
         {
-            if (size < 1)
-            {
-                throw new IllegalArgumentException(String.format("Invalid WINDOW_UPDATE Size Incremnt = %d (> 0)", size));
-            }
-
-            buffer().putInt(offset() + PAYLOAD_OFFSET, size & 0x7F_FF_FF_FF, BIG_ENDIAN);
+            buffer().putInt(offset() + PAYLOAD_OFFSET, errorCode.errorCode, BIG_ENDIAN);
             return this;
         }
 

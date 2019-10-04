@@ -13,17 +13,18 @@
  * License for the specific language governing permissions and limitations
  * under the License.
  */
-package org.reaktivity.nukleus.http2.internal.types.stream;
+package org.reaktivity.nukleus.http2.internal.types;
 
-import static java.nio.ByteOrder.BIG_ENDIAN;
-import static org.reaktivity.nukleus.http2.internal.types.stream.Http2FrameType.GO_AWAY;
+import static org.reaktivity.nukleus.http2.internal.stream.Http2Flags.ACK;
+import static org.reaktivity.nukleus.http2.internal.types.Http2FrameType.PING;
 
 import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
+import org.reaktivity.nukleus.http2.internal.stream.Http2Flags;
 
 /*
 
-    Flyweight for HTTP2 GOAWAY frame
+    Flyweight for HTTP2 PING frame
 
     +-----------------------------------------------+
     |                 Length (24)                   |
@@ -32,60 +33,67 @@ import org.agrona.MutableDirectBuffer;
     +-+-------------+---------------+-------------------------------+
     |R|                 Stream Identifier (31)                      |
     +=+=============+===============================================+
-    |R|                  Last-Stream-ID (31)                        |
-    +-+-------------------------------------------------------------+
-    |                      Error Code (32)                          |
-    +---------------------------------------------------------------+
-    |                  Additional Debug Data (*)                    |
+    |                                                               |
+    |                      Opaque Data (64)                         |
+    |                                                               |
     +---------------------------------------------------------------+
 
  */
-public class Http2GoawayFW extends Http2FrameFW
+public class Http2PingFW extends Http2FrameFW
 {
-    private static final int LAST_STREAM_ID_OFFSET = 9;
-    private static final int ERROR_CODE_OFFSET = 13;
+    private static final int FLAGS_OFFSET = 4;
+    private static final int PAYLOAD_OFFSET = 9;
 
     @Override
     public Http2FrameType type()
     {
-        return GO_AWAY;
+        return PING;
     }
 
-    public int lastStreamId()
+    public boolean ack()
     {
-        return buffer().getInt(offset() + LAST_STREAM_ID_OFFSET, BIG_ENDIAN) & 0x7F_FF_FF_FF;
+        return Http2Flags.ack(flags());
     }
 
-    public int errorCode()
-    {
-        return buffer().getInt(offset() + ERROR_CODE_OFFSET, BIG_ENDIAN);
-    }
-
-    @Override
-    public Http2GoawayFW tryWrap(
+    public Http2PingFW tryWrap(
         DirectBuffer buffer,
         int offset,
         int maxLimit)
     {
-        super.tryWrap(buffer, offset, maxLimit);
-        return this;
+        boolean wrappable = super.wrap(buffer, offset, maxLimit) != null;
+
+        wrappable &= super.streamId() == 0;
+        wrappable &= super.type() == PING;
+        wrappable &= super.length() == 8;
+        wrappable &= limit() <= maxLimit;
+
+        return wrappable ? this : null;
     }
 
     @Override
-    public Http2GoawayFW wrap(DirectBuffer buffer, int offset, int maxLimit)
+    public Http2PingFW wrap(
+        DirectBuffer buffer,
+        int offset,
+        int maxLimit)
     {
         super.wrap(buffer, offset, maxLimit);
 
         int streamId = super.streamId();
         if (streamId != 0)
         {
-            throw new IllegalArgumentException(String.format("Invalid stream-id=%d for GOAWAY frame", streamId));
+            throw new IllegalArgumentException(String.format("Invalid PING frame stream-id=%d", streamId));
         }
 
         Http2FrameType type = super.type();
-        if (type != GO_AWAY)
+        if (type != PING)
         {
-            throw new IllegalArgumentException(String.format("Invalid type=%s for GOAWAY frame", type));
+            throw new IllegalArgumentException(String.format("Invalid PING frame type=%s", type));
+        }
+
+        int payloadLength = super.length();
+        if (payloadLength != 8)
+        {
+            throw new IllegalArgumentException(String.format("Invalid PING frame length=%d (must be 8)", payloadLength));
         }
 
         checkLimit(limit(), maxLimit);
@@ -99,34 +107,37 @@ public class Http2GoawayFW extends Http2FrameFW
                 type(), length(), type(), flags(), streamId());
     }
 
-    public static final class Builder extends Http2FrameFW.Builder<Builder, Http2GoawayFW>
+    public static final class Builder extends Http2FrameFW.Builder<Http2PingFW.Builder, Http2PingFW>
     {
 
         public Builder()
         {
-            super(new Http2GoawayFW());
+            super(new Http2PingFW());
         }
 
         @Override
         public Builder wrap(MutableDirectBuffer buffer, int offset, int maxLimit)
         {
             super.wrap(buffer, offset, maxLimit);
-
-            // not including "Additional Debug Data"
             payloadLength(8);
-
             return this;
         }
 
-        public Builder lastStreamId(int lastStreamId)
+        public Builder ack()
         {
-            buffer().putInt(offset() + LAST_STREAM_ID_OFFSET, lastStreamId, BIG_ENDIAN);
+            buffer().putByte(offset() + FLAGS_OFFSET, ACK);
             return this;
         }
 
-        public Builder errorCode(Http2ErrorCode error)
+        @Override
+        public Http2PingFW.Builder payload(DirectBuffer payload, int offset, int length)
         {
-            buffer().putInt(offset() + ERROR_CODE_OFFSET, error.errorCode, BIG_ENDIAN);
+            if (length != 8)
+            {
+                throw new IllegalArgumentException(String.format("Invalid PING frame length = %d (must be 8)", length));
+            }
+
+            super.payload(payload, offset, length);
             return this;
         }
 

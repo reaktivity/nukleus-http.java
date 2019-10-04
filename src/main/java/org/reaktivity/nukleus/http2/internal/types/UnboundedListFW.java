@@ -14,7 +14,7 @@
  * under the License.
  */
 // TODO: license
-package org.reaktivity.nukleus.http2.internal.types.stream;
+package org.reaktivity.nukleus.http2.internal.types;
 
 import java.util.Objects;
 import java.util.function.Consumer;

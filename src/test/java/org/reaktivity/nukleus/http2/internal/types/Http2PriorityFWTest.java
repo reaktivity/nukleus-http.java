@@ -13,17 +13,17 @@
  * License for the specific language governing permissions and limitations
  * under the License.
  */
-package org.reaktivity.nukleus.http2.internal.types.stream;
+package org.reaktivity.nukleus.http2.internal.types;
 
 import static org.junit.Assert.assertEquals;
-import static org.reaktivity.nukleus.http2.internal.types.stream.Http2ErrorCode.PROTOCOL_ERROR;
-import static org.reaktivity.nukleus.http2.internal.types.stream.Http2FrameType.GO_AWAY;
+import static org.junit.Assert.assertTrue;
+import static org.reaktivity.nukleus.http2.internal.types.Http2FrameType.PRIORITY;
 
 import org.agrona.MutableDirectBuffer;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.junit.Test;
 
-public class Http2GoawayFWTest
+public class Http2PriorityFWTest
 {
 
     @Test
@@ -32,21 +32,22 @@ public class Http2GoawayFWTest
         byte[] bytes = new byte[100];
         MutableDirectBuffer buf = new UnsafeBuffer(bytes);
 
-        Http2GoawayFW goaway = new Http2GoawayFW.Builder()
+        Http2PriorityFW priority = new Http2PriorityFW.Builder()
                 .wrap(buf, 1, buf.capacity())       // non-zero offset
-                .lastStreamId(3)
-                .errorCode(PROTOCOL_ERROR)
+                .streamId(3)
+                .exclusive()
+                .parentStream(1)
+                .weight(256)
                 .build();
 
-        assertEquals(8, goaway.length());
-        assertEquals(1, goaway.offset());
-        assertEquals(18, goaway.limit());
-        assertEquals(GO_AWAY, goaway.type());
-        assertEquals(0, goaway.flags());
-        assertEquals(0, goaway.streamId());
-        assertEquals(3, goaway.lastStreamId());
-        Http2ErrorCode errorCode = Http2ErrorCode.from(goaway.errorCode());
-        assertEquals(PROTOCOL_ERROR, errorCode);
+        assertEquals(5, priority.length());
+        assertEquals(1, priority.offset());
+        assertEquals(15, priority.limit());
+        assertEquals(PRIORITY, priority.type());
+        assertEquals(3, priority.streamId());
+        assertTrue(priority.exclusive());
+        assertEquals(1, priority.parentStream());
+        assertEquals(256, priority.weight());
     }
 
 }

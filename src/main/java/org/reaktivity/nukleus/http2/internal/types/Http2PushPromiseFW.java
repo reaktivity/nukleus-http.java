@@ -13,14 +13,11 @@
  * License for the specific language governing permissions and limitations
  * under the License.
  */
-package org.reaktivity.nukleus.http2.internal.types.stream;
+package org.reaktivity.nukleus.http2.internal.types;
 
 import static java.nio.ByteOrder.BIG_ENDIAN;
 import static org.reaktivity.nukleus.http2.internal.stream.Http2Flags.END_HEADERS;
-import static org.reaktivity.nukleus.http2.internal.stream.Http2Flags.END_STREAM;
-import static org.reaktivity.nukleus.http2.internal.stream.Http2Flags.PADDED;
-import static org.reaktivity.nukleus.http2.internal.stream.Http2Flags.PRIORITY;
-import static org.reaktivity.nukleus.http2.internal.types.stream.Http2FrameType.HEADERS;
+import static org.reaktivity.nukleus.http2.internal.types.Http2FrameType.PUSH_PROMISE;
 
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
@@ -45,26 +42,26 @@ import org.reaktivity.nukleus.http2.internal.stream.Http2Flags;
     +=+=============+===============================================+
     |Pad Length? (8)|
     +-+-------------+-----------------------------------------------+
-    |E|                 Stream Dependency? (31)                     |
-    +-+-------------+-----------------------------------------------+
-    |  Weight? (8)  |
-    +-+-------------+-----------------------------------------------+
+    |R|                  Promised Stream ID (31)                    |
+    +-+-----------------------------+-------------------------------+
     |                   Header Block Fragment (*)                 ...
     +---------------------------------------------------------------+
     |                           Padding (*)                       ...
     +---------------------------------------------------------------+
 
  */
-public class Http2HeadersFW extends Http2FrameFW
+public class Http2PushPromiseFW extends Http2FrameFW
 {
 
     private static final int FLAGS_OFFSET = 4;
     private static final int PAYLOAD_OFFSET = 9;
 
+    private final HpackHeaderBlockFW headerBlockRO = new HpackHeaderBlockFW();
+
     @Override
     public Http2FrameType type()
     {
-        return HEADERS;
+        return PUSH_PROMISE;
     }
 
     public boolean padded()
@@ -77,69 +74,45 @@ public class Http2HeadersFW extends Http2FrameFW
         return Http2Flags.endHeaders(flags());
     }
 
-    public boolean priority()
+    public int promisedStreamId()
     {
-        return Http2Flags.priority(flags());
+        int offset = offset() + PAYLOAD_OFFSET + (padded() ? 1 : 0);
+        return buffer().getInt(offset, BIG_ENDIAN) & 0x7F_FF_FF_FF;
     }
 
-    public int dataOffset()
+    private int headersOffset()
     {
-        int dataOffset = offset() + PAYLOAD_OFFSET;
+        return offset() + PAYLOAD_OFFSET + 4 + (padded() ? 1 : 0);
+    }
+
+    private int headersLength()
+    {
+        int headersLength = length() - 4;    // -4 for promised stream id
         if (padded())
         {
-            dataOffset++;        // +1 for Pad Length
+            int padding = buffer().getByte(offset() + PAYLOAD_OFFSET) & 0xff;
+            headersLength = headersLength - padding - 1;    // -1 for Pad Length field
         }
-        if (priority())
-        {
-            dataOffset += 5;      // +4 for Stream Dependency, +1 for Weight
-        }
-        return dataOffset;
+
+        return headersLength;
     }
 
-    public int parentStream()
+    public void forEach(Consumer<HpackHeaderFieldFW> headerField)
     {
-        if (priority())
-        {
-            int dependencyOffset = offset() + PAYLOAD_OFFSET;
-            if (padded())
-            {
-                dependencyOffset++;
-            }
-            return buffer().getInt(dependencyOffset, BIG_ENDIAN) & 0x7F_FF_FF_FF;
-        }
-        else
-        {
-            return 0;
-        }
-    }
-
-    public int dataLength()
-    {
-        int dataLength = length();
-        if (padded())
-        {
-            int paddingLength = buffer().getByte(offset() + PAYLOAD_OFFSET) & 0xff;
-            dataLength -= paddingLength + 1;    // -1 for Pad Length, -Padding
-        }
-
-        if (priority())
-        {
-            dataLength -= 5;    // -4 for Stream Dependency, -1 for Weight
-        }
-
-        return dataLength;
+        headerBlockRO.forEach(headerField);
     }
 
     @Override
-    public Http2HeadersFW wrap(DirectBuffer buffer, int offset, int maxLimit)
+    public Http2PushPromiseFW wrap(DirectBuffer buffer, int offset, int maxLimit)
     {
         super.wrap(buffer, offset, maxLimit);
         int streamId = streamId();
         if (streamId == 0)
         {
             throw new IllegalArgumentException(
-                    String.format("Invalid HEADERS frame stream-id=%d (must not be 0)", streamId));
+                    String.format("Invalid PUSH_PROMISE frame stream-id=%d (must not be 0)", streamId));
         }
+        headerBlockRO.wrap(buffer(), headersOffset(), headersOffset() + headersLength());
 
         checkLimit(limit(), maxLimit);
         return this;
@@ -152,13 +125,13 @@ public class Http2HeadersFW extends Http2FrameFW
                 type(), length(), type(), flags(), streamId());
     }
 
-    public static final class Builder extends Http2FrameFW.Builder<Builder, Http2HeadersFW>
+    public static final class Builder extends Http2FrameFW.Builder<Builder, Http2PushPromiseFW>
     {
         private final HpackHeaderBlockFW.Builder blockRW = new HpackHeaderBlockFW.Builder();
 
         public Builder()
         {
-            super(new Http2HeadersFW());
+            super(new Http2PushPromiseFW());
         }
 
         @Override
@@ -166,28 +139,8 @@ public class Http2HeadersFW extends Http2FrameFW
         {
             super.wrap(buffer, offset, maxLimit);
 
-            blockRW.wrap(buffer, offset + PAYLOAD_OFFSET, maxLimit());
+            blockRW.wrap(buffer, offset + PAYLOAD_OFFSET + 4, maxLimit());
 
-            return this;
-        }
-
-        public Builder padded(boolean padded)
-        {
-            buffer().putByte(offset() + FLAGS_OFFSET, PADDED);
-            return this;
-        }
-
-        public Builder endStream(boolean endStream)
-        {
-            byte flags = buffer().getByte(offset() + FLAGS_OFFSET);
-            flags = (byte) (endStream ? (flags | END_STREAM) : (flags & ~END_STREAM));
-            buffer().putByte(offset() + FLAGS_OFFSET, flags);
-            return this;
-        }
-
-        public Builder endStream()
-        {
-            endStream(true);
             return this;
         }
 
@@ -199,11 +152,9 @@ public class Http2HeadersFW extends Http2FrameFW
             return this;
         }
 
-        public Builder priority()
+        public Builder promisedStreamId(int streamId)
         {
-            byte flags = buffer().getByte(offset() + FLAGS_OFFSET);
-            flags |= PRIORITY;
-            buffer().putByte(offset() + FLAGS_OFFSET, flags);
+            buffer().putInt(offset() + PAYLOAD_OFFSET, streamId, BIG_ENDIAN);
             return this;
         }
 
@@ -230,6 +181,13 @@ public class Http2HeadersFW extends Http2FrameFW
             mutator.accept(blockRW);
             int length = blockRW.limit() - offset() - PAYLOAD_OFFSET;
             payloadLength(length);
+            return this;
+        }
+
+        public Builder headers(DirectBuffer headersBuf, int headersOffset, int headersLength)
+        {
+            buffer().putBytes(offset() + PAYLOAD_OFFSET + 4, headersBuf, headersOffset, headersLength);
+            payloadLength(headersLength + 4);
             return this;
         }
 

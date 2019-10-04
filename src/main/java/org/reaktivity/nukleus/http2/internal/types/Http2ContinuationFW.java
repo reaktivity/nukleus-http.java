@@ -13,18 +13,22 @@
  * License for the specific language governing permissions and limitations
  * under the License.
  */
-package org.reaktivity.nukleus.http2.internal.types.stream;
+package org.reaktivity.nukleus.http2.internal.types;
 
-import static org.reaktivity.nukleus.http2.internal.stream.Http2Flags.ACK;
-import static org.reaktivity.nukleus.http2.internal.types.stream.Http2FrameType.PING;
+import static org.reaktivity.nukleus.http2.internal.stream.Http2Flags.END_HEADERS;
+import static org.reaktivity.nukleus.http2.internal.types.Http2FrameType.CONTINUATION;
+
+import java.util.function.Consumer;
 
 import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
+import org.reaktivity.nukleus.http2.internal.hpack.HpackHeaderBlockFW;
+import org.reaktivity.nukleus.http2.internal.hpack.HpackHeaderFieldFW;
 import org.reaktivity.nukleus.http2.internal.stream.Http2Flags;
 
 /*
 
-    Flyweight for HTTP2 PING frame
+    Flyweight for HTTP2 CONTINUATION frame
 
     +-----------------------------------------------+
     |                 Length (24)                   |
@@ -33,13 +37,11 @@ import org.reaktivity.nukleus.http2.internal.stream.Http2Flags;
     +-+-------------+---------------+-------------------------------+
     |R|                 Stream Identifier (31)                      |
     +=+=============+===============================================+
-    |                                                               |
-    |                      Opaque Data (64)                         |
-    |                                                               |
+    |                   Header Block Fragment (*)                 ...
     +---------------------------------------------------------------+
 
  */
-public class Http2PingFW extends Http2FrameFW
+public class Http2ContinuationFW extends Http2FrameFW
 {
     private static final int FLAGS_OFFSET = 4;
     private static final int PAYLOAD_OFFSET = 9;
@@ -47,53 +49,30 @@ public class Http2PingFW extends Http2FrameFW
     @Override
     public Http2FrameType type()
     {
-        return PING;
+        return CONTINUATION;
     }
 
-    public boolean ack()
+    public boolean endHeaders()
     {
-        return Http2Flags.ack(flags());
-    }
-
-    public Http2PingFW tryWrap(
-        DirectBuffer buffer,
-        int offset,
-        int maxLimit)
-    {
-        boolean wrappable = super.wrap(buffer, offset, maxLimit) != null;
-
-        wrappable &= super.streamId() == 0;
-        wrappable &= super.type() == PING;
-        wrappable &= super.length() == 8;
-        wrappable &= limit() <= maxLimit;
-
-        return wrappable ? this : null;
+        return Http2Flags.endHeaders(flags());
     }
 
     @Override
-    public Http2PingFW wrap(
-        DirectBuffer buffer,
-        int offset,
-        int maxLimit)
+    public Http2ContinuationFW wrap(DirectBuffer buffer, int offset, int maxLimit)
     {
         super.wrap(buffer, offset, maxLimit);
 
-        int streamId = super.streamId();
-        if (streamId != 0)
+        int streamId = streamId();
+        if (streamId == 0)
         {
-            throw new IllegalArgumentException(String.format("Invalid PING frame stream-id=%d", streamId));
+            throw new IllegalArgumentException(
+                    String.format("Invalid CONTINUATION frame stream-id=%d (must not be 0)", streamId));
         }
 
         Http2FrameType type = super.type();
-        if (type != PING)
+        if (type != CONTINUATION)
         {
-            throw new IllegalArgumentException(String.format("Invalid PING frame type=%s", type));
-        }
-
-        int payloadLength = super.length();
-        if (payloadLength != 8)
-        {
-            throw new IllegalArgumentException(String.format("Invalid PING frame length=%d (must be 8)", payloadLength));
+            throw new IllegalArgumentException(String.format("Invalid CONTINUATION frame type=%s", type));
         }
 
         checkLimit(limit(), maxLimit);
@@ -107,37 +86,34 @@ public class Http2PingFW extends Http2FrameFW
                 type(), length(), type(), flags(), streamId());
     }
 
-    public static final class Builder extends Http2FrameFW.Builder<Http2PingFW.Builder, Http2PingFW>
+    public static final class Builder extends Http2FrameFW.Builder<Builder, Http2ContinuationFW>
     {
+        private final HpackHeaderBlockFW.Builder blockRW = new HpackHeaderBlockFW.Builder();
 
         public Builder()
         {
-            super(new Http2PingFW());
+            super(new Http2ContinuationFW());
         }
 
         @Override
         public Builder wrap(MutableDirectBuffer buffer, int offset, int maxLimit)
         {
             super.wrap(buffer, offset, maxLimit);
-            payloadLength(8);
+            blockRW.wrap(buffer, offset + PAYLOAD_OFFSET, maxLimit);
             return this;
         }
 
-        public Builder ack()
+        public Builder endHeaders()
         {
-            buffer().putByte(offset() + FLAGS_OFFSET, ACK);
+            buffer().putByte(offset() + FLAGS_OFFSET, END_HEADERS);
             return this;
         }
 
-        @Override
-        public Http2PingFW.Builder payload(DirectBuffer payload, int offset, int length)
+        public Builder header(Consumer<HpackHeaderFieldFW.Builder> mutator)
         {
-            if (length != 8)
-            {
-                throw new IllegalArgumentException(String.format("Invalid PING frame length = %d (must be 8)", length));
-            }
-
-            super.payload(payload, offset, length);
+            blockRW.header(mutator);
+            int length = blockRW.limit() - offset() - PAYLOAD_OFFSET;
+            payloadLength(length);
             return this;
         }
 

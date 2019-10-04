@@ -13,16 +13,17 @@
  * License for the specific language governing permissions and limitations
  * under the License.
  */
-package org.reaktivity.nukleus.http2.internal.types.stream;
+package org.reaktivity.nukleus.http2.internal.types;
 
 import static org.junit.Assert.assertEquals;
-import static org.reaktivity.nukleus.http2.internal.types.stream.Http2FrameType.WINDOW_UPDATE;
+import static org.reaktivity.nukleus.http2.internal.types.Http2ErrorCode.PROTOCOL_ERROR;
+import static org.reaktivity.nukleus.http2.internal.types.Http2FrameType.RST_STREAM;
 
 import org.agrona.MutableDirectBuffer;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.junit.Test;
 
-public class Http2WindowUpdateFWTest
+public class Http2RstStreamFWTest
 {
 
     @Test
@@ -31,19 +32,20 @@ public class Http2WindowUpdateFWTest
         byte[] bytes = new byte[100];
         MutableDirectBuffer buf = new UnsafeBuffer(bytes);
 
-        Http2WindowUpdateFW window = new Http2WindowUpdateFW.Builder()
-                .wrap(buf, 1, buf.capacity())   // non-zero offset
+        Http2RstStreamFW reset = new Http2RstStreamFW.Builder()
+                .wrap(buf, 1, buf.capacity())       // non-zero offset
                 .streamId(3)
-                .size(100)
+                .errorCode(PROTOCOL_ERROR)
                 .build();
 
-        assertEquals(4, window.length());
-        assertEquals(1, window.offset());
-        assertEquals(14, window.limit());
-        assertEquals(WINDOW_UPDATE, window.type());
-        assertEquals(0, window.flags());
-        assertEquals(3, window.streamId());
-        assertEquals(100, window.size());
+        assertEquals(4, reset.length());
+        assertEquals(1, reset.offset());
+        assertEquals(14, reset.limit());
+        assertEquals(RST_STREAM, reset.type());
+        assertEquals(0, reset.flags());
+        assertEquals(3, reset.streamId());
+        Http2ErrorCode errorCode = Http2ErrorCode.from(reset.errorCode());
+        assertEquals(PROTOCOL_ERROR, errorCode);
     }
 
 }

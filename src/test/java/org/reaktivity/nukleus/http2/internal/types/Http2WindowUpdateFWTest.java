@@ -13,17 +13,16 @@
  * License for the specific language governing permissions and limitations
  * under the License.
  */
-package org.reaktivity.nukleus.http2.internal.types.stream;
+package org.reaktivity.nukleus.http2.internal.types;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.reaktivity.nukleus.http2.internal.types.stream.Http2FrameType.PRIORITY;
+import static org.reaktivity.nukleus.http2.internal.types.Http2FrameType.WINDOW_UPDATE;
 
 import org.agrona.MutableDirectBuffer;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.junit.Test;
 
-public class Http2PriorityFWTest
+public class Http2WindowUpdateFWTest
 {
 
     @Test
@@ -32,22 +31,19 @@ public class Http2PriorityFWTest
         byte[] bytes = new byte[100];
         MutableDirectBuffer buf = new UnsafeBuffer(bytes);
 
-        Http2PriorityFW priority = new Http2PriorityFW.Builder()
-                .wrap(buf, 1, buf.capacity())       // non-zero offset
+        Http2WindowUpdateFW window = new Http2WindowUpdateFW.Builder()
+                .wrap(buf, 1, buf.capacity())   // non-zero offset
                 .streamId(3)
-                .exclusive()
-                .parentStream(1)
-                .weight(256)
+                .size(100)
                 .build();
 
-        assertEquals(5, priority.length());
-        assertEquals(1, priority.offset());
-        assertEquals(15, priority.limit());
-        assertEquals(PRIORITY, priority.type());
-        assertEquals(3, priority.streamId());
-        assertTrue(priority.exclusive());
-        assertEquals(1, priority.parentStream());
-        assertEquals(256, priority.weight());
+        assertEquals(4, window.length());
+        assertEquals(1, window.offset());
+        assertEquals(14, window.limit());
+        assertEquals(WINDOW_UPDATE, window.type());
+        assertEquals(0, window.flags());
+        assertEquals(3, window.streamId());
+        assertEquals(100, window.size());
     }
 
 }
