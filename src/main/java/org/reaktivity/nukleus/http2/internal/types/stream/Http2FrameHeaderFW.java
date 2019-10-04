@@ -41,7 +41,7 @@ public class Http2FrameHeaderFW extends Flyweight
 
     private static final int SIZE_OF_FRAME = STREAM_ID_OFFSET + 4;
 
-    public int payloadLength()
+    public int length()
     {
         int length = (buffer().getByte(offset() + LENGTH_OFFSET) & 0xFF) << 16;
         length += buffer().getShort(offset() + LENGTH_OFFSET + 1, BIG_ENDIAN) & 0xFF_FF;
@@ -108,7 +108,7 @@ public class Http2FrameHeaderFW extends Flyweight
     public String toString()
     {
         return String.format("%s frame <length=%s, flags=%s, id=%s>",
-                type(), payloadLength(), flags(), streamId());
+                type(), length(), flags(), streamId());
     }
 
     protected static class Builder<B extends Builder<?, T>, T extends Http2FrameHeaderFW> extends Flyweight.Builder<T>

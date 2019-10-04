@@ -13,15 +13,31 @@
  * License for the specific language governing permissions and limitations
  * under the License.
  */
-package org.reaktivity.nukleus.http2.internal;
+package org.reaktivity.nukleus.http2.internal.util.function;
 
-public enum Http2StreamState
+import java.util.Objects;
+import java.util.function.BiConsumer;
+
+@FunctionalInterface
+public interface ObjectIntBiConsumer<T> extends BiConsumer<T, Integer>
 {
-    UNKNOWN,
-    RESERVED_LOCAL,
-    RESERVED_REMOTE,
-    OPEN,
-    HALF_CLOSED_LOCAL,
-    HALF_CLOSED_REMOTE,
-    CLOSED
+    void accept(T t, int value);
+
+    @Override
+    default void accept(T t, Integer value)
+    {
+        this.accept(t, value.intValue());
+    }
+
+    default ObjectIntBiConsumer<T> andThen(
+        ObjectIntBiConsumer<? super T> after)
+    {
+        Objects.requireNonNull(after);
+
+        return (r, l) ->
+        {
+            accept(r, l);
+            after.accept(r, l);
+        };
+    }
 }

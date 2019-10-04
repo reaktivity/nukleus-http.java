@@ -13,7 +13,7 @@
  * License for the specific language governing permissions and limitations
  * under the License.
  */
-package org.reaktivity.nukleus.http2.internal;
+package org.reaktivity.nukleus.http2.internal.stream;
 
 import java.util.function.Function;
 import java.util.function.LongSupplier;
@@ -22,36 +22,33 @@ import java.util.function.Supplier;
 import java.util.function.ToIntFunction;
 
 import org.agrona.MutableDirectBuffer;
-import org.agrona.collections.Long2ObjectHashMap;
 import org.reaktivity.nukleus.buffer.BufferPool;
+import org.reaktivity.nukleus.http2.internal.Http2Configuration;
 import org.reaktivity.nukleus.route.RouteManager;
 import org.reaktivity.nukleus.stream.StreamFactory;
 import org.reaktivity.nukleus.stream.StreamFactoryBuilder;
 
-public final class ServerStreamFactoryBuilder implements StreamFactoryBuilder
+public final class Http2ServerFactoryBuilder implements StreamFactoryBuilder
 {
     private final Http2Configuration config;
-    private final Long2ObjectHashMap<Correlation> correlations;
 
     private RouteManager router;
     private MutableDirectBuffer writeBuffer;
     private LongUnaryOperator supplyInitialId;
     private LongUnaryOperator supplyReplyId;
-    private LongSupplier supplyTrace;
     private ToIntFunction<String> supplyTypeId;
     private LongSupplier supplyGroupId;
     private Supplier<BufferPool> supplyBufferPool;
     private Function<String, LongSupplier> supplyCounter;
 
-    ServerStreamFactoryBuilder(
+    public Http2ServerFactoryBuilder(
         Http2Configuration config)
     {
         this.config = config;
-        this.correlations = new Long2ObjectHashMap<>();
     }
 
     @Override
-    public ServerStreamFactoryBuilder setRouteManager(
+    public Http2ServerFactoryBuilder setRouteManager(
         RouteManager router)
     {
         this.router = router;
@@ -59,7 +56,7 @@ public final class ServerStreamFactoryBuilder implements StreamFactoryBuilder
     }
 
     @Override
-    public ServerStreamFactoryBuilder setWriteBuffer(
+    public Http2ServerFactoryBuilder setWriteBuffer(
         MutableDirectBuffer writeBuffer)
     {
         this.writeBuffer = writeBuffer;
@@ -67,7 +64,7 @@ public final class ServerStreamFactoryBuilder implements StreamFactoryBuilder
     }
 
     @Override
-    public ServerStreamFactoryBuilder setInitialIdSupplier(
+    public Http2ServerFactoryBuilder setInitialIdSupplier(
         LongUnaryOperator supplyInitialId)
     {
         this.supplyInitialId = supplyInitialId;
@@ -87,14 +84,6 @@ public final class ServerStreamFactoryBuilder implements StreamFactoryBuilder
         LongSupplier supplyGroupId)
     {
         this.supplyGroupId = supplyGroupId;
-        return this;
-    }
-
-    @Override
-    public StreamFactoryBuilder setTraceSupplier(
-        LongSupplier supplyTrace)
-    {
-        this.supplyTrace = supplyTrace;
         return this;
     }
 
@@ -127,7 +116,7 @@ public final class ServerStreamFactoryBuilder implements StreamFactoryBuilder
     {
         final BufferPool bufferPool = supplyBufferPool.get();
 
-        return new ServerStreamFactory(
+        return new Http2ServerFactory(
                 config,
                 router,
                 writeBuffer,
@@ -135,9 +124,7 @@ public final class ServerStreamFactoryBuilder implements StreamFactoryBuilder
                 supplyInitialId,
                 supplyReplyId,
                 supplyGroupId,
-                supplyTrace,
                 supplyTypeId,
-                supplyCounter,
-                correlations);
+                supplyCounter);
     }
 }

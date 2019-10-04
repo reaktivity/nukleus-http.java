@@ -21,6 +21,7 @@ import static org.reaktivity.nukleus.route.RouteKind.SERVER;
 import java.util.Map;
 
 import org.reaktivity.nukleus.Elektron;
+import org.reaktivity.nukleus.http2.internal.stream.Http2ServerFactoryBuilder;
 import org.reaktivity.nukleus.route.RouteKind;
 import org.reaktivity.nukleus.stream.StreamFactoryBuilder;
 
@@ -31,7 +32,8 @@ final class Http2Elektron implements Elektron
     Http2Elektron(
         Http2Configuration config)
     {
-        this.streamFactoryBuilders = singletonMap(SERVER, new ServerStreamFactoryBuilder(config));
+        //this.streamFactoryBuilders = singletonMap(SERVER, new ServerStreamFactoryBuilder(config));
+        this.streamFactoryBuilders = singletonMap(SERVER, new Http2ServerFactoryBuilder(config));
     }
 
     @Override

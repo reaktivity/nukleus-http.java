@@ -40,7 +40,7 @@ public class Http2PriorityFWTest
                 .weight(256)
                 .build();
 
-        assertEquals(5, priority.payloadLength());
+        assertEquals(5, priority.length());
         assertEquals(1, priority.offset());
         assertEquals(15, priority.limit());
         assertEquals(PRIORITY, priority.type());

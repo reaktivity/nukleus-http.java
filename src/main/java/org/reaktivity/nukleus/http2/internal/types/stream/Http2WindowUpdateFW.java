@@ -60,7 +60,7 @@ public class Http2WindowUpdateFW extends Http2FrameFW
         boolean wrappable = super.wrap(buffer, offset, maxLimit) != null;
 
         wrappable &= super.type() == WINDOW_UPDATE;
-        wrappable &= super.payloadLength() == 4;
+        wrappable &= super.length() == 4;
         wrappable &= limit() <= maxLimit;
 
         return wrappable ? this : null;
@@ -80,7 +80,7 @@ public class Http2WindowUpdateFW extends Http2FrameFW
             throw new IllegalArgumentException(String.format("Invalid type=%s for WINDOW_UPDATE frame", type));
         }
 
-        int payloadLength = super.payloadLength();
+        int payloadLength = super.length();
         if (payloadLength != 4)
         {
             throw new IllegalArgumentException(String.format("Invalid WINDOW_UPDATE frame length=%d (must be 4)", payloadLength));
@@ -94,7 +94,7 @@ public class Http2WindowUpdateFW extends Http2FrameFW
     public String toString()
     {
         return String.format("%s frame <length=%s, type=%s, flags=%s, id=%s>",
-                type(), payloadLength(), type(), flags(), streamId());
+                type(), length(), type(), flags(), streamId());
     }
 
     public static final class Builder extends Http2FrameFW.Builder<Builder, Http2WindowUpdateFW>

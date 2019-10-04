@@ -46,7 +46,7 @@ public class Http2FrameFW extends Flyweight
 
     private final AtomicBuffer payloadRO = new UnsafeBuffer(new byte[0]);
 
-    public int payloadLength()
+    public int length()
     {
         int length = (buffer().getByte(offset() + LENGTH_OFFSET) & 0xFF) << 16;
         length += buffer().getShort(offset() + LENGTH_OFFSET + 1, BIG_ENDIAN) & 0xFF_FF;
@@ -86,7 +86,7 @@ public class Http2FrameFW extends Flyweight
     @Override
     public final int limit()
     {
-        return offset() + PAYLOAD_OFFSET + payloadLength();
+        return offset() + PAYLOAD_OFFSET + length();
     }
 
     public Http2FrameFW tryWrap(
@@ -98,7 +98,7 @@ public class Http2FrameFW extends Flyweight
         boolean wrappable = super.wrap(buffer, offset, maxLimit) != null;
 
         wrappable &= maxLimit - offset >= 9;
-        wrappable &= maxLimit - offset >= 9 + payloadLength();
+        wrappable &= maxLimit - offset >= 9 + length();
 
         return wrappable ? wrap(buffer, offset, maxLimit) : null;
     }
@@ -115,7 +115,7 @@ public class Http2FrameFW extends Flyweight
         }
         super.wrap(buffer, offset, maxLimit);
 
-        final int payloadLength = payloadLength();
+        final int payloadLength = length();
         if (maxLimit - offset < 9 + payloadLength)
         {
             throw new IllegalArgumentException("Invalid HTTP2 frame - not enough payload bytes");
@@ -135,7 +135,7 @@ public class Http2FrameFW extends Flyweight
     public String toString()
     {
         return String.format("%s frame <length=%s, flags=%s, id=%s>",
-                type(), payloadLength(), flags(), streamId());
+                type(), length(), flags(), streamId());
     }
 
     protected static class Builder<B extends Builder, T extends Http2FrameFW> extends Flyweight.Builder<T>

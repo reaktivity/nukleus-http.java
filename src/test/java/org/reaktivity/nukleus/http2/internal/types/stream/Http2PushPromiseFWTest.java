@@ -47,7 +47,7 @@ public class Http2PushPromiseFWTest
                 .endHeaders()
                 .build();
 
-        assertEquals(35, push.payloadLength());
+        assertEquals(35, push.length());
         assertEquals(1, push.offset());
         assertEquals(45, push.limit());
         assertTrue(push.endHeaders());

@@ -40,7 +40,7 @@ public class Http2PingFWTest
                 .payload(payload, 0, payload.capacity())
                 .build();
 
-        assertEquals(8, ping.payloadLength());
+        assertEquals(8, ping.length());
         assertEquals(1, ping.offset());
         assertEquals(18, ping.limit());
         assertEquals(PING, ping.type());

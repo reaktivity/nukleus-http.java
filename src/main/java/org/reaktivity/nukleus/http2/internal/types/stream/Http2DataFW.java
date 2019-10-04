@@ -71,11 +71,11 @@ public class Http2DataFW extends Http2FrameFW
         if (padding())
         {
             int paddingLength = buffer().getByte(offset() + PAYLOAD_OFFSET) & 0xff;
-            return payloadLength() - paddingLength - 1;
+            return length() - paddingLength - 1;
         }
         else
         {
-            return payloadLength();
+            return length();
         }
     }
 
@@ -112,7 +112,7 @@ public class Http2DataFW extends Http2FrameFW
     public String toString()
     {
         return String.format("%s frame <length=%s, type=%s, flags=%s, id=%s>",
-                type(), payloadLength(), type(), flags(), streamId());
+                type(), length(), type(), flags(), streamId());
     }
 
     public static final class Builder extends Http2FrameFW.Builder<Builder, Http2DataFW>

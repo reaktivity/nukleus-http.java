@@ -80,7 +80,7 @@ public class Http2ContinuationFW extends Http2FrameFW
     public String toString()
     {
         return String.format("%s frame <length=%s, type=%s, flags=%s, id=%s>",
-                type(), payloadLength(), type(), flags(), streamId());
+                type(), length(), type(), flags(), streamId());
     }
 
     public static final class Builder extends Http2FrameFW.Builder<Builder, Http2ContinuationFW>

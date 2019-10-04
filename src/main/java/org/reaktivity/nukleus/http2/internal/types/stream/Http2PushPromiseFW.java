@@ -84,7 +84,7 @@ public class Http2PushPromiseFW extends Http2FrameFW
 
     private int headersLength()
     {
-        int headersLength = payloadLength() - 4;    // -4 for promised stream id
+        int headersLength = length() - 4;    // -4 for promised stream id
         if (padded())
         {
             int padding = buffer().getByte(offset() + PAYLOAD_OFFSET) & 0xff;
@@ -119,7 +119,7 @@ public class Http2PushPromiseFW extends Http2FrameFW
     public String toString()
     {
         return String.format("%s frame <length=%s, type=%s, flags=%s, id=%s>",
-                type(), payloadLength(), type(), flags(), streamId());
+                type(), length(), type(), flags(), streamId());
     }
 
     public static final class Builder extends Http2FrameFW.Builder<Builder, Http2PushPromiseFW>
