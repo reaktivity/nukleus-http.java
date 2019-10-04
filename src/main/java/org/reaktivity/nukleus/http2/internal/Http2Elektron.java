@@ -32,7 +32,6 @@ final class Http2Elektron implements Elektron
     Http2Elektron(
         Http2Configuration config)
     {
-        //this.streamFactoryBuilders = singletonMap(SERVER, new ServerStreamFactoryBuilder(config));
         this.streamFactoryBuilders = singletonMap(SERVER, new Http2ServerFactoryBuilder(config));
     }
 
