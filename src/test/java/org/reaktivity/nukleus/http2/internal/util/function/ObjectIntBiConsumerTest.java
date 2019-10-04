@@ -26,7 +26,21 @@ public class ObjectIntBiConsumerTest
 {
     @Test
     @SuppressWarnings("unchecked")
-    public void shouldInvokeBeforeThenAfter()
+    public void shouldInvokePrimitiveAccept()
+    {
+        final ObjectIntBiConsumer<Object> consumer = spy(ObjectIntBiConsumer.class);
+
+        final Object object = new Object();
+        final Integer value = new Random().nextInt();
+
+        consumer.accept(object, value);
+
+        verify(consumer).accept(object, value.intValue());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void shouldInvokeBeforeAndThenAfter()
     {
         final ObjectIntBiConsumer<Object> before = spy(ObjectIntBiConsumer.class);
         final ObjectIntBiConsumer<Object> after = spy(ObjectIntBiConsumer.class);
