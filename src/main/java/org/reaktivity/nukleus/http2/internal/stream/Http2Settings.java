@@ -15,7 +15,7 @@
  */
 package org.reaktivity.nukleus.http2.internal.stream;
 
-import org.reaktivity.nukleus.http2.internal.types.stream.Http2ErrorCode;
+import org.reaktivity.nukleus.http2.internal.types.Http2ErrorCode;
 
 public class Http2Settings
 {

@@ -6,7 +6,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>org.reaktivity</groupId>
   <artifactId>nukleus-http</artifactId>
-  <version>0.96</version>
+  <version>0.97</version>
   <name>HTTP Nukleus Implementation</name>
   <description>HTTP Nukleus Implementation</description>
   <url>https://github.com/reaktivity/nukleus-http.java</url>
@@ -42,13 +42,13 @@
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     <checkstyle.config.location>src/conf/checkstyle/configuration.xml</checkstyle.config.location>
     <checkstyle.suppressions.location>src/conf/checkstyle/suppressions.xml</checkstyle.suppressions.location>
-    <jacoco.coverage.ratio>0.85</jacoco.coverage.ratio>
-    <jacoco.missed.count>5</jacoco.missed.count>
+    <jacoco.coverage.ratio>0.90</jacoco.coverage.ratio>
+    <jacoco.missed.count>0</jacoco.missed.count>
 
     <junit.version>4.12</junit.version>
     <jmh.version>1.17.4</jmh.version>
     <jmh.profilers.version>0.1.3</jmh.profilers.version>
-    <jmock.version>2.6.0</jmock.version>
+    <mockito.version>2.23.4</mockito.version>
 
     <k3po.version>3.0.0-alpha-103</k3po.version>
 
@@ -133,9 +133,9 @@
       <scope>test</scope>
     </dependency>
     <dependency>
-      <groupId>org.jmock</groupId>
-      <artifactId>jmock-junit4</artifactId>
-      <version>${jmock.version}</version>
+      <groupId>org.mockito</groupId>
+      <artifactId>mockito-core</artifactId>
+      <version>${mockito.version}</version>
       <scope>test</scope>
     </dependency>
   </dependencies>
@@ -221,6 +221,7 @@
         <configuration>
           <excludes>
             <exclude>org/reaktivity/nukleus/http/internal/types/**/*.class</exclude>
+            <exclude>org/reaktivity/nukleus/http2/internal/types/**/*.class</exclude>
           </excludes>
           <rules>
             <rule>
