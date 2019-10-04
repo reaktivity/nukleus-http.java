@@ -37,7 +37,7 @@ public class Http2WindowUpdateFWTest
                 .size(100)
                 .build();
 
-        assertEquals(4, window.payloadLength());
+        assertEquals(4, window.length());
         assertEquals(1, window.offset());
         assertEquals(14, window.limit());
         assertEquals(WINDOW_UPDATE, window.type());

@@ -15,7 +15,7 @@
  */
 package org.reaktivity.nukleus.http2.internal.types.stream;
 
-public enum Http2SettingsId
+public enum Http2Setting
 {
     UNKNOWN(-1),
     HEADER_TABLE_SIZE(1),
@@ -27,7 +27,8 @@ public enum Http2SettingsId
 
     private final int id;
 
-    Http2SettingsId(int id)
+    Http2Setting(
+        int id)
     {
         this.id = id;
     }
@@ -37,7 +38,8 @@ public enum Http2SettingsId
         return id;
     }
 
-    static Http2SettingsId get(int id)
+    static Http2Setting get(
+        int id)
     {
         switch (id)
         {

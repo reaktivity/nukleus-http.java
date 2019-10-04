@@ -38,7 +38,7 @@ public class Http2RstStreamFWTest
                 .errorCode(PROTOCOL_ERROR)
                 .build();
 
-        assertEquals(4, reset.payloadLength());
+        assertEquals(4, reset.length());
         assertEquals(1, reset.offset());
         assertEquals(14, reset.limit());
         assertEquals(RST_STREAM, reset.type());

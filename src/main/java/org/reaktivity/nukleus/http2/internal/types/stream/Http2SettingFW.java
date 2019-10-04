@@ -39,9 +39,9 @@ public class Http2SettingFW extends Flyweight
         return buffer().getShort(offset(), BIG_ENDIAN);
     }
 
-    public long value()
+    public int value()
     {
-        return buffer().getInt(offset() + 2, BIG_ENDIAN) & 0xff_ff_ff_ffL;
+        return buffer().getInt(offset() + 2, BIG_ENDIAN);
     }
 
     @Override

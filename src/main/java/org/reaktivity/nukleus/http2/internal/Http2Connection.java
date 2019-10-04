@@ -80,8 +80,8 @@ import org.reaktivity.nukleus.http2.internal.types.stream.Http2PingFW;
 import org.reaktivity.nukleus.http2.internal.types.stream.Http2PrefaceFW;
 import org.reaktivity.nukleus.http2.internal.types.stream.Http2PriorityFW;
 import org.reaktivity.nukleus.http2.internal.types.stream.Http2RstStreamFW;
+import org.reaktivity.nukleus.http2.internal.types.stream.Http2Setting;
 import org.reaktivity.nukleus.http2.internal.types.stream.Http2SettingsFW;
-import org.reaktivity.nukleus.http2.internal.types.stream.Http2SettingsId;
 import org.reaktivity.nukleus.http2.internal.types.stream.Http2WindowUpdateFW;
 import org.reaktivity.nukleus.route.RouteManager;
 
@@ -344,7 +344,7 @@ final class Http2Connection
 
         if (http2Frame != null)
         {
-            if (http2Frame.payloadLength() > localSettings.maxFrameSize)
+            if (http2Frame.length() > localSettings.maxFrameSize)
             {
                 this.decodeError = Http2ErrorCode.FRAME_SIZE_ERROR;
             }
@@ -363,7 +363,7 @@ final class Http2Connection
 
             if (http2FrameHeader != null)
             {
-                if (http2FrameHeader.payloadLength() > localSettings.maxFrameSize)
+                if (http2FrameHeader.length() > localSettings.maxFrameSize)
                 {
                     this.decodeError = Http2ErrorCode.FRAME_SIZE_ERROR;
                 }
@@ -505,7 +505,7 @@ final class Http2Connection
         final Http2SettingsFW settings =
                 factory.settingsRO.tryWrap(http2Frame.buffer(), http2Frame.offset(), http2Frame.limit());
 
-        if (settings == null || settings.ack() && settings.payloadLength() != 0)
+        if (settings == null || settings.ack() && settings.length() != 0)
         {
             decodeError = Http2ErrorCode.FRAME_SIZE_ERROR;
         }
@@ -549,7 +549,7 @@ final class Http2Connection
         if (!goaway)
         {
             goaway = true;
-            remoteSettings.enablePush = false;      // no new streams
+            remoteSettings.enablePush = 0;      // no new streams
             this.decodeError = Http2ErrorCode.NO_ERROR;
         }
     }
@@ -788,7 +788,7 @@ final class Http2Connection
             return;
         }
 
-        final int payloadLength = http2Frame.payloadLength();
+        final int payloadLength = http2Frame.length();
         if (stream.http2InWindow < payloadLength || http2InWindow < payloadLength)
         {
             doRstByUs(stream, Http2ErrorCode.FLOW_CONTROL_ERROR);
@@ -892,13 +892,13 @@ final class Http2Connection
     }
 
     private void applySetting(
-        Http2SettingsId id,
-        Long value)
+        Http2Setting id,
+        int value)
     {
         switch (id)
         {
         case HEADER_TABLE_SIZE:
-            remoteSettings.headerTableSize = value.intValue();
+            remoteSettings.headerTableSize = value;
             break;
         case ENABLE_PUSH:
             if (!(value == 0L || value == 1L))
@@ -906,10 +906,10 @@ final class Http2Connection
                 decodeError = Http2ErrorCode.PROTOCOL_ERROR;
                 return;
             }
-            remoteSettings.enablePush = value == 1L;
+            remoteSettings.enablePush = value;
             break;
         case MAX_CONCURRENT_STREAMS:
-            remoteSettings.maxConcurrentStreams = value.intValue();
+            remoteSettings.maxConcurrentStreams = value;
             break;
         case INITIAL_WINDOW_SIZE:
             if (value > Integer.MAX_VALUE)
@@ -918,8 +918,8 @@ final class Http2Connection
                 return;
             }
             int old = remoteSettings.initialWindowSize;
-            remoteSettings.initialWindowSize = value.intValue();
-            int update = value.intValue() - old;
+            remoteSettings.initialWindowSize = value;
+            int update = value - old;
 
             // 6.9.2. Initial Flow-Control Window Size
             // SETTINGS frame can alter the initial flow-control
@@ -944,10 +944,10 @@ final class Http2Connection
                 decodeError = Http2ErrorCode.PROTOCOL_ERROR;
                 return;
             }
-            remoteSettings.maxFrameSize = value.intValue();
+            remoteSettings.maxFrameSize = value;
             break;
         case MAX_HEADER_LIST_SIZE:
-            remoteSettings.maxHeaderListSize = value.intValue();
+            remoteSettings.maxHeaderListSize = value;
             break;
         default:
             // Ignore the unkonwn setting
@@ -1177,7 +1177,7 @@ final class Http2Connection
     private int findPushId(
         int streamId)
     {
-        if (remoteSettings.enablePush && promisedStreamCount + 1 < remoteSettings.maxConcurrentStreams)
+        if (remoteSettings.enablePush == 1 && promisedStreamCount + 1 < remoteSettings.maxConcurrentStreams)
         {
             // PUSH_PROMISE frames MUST only be sent on a peer-initiated stream
             if (streamId % 2 == 0)

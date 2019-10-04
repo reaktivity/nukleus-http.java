@@ -15,28 +15,71 @@
  */
 package org.reaktivity.nukleus.http2.internal;
 
-class Settings
+import org.reaktivity.nukleus.http2.internal.types.stream.Http2ErrorCode;
+
+public class Settings
 {
-    static final int DEFAULT_HEADER_TABLE_SIZE = 4096;
-    static final boolean DEFAULT_ENABLE_PUSH = true;
-    static final int DEFAULT_MAX_CONCURRENT_STREAMS = Integer.MAX_VALUE;
-    static final int DEFAULT_INITIAL_WINDOW_SIZE = 65_535;
+    private static final int DEFAULT_HEADER_TABLE_SIZE = 4096;
+    private static final int DEFAULT_ENABLE_PUSH = 1;
+    private static final int DEFAULT_MAX_CONCURRENT_STREAMS = Integer.MAX_VALUE;
+    private static final int DEFAULT_INITIAL_WINDOW_SIZE = 65_535;
     private static final int DEFAULT_MAX_FRAME_SIZE = 16_384;
 
-    int headerTableSize = DEFAULT_HEADER_TABLE_SIZE;
-    boolean enablePush = DEFAULT_ENABLE_PUSH;
-    int maxConcurrentStreams = DEFAULT_MAX_CONCURRENT_STREAMS;
-    int initialWindowSize = DEFAULT_INITIAL_WINDOW_SIZE;
-    int maxFrameSize = DEFAULT_MAX_FRAME_SIZE;
-    long maxHeaderListSize;
+    public int headerTableSize = DEFAULT_HEADER_TABLE_SIZE;
+    public int enablePush = DEFAULT_ENABLE_PUSH;
+    public int maxConcurrentStreams = DEFAULT_MAX_CONCURRENT_STREAMS;
+    public int initialWindowSize = DEFAULT_INITIAL_WINDOW_SIZE;
+    public int maxFrameSize = DEFAULT_MAX_FRAME_SIZE;
+    public long maxHeaderListSize;
 
-    Settings(int maxConcurrentStreams, int initialWindowSize)
+    public Settings(
+        int maxConcurrentStreams,
+        int initialWindowSize)
     {
         this.maxConcurrentStreams = maxConcurrentStreams;
         this.initialWindowSize = initialWindowSize;
     }
 
-    Settings()
+    public Settings()
     {
+    }
+
+    public void apply(
+        Settings settings)
+    {
+        this.maxConcurrentStreams = settings.maxConcurrentStreams;
+        this.initialWindowSize = settings.initialWindowSize;
+    }
+
+    public Http2ErrorCode error()
+    {
+        Http2ErrorCode error = Http2ErrorCode.NO_ERROR;
+
+        if (!enablePushIsValid() ||
+            !maxFrameSizeIsValid())
+        {
+            error = Http2ErrorCode.PROTOCOL_ERROR;
+        }
+        else if (!initialWindowSizeIsValid())
+        {
+            error = Http2ErrorCode.FLOW_CONTROL_ERROR;
+        }
+
+        return error;
+    }
+
+    private boolean enablePushIsValid()
+    {
+        return enablePush == 0 || enablePush == 1;
+    }
+
+    private boolean maxFrameSizeIsValid()
+    {
+        return 0x4000 <= maxFrameSize && maxFrameSize <= 0xffffff;
+    }
+
+    private boolean initialWindowSizeIsValid()
+    {
+        return initialWindowSize >= 0;
     }
 }

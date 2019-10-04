@@ -73,7 +73,7 @@ public class Http2PriorityFW extends Http2FrameFW
 
         wrappable &= super.type() == PRIORITY;
         wrappable &= super.streamId() != 0;
-        wrappable &= super.payloadLength() == 5;
+        wrappable &= super.length() == 5;
         wrappable &= limit() <= maxLimit;
 
         return wrappable ? this : null;
@@ -99,7 +99,7 @@ public class Http2PriorityFW extends Http2FrameFW
             throw new IllegalArgumentException(String.format("Invalid PRIORITY frame type=%s", type));
         }
 
-        int payloadLength = super.payloadLength();
+        int payloadLength = super.length();
         if (payloadLength != 5)
         {
             throw new IllegalArgumentException(String.format("Invalid PRIORITY frame length=%d (must be 5)", payloadLength));
@@ -112,7 +112,7 @@ public class Http2PriorityFW extends Http2FrameFW
     public String toString()
     {
         return String.format("%s frame <length=%s, type=%s, flags=%s, id=%s>",
-                type(), payloadLength(), type(), flags(), streamId());
+                type(), length(), type(), flags(), streamId());
     }
 
     public static final class Builder extends Http2FrameFW.Builder<Builder, Http2PriorityFW>

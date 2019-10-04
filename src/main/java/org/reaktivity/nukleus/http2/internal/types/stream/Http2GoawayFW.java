@@ -62,6 +62,16 @@ public class Http2GoawayFW extends Http2FrameFW
     }
 
     @Override
+    public Http2GoawayFW tryWrap(
+        DirectBuffer buffer,
+        int offset,
+        int maxLimit)
+    {
+        super.tryWrap(buffer, offset, maxLimit);
+        return this;
+    }
+
+    @Override
     public Http2GoawayFW wrap(DirectBuffer buffer, int offset, int maxLimit)
     {
         super.wrap(buffer, offset, maxLimit);
@@ -86,7 +96,7 @@ public class Http2GoawayFW extends Http2FrameFW
     public String toString()
     {
         return String.format("%s frame <length=%s, type=%s, flags=%s, id=%s>",
-                type(), payloadLength(), type(), flags(), streamId());
+                type(), length(), type(), flags(), streamId());
     }
 
     public static final class Builder extends Http2FrameFW.Builder<Builder, Http2GoawayFW>

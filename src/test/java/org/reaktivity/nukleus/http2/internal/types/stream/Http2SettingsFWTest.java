@@ -56,7 +56,7 @@ public class Http2SettingsFWTest
                 .maxHeaderListSize(4096L)
                 .build();
 
-        assertEquals(12, settings.payloadLength());
+        assertEquals(12, settings.length());
         assertEquals(1, settings.offset());
         assertEquals(22, settings.limit());
         assertEquals(SETTINGS, settings.type());
@@ -77,7 +77,7 @@ public class Http2SettingsFWTest
                 .ack()
                 .build();
 
-        assertEquals(0, settings.payloadLength());
+        assertEquals(0, settings.length());
         assertEquals(1, settings.offset());
         assertEquals(10, settings.limit());
         assertEquals(SETTINGS, settings.type());

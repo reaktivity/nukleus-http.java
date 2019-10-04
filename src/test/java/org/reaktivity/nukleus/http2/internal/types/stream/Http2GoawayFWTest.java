@@ -38,7 +38,7 @@ public class Http2GoawayFWTest
                 .errorCode(PROTOCOL_ERROR)
                 .build();
 
-        assertEquals(8, goaway.payloadLength());
+        assertEquals(8, goaway.length());
         assertEquals(1, goaway.offset());
         assertEquals(18, goaway.limit());
         assertEquals(GO_AWAY, goaway.type());

@@ -17,18 +17,18 @@ package org.reaktivity.nukleus.http2.internal.types.stream;
 
 import static org.reaktivity.nukleus.http2.internal.types.stream.Http2Flags.ACK;
 import static org.reaktivity.nukleus.http2.internal.types.stream.Http2FrameType.SETTINGS;
-import static org.reaktivity.nukleus.http2.internal.types.stream.Http2SettingsId.ENABLE_PUSH;
-import static org.reaktivity.nukleus.http2.internal.types.stream.Http2SettingsId.HEADER_TABLE_SIZE;
-import static org.reaktivity.nukleus.http2.internal.types.stream.Http2SettingsId.INITIAL_WINDOW_SIZE;
-import static org.reaktivity.nukleus.http2.internal.types.stream.Http2SettingsId.MAX_CONCURRENT_STREAMS;
-import static org.reaktivity.nukleus.http2.internal.types.stream.Http2SettingsId.MAX_FRAME_SIZE;
-import static org.reaktivity.nukleus.http2.internal.types.stream.Http2SettingsId.MAX_HEADER_LIST_SIZE;
+import static org.reaktivity.nukleus.http2.internal.types.stream.Http2Setting.ENABLE_PUSH;
+import static org.reaktivity.nukleus.http2.internal.types.stream.Http2Setting.HEADER_TABLE_SIZE;
+import static org.reaktivity.nukleus.http2.internal.types.stream.Http2Setting.INITIAL_WINDOW_SIZE;
+import static org.reaktivity.nukleus.http2.internal.types.stream.Http2Setting.MAX_CONCURRENT_STREAMS;
+import static org.reaktivity.nukleus.http2.internal.types.stream.Http2Setting.MAX_FRAME_SIZE;
+import static org.reaktivity.nukleus.http2.internal.types.stream.Http2Setting.MAX_HEADER_LIST_SIZE;
 
-import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
+import org.reaktivity.nukleus.http2.internal.util.function.ObjectIntBiConsumer;
 
 /*
     Flyweight for HTTP2 SETTINGS frame
@@ -68,9 +68,9 @@ public class Http2SettingsFW extends Http2FrameFW
         return Http2Flags.ack(flags());
     }
 
-    public void forEach(BiConsumer<Http2SettingsId, Long> consumer)
+    public void forEach(ObjectIntBiConsumer<Http2Setting> consumer)
     {
-        listFW.forEach(s -> consumer.accept(Http2SettingsId.get(s.id()), s.value()));
+        listFW.forEach(s -> consumer.accept(Http2Setting.get(s.id()), s.value()));
     }
 
     public long headerTableSize()
@@ -103,7 +103,8 @@ public class Http2SettingsFW extends Http2FrameFW
         return settings(MAX_HEADER_LIST_SIZE.id());
     }
 
-    public long settings(int key)
+    public long settings(
+        int key)
     {
         long[] value = new long[] { -1L };
 
@@ -127,7 +128,7 @@ public class Http2SettingsFW extends Http2FrameFW
 
         wrappable &= super.streamId() == 0;
         wrappable &= super.type() == SETTINGS;
-        wrappable &= super.payloadLength() % 6 == 0;
+        wrappable &= super.length() % 6 == 0;
         wrappable &= limit() <= maxLimit;
 
         if (wrappable)
@@ -158,7 +159,7 @@ public class Http2SettingsFW extends Http2FrameFW
             throw new IllegalArgumentException(String.format("Invalid SETTINGS frame type=%s", type));
         }
 
-        int payloadLength = super.payloadLength();
+        int payloadLength = super.length();
         if (payloadLength % 6 != 0)
         {
             throw new IllegalArgumentException(String.format("Invalid SETTINGS frame length=%d", payloadLength));
@@ -173,7 +174,7 @@ public class Http2SettingsFW extends Http2FrameFW
     public String toString()
     {
         return String.format("%s frame <length=%s, type=%s, flags=%s, id=%s>",
-                type(), payloadLength(), type(), flags(), streamId());
+                type(), length(), type(), flags(), streamId());
     }
 
     public static final class Builder extends Http2FrameFW.Builder<Builder, Http2SettingsFW>

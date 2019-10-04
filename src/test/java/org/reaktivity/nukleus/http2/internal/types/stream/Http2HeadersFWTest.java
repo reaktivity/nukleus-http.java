@@ -83,7 +83,7 @@ public class Http2HeadersFWTest
                 .streamId(3)
                 .build();
 
-        assertEquals(20, fw.payloadLength());
+        assertEquals(20, fw.length());
         assertEquals(1, fw.offset());
         assertEquals(30, fw.limit());
         assertTrue(fw.endHeaders());

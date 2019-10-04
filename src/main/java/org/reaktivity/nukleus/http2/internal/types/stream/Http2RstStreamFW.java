@@ -60,7 +60,7 @@ public class Http2RstStreamFW extends Http2FrameFW
 
         wrappable &= super.streamId() != 0;
         wrappable &= super.type() == RST_STREAM;
-        wrappable &= super.payloadLength() == 4;
+        wrappable &= super.length() == 4;
         wrappable &= limit() <= maxLimit;
 
         return wrappable ? this : null;
@@ -86,7 +86,7 @@ public class Http2RstStreamFW extends Http2FrameFW
             throw new IllegalArgumentException(String.format("Invalid RST_STREAM frame type=%s", type));
         }
 
-        int payloadLength = super.payloadLength();
+        int payloadLength = super.length();
         if (payloadLength != 4)
         {
             throw new IllegalArgumentException(String.format("Invalid RST_STREAM frame length=%d (must be 4)", payloadLength));
@@ -99,7 +99,7 @@ public class Http2RstStreamFW extends Http2FrameFW
     public String toString()
     {
         return String.format("%s frame <length=%s, type=%s, flags=%s, id=%s>",
-                type(), payloadLength(), type(), flags(), streamId());
+                type(), length(), type(), flags(), streamId());
     }
 
     public static final class Builder extends Http2FrameFW.Builder<Builder, Http2RstStreamFW>

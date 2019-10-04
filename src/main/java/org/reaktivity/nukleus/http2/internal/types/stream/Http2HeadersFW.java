@@ -112,7 +112,7 @@ public class Http2HeadersFW extends Http2FrameFW
 
     public int dataLength()
     {
-        int dataLength = payloadLength();
+        int dataLength = length();
         if (padded())
         {
             int paddingLength = buffer().getByte(offset() + PAYLOAD_OFFSET) & 0xff;
@@ -146,7 +146,7 @@ public class Http2HeadersFW extends Http2FrameFW
     public String toString()
     {
         return String.format("%s frame <length=%s, type=%s, flags=%s, id=%s>",
-                type(), payloadLength(), type(), flags(), streamId());
+                type(), length(), type(), flags(), streamId());
     }
 
     public static final class Builder extends Http2FrameFW.Builder<Builder, Http2HeadersFW>
@@ -174,11 +174,17 @@ public class Http2HeadersFW extends Http2FrameFW
             return this;
         }
 
-        public Builder endStream()
+        public Builder endStream(boolean endStream)
         {
             byte flags = buffer().getByte(offset() + FLAGS_OFFSET);
-            flags |= END_STREAM;
+            flags = (byte) (endStream ? (flags | END_STREAM) : (flags & ~END_STREAM));
             buffer().putByte(offset() + FLAGS_OFFSET, flags);
+            return this;
+        }
+
+        public Builder endStream()
+        {
+            endStream(true);
             return this;
         }
 

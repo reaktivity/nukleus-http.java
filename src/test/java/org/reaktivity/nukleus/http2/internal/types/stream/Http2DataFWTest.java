@@ -40,7 +40,7 @@ public class Http2DataFWTest
                 .payload(payload)
                 .build();
 
-        assertEquals(6, fw.payloadLength());
+        assertEquals(6, fw.length());
         assertEquals(1, fw.offset());
         assertEquals(16, fw.limit());
         assertTrue(fw.endStream());
@@ -63,7 +63,7 @@ public class Http2DataFWTest
                 .payload(payload)
                 .build();
 
-        assertEquals(0, fw.payloadLength());
+        assertEquals(0, fw.length());
         assertEquals(1, fw.offset());
         assertEquals(10, fw.limit());
         assertTrue(fw.endStream());

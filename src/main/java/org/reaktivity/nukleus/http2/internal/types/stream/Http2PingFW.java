@@ -63,7 +63,7 @@ public class Http2PingFW extends Http2FrameFW
 
         wrappable &= super.streamId() == 0;
         wrappable &= super.type() == PING;
-        wrappable &= super.payloadLength() == 8;
+        wrappable &= super.length() == 8;
         wrappable &= limit() <= maxLimit;
 
         return wrappable ? this : null;
@@ -89,7 +89,7 @@ public class Http2PingFW extends Http2FrameFW
             throw new IllegalArgumentException(String.format("Invalid PING frame type=%s", type));
         }
 
-        int payloadLength = super.payloadLength();
+        int payloadLength = super.length();
         if (payloadLength != 8)
         {
             throw new IllegalArgumentException(String.format("Invalid PING frame length=%d (must be 8)", payloadLength));
@@ -103,7 +103,7 @@ public class Http2PingFW extends Http2FrameFW
     public String toString()
     {
         return String.format("%s frame <length=%s, type=%s, flags=%s, id=%s>",
-                type(), payloadLength(), type(), flags(), streamId());
+                type(), length(), type(), flags(), streamId());
     }
 
     public static final class Builder extends Http2FrameFW.Builder<Http2PingFW.Builder, Http2PingFW>
