@@ -15,13 +15,14 @@
  */
 package org.reaktivity.nukleus.http2.internal.types.stream;
 
-import static org.reaktivity.nukleus.http2.internal.types.stream.Http2Flags.END_STREAM;
+import static org.reaktivity.nukleus.http2.internal.stream.Http2Flags.END_STREAM;
 import static org.reaktivity.nukleus.http2.internal.types.stream.Http2FrameType.DATA;
 
 import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
 import org.agrona.concurrent.AtomicBuffer;
 import org.agrona.concurrent.UnsafeBuffer;
+import org.reaktivity.nukleus.http2.internal.stream.Http2Flags;
 
 /*
     Flyweight for HTTP2 DATA frame

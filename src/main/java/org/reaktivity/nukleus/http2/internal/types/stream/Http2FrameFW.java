@@ -22,6 +22,7 @@ import org.agrona.MutableDirectBuffer;
 import org.agrona.concurrent.AtomicBuffer;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.reaktivity.nukleus.http.internal.types.Flyweight;
+import org.reaktivity.nukleus.http2.internal.stream.Http2Flags;
 
 /*
     Flyweight for for all HTTP2 frames

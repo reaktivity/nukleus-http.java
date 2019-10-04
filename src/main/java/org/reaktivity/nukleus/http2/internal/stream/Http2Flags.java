@@ -13,31 +13,39 @@
  * License for the specific language governing permissions and limitations
  * under the License.
  */
-package org.reaktivity.nukleus.http2.internal.util.function;
+package org.reaktivity.nukleus.http2.internal.stream;
 
-import java.util.Objects;
-import java.util.function.BiConsumer;
-
-@FunctionalInterface
-public interface IntObjectBiConsumer<T> extends BiConsumer<Integer, T>
+public interface Http2Flags
 {
-    void accept(int value, T t);
+    byte NONE = 0x0;
+    byte END_STREAM = 0x01;
+    byte ACK = 0x01;
+    byte END_HEADERS = 0x04;
+    byte PADDED = 0x08;
+    byte PRIORITY = 0x20;
 
-    @Override
-    default void accept(Integer value, T t)
+    static boolean padded(byte flags)
     {
-        this.accept(value.intValue(), t);
+        return (flags & PADDED) != 0;
     }
 
-    default IntObjectBiConsumer<T> andThen(
-            IntObjectBiConsumer<? super T> after)
+    static boolean endStream(byte flags)
     {
-        Objects.requireNonNull(after);
+        return (flags & END_STREAM) != 0;
+    }
 
-        return (l, r) ->
-        {
-            accept(l, r);
-            after.accept(l, r);
-        };
+    static boolean endHeaders(byte flags)
+    {
+        return (flags & END_HEADERS) != 0;
+    }
+
+    static boolean priority(byte flags)
+    {
+        return (flags & PRIORITY) != 0;
+    }
+
+    static boolean ack(byte flags)
+    {
+        return (flags & ACK) != 0;
     }
 }

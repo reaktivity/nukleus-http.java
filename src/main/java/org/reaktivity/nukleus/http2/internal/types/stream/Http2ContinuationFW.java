@@ -15,13 +15,16 @@
  */
 package org.reaktivity.nukleus.http2.internal.types.stream;
 
-import static org.reaktivity.nukleus.http2.internal.types.stream.Http2Flags.END_HEADERS;
+import static org.reaktivity.nukleus.http2.internal.stream.Http2Flags.END_HEADERS;
 import static org.reaktivity.nukleus.http2.internal.types.stream.Http2FrameType.CONTINUATION;
 
 import java.util.function.Consumer;
 
 import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
+import org.reaktivity.nukleus.http2.internal.hpack.HpackHeaderBlockFW;
+import org.reaktivity.nukleus.http2.internal.hpack.HpackHeaderFieldFW;
+import org.reaktivity.nukleus.http2.internal.stream.Http2Flags;
 
 /*
 

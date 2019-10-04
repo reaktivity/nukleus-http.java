@@ -13,11 +13,11 @@
  * License for the specific language governing permissions and limitations
  * under the License.
  */
-package org.reaktivity.nukleus.http2.internal.types.stream;
+package org.reaktivity.nukleus.http2.internal.hpack;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import static org.reaktivity.nukleus.http2.internal.types.stream.HpackLiteralHeaderFieldFW.LiteralType.INCREMENTAL_INDEXING;
+import static org.reaktivity.nukleus.http2.internal.hpack.HpackLiteralHeaderFieldFW.LiteralType.INCREMENTAL_INDEXING;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -28,7 +28,7 @@ import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.junit.Test;
-import org.reaktivity.nukleus.http2.internal.types.stream.HpackHeaderFieldFW.HeaderFieldType;
+import org.reaktivity.nukleus.http2.internal.hpack.HpackHeaderFieldFW.HeaderFieldType;
 
 public class HpackHeaderBlockFWTest
 {
@@ -449,7 +449,7 @@ public class HpackHeaderBlockFWTest
         assertEquals(27, fw.limit());
     }
 
-    static Consumer<HpackHeaderFieldFW> getHeaders(HpackContext context, Map<String, String> headers)
+    public static Consumer<HpackHeaderFieldFW> getHeaders(HpackContext context, Map<String, String> headers)
     {
         return x ->
         {

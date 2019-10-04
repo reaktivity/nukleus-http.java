@@ -20,6 +20,7 @@ import static java.nio.ByteOrder.BIG_ENDIAN;
 import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
 import org.reaktivity.nukleus.http.internal.types.Flyweight;
+import org.reaktivity.nukleus.http2.internal.stream.Http2Flags;
 
 /*
     HTTP2 frame header flyweight

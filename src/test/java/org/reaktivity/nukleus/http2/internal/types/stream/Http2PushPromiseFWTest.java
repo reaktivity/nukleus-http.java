@@ -17,7 +17,7 @@ package org.reaktivity.nukleus.http2.internal.types.stream;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import static org.reaktivity.nukleus.http2.internal.types.stream.HpackLiteralHeaderFieldFW.LiteralType.INCREMENTAL_INDEXING;
+import static org.reaktivity.nukleus.http2.internal.hpack.HpackLiteralHeaderFieldFW.LiteralType.INCREMENTAL_INDEXING;
 import static org.reaktivity.nukleus.http2.internal.types.stream.Http2FrameType.PUSH_PROMISE;
 
 import java.util.LinkedHashMap;
@@ -26,6 +26,8 @@ import java.util.Map;
 import org.agrona.MutableDirectBuffer;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.junit.Test;
+import org.reaktivity.nukleus.http2.internal.hpack.HpackContext;
+import org.reaktivity.nukleus.http2.internal.hpack.HpackHeaderBlockFWTest;
 
 public class Http2PushPromiseFWTest
 {

@@ -13,7 +13,7 @@
  * License for the specific language governing permissions and limitations
  * under the License.
  */
-package org.reaktivity.nukleus.http2.internal.types.stream;
+package org.reaktivity.nukleus.http2.internal.hpack;
 
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
@@ -22,6 +22,8 @@ import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
 import org.reaktivity.nukleus.http.internal.types.Flyweight;
 import org.reaktivity.nukleus.http.internal.types.HttpHeaderFW;
+import org.reaktivity.nukleus.http2.internal.types.stream.UnboundedListFW;
+import org.reaktivity.nukleus.http2.internal.types.stream.UnboundedListFW.Builder;
 
 /*
     Flyweight for HPACK Header Block

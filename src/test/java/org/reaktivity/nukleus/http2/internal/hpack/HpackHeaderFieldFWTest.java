@@ -13,23 +13,23 @@
  * License for the specific language governing permissions and limitations
  * under the License.
  */
-package org.reaktivity.nukleus.http2.internal.types.stream;
+package org.reaktivity.nukleus.http2.internal.hpack;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.Assert.assertEquals;
-import static org.reaktivity.nukleus.http2.internal.types.stream.HpackHeaderFieldFW.HeaderFieldType.LITERAL;
-import static org.reaktivity.nukleus.http2.internal.types.stream.HpackLiteralHeaderFieldFW.LiteralType.INCREMENTAL_INDEXING;
-import static org.reaktivity.nukleus.http2.internal.types.stream.HpackLiteralHeaderFieldFW.LiteralType.NEVER_INDEXED;
-import static org.reaktivity.nukleus.http2.internal.types.stream.HpackLiteralHeaderFieldFW.LiteralType.WITHOUT_INDEXING;
-import static org.reaktivity.nukleus.http2.internal.types.stream.HpackLiteralHeaderFieldFW.NameType.INDEXED;
-import static org.reaktivity.nukleus.http2.internal.types.stream.HpackLiteralHeaderFieldFW.NameType.NEW;
+import static org.reaktivity.nukleus.http2.internal.hpack.HpackHeaderFieldFW.HeaderFieldType.LITERAL;
+import static org.reaktivity.nukleus.http2.internal.hpack.HpackLiteralHeaderFieldFW.LiteralType.INCREMENTAL_INDEXING;
+import static org.reaktivity.nukleus.http2.internal.hpack.HpackLiteralHeaderFieldFW.LiteralType.NEVER_INDEXED;
+import static org.reaktivity.nukleus.http2.internal.hpack.HpackLiteralHeaderFieldFW.LiteralType.WITHOUT_INDEXING;
+import static org.reaktivity.nukleus.http2.internal.hpack.HpackLiteralHeaderFieldFW.NameType.INDEXED;
+import static org.reaktivity.nukleus.http2.internal.hpack.HpackLiteralHeaderFieldFW.NameType.NEW;
 
 import org.agrona.BitUtil;
 import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.junit.Test;
-import org.reaktivity.nukleus.http2.internal.types.stream.HpackHeaderFieldFW.HeaderFieldType;
+import org.reaktivity.nukleus.http2.internal.hpack.HpackHeaderFieldFW.HeaderFieldType;
 
 public class HpackHeaderFieldFWTest
 {

@@ -15,7 +15,7 @@
  */
 package org.reaktivity.nukleus.http2.internal.types.stream;
 
-import static org.reaktivity.nukleus.http2.internal.types.stream.Http2Flags.ACK;
+import static org.reaktivity.nukleus.http2.internal.stream.Http2Flags.ACK;
 import static org.reaktivity.nukleus.http2.internal.types.stream.Http2FrameType.SETTINGS;
 import static org.reaktivity.nukleus.http2.internal.types.stream.Http2Setting.ENABLE_PUSH;
 import static org.reaktivity.nukleus.http2.internal.types.stream.Http2Setting.HEADER_TABLE_SIZE;
@@ -28,6 +28,7 @@ import java.util.function.Consumer;
 
 import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
+import org.reaktivity.nukleus.http2.internal.stream.Http2Flags;
 import org.reaktivity.nukleus.http2.internal.util.function.ObjectIntBiConsumer;
 
 /*

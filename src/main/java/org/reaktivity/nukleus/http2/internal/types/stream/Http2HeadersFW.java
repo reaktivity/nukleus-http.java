@@ -16,10 +16,10 @@
 package org.reaktivity.nukleus.http2.internal.types.stream;
 
 import static java.nio.ByteOrder.BIG_ENDIAN;
-import static org.reaktivity.nukleus.http2.internal.types.stream.Http2Flags.END_HEADERS;
-import static org.reaktivity.nukleus.http2.internal.types.stream.Http2Flags.END_STREAM;
-import static org.reaktivity.nukleus.http2.internal.types.stream.Http2Flags.PADDED;
-import static org.reaktivity.nukleus.http2.internal.types.stream.Http2Flags.PRIORITY;
+import static org.reaktivity.nukleus.http2.internal.stream.Http2Flags.END_HEADERS;
+import static org.reaktivity.nukleus.http2.internal.stream.Http2Flags.END_STREAM;
+import static org.reaktivity.nukleus.http2.internal.stream.Http2Flags.PADDED;
+import static org.reaktivity.nukleus.http2.internal.stream.Http2Flags.PRIORITY;
 import static org.reaktivity.nukleus.http2.internal.types.stream.Http2FrameType.HEADERS;
 
 import java.util.function.BiFunction;
@@ -28,6 +28,9 @@ import java.util.function.Consumer;
 import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
 import org.reaktivity.nukleus.http.internal.types.HttpHeaderFW;
+import org.reaktivity.nukleus.http2.internal.hpack.HpackHeaderBlockFW;
+import org.reaktivity.nukleus.http2.internal.hpack.HpackHeaderFieldFW;
+import org.reaktivity.nukleus.http2.internal.stream.Http2Flags;
 
 /*
 

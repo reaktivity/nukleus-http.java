@@ -15,11 +15,12 @@
  */
 package org.reaktivity.nukleus.http2.internal.types.stream;
 
-import static org.reaktivity.nukleus.http2.internal.types.stream.Http2Flags.ACK;
+import static org.reaktivity.nukleus.http2.internal.stream.Http2Flags.ACK;
 import static org.reaktivity.nukleus.http2.internal.types.stream.Http2FrameType.PING;
 
 import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
+import org.reaktivity.nukleus.http2.internal.stream.Http2Flags;
 
 /*
 
