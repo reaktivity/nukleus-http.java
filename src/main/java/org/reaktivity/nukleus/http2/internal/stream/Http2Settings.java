@@ -13,11 +13,11 @@
  * License for the specific language governing permissions and limitations
  * under the License.
  */
-package org.reaktivity.nukleus.http2.internal;
+package org.reaktivity.nukleus.http2.internal.stream;
 
 import org.reaktivity.nukleus.http2.internal.types.stream.Http2ErrorCode;
 
-public class Settings
+public class Http2Settings
 {
     private static final int DEFAULT_HEADER_TABLE_SIZE = 4096;
     private static final int DEFAULT_ENABLE_PUSH = 1;
@@ -32,7 +32,7 @@ public class Settings
     public int maxFrameSize = DEFAULT_MAX_FRAME_SIZE;
     public long maxHeaderListSize;
 
-    public Settings(
+    public Http2Settings(
         int maxConcurrentStreams,
         int initialWindowSize)
     {
@@ -40,12 +40,12 @@ public class Settings
         this.initialWindowSize = initialWindowSize;
     }
 
-    public Settings()
+    public Http2Settings()
     {
     }
 
     public void apply(
-        Settings settings)
+        Http2Settings settings)
     {
         this.maxConcurrentStreams = settings.maxConcurrentStreams;
         this.initialWindowSize = settings.initialWindowSize;

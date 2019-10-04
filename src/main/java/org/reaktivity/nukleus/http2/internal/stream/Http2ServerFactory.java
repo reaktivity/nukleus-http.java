@@ -70,7 +70,6 @@ import org.reaktivity.nukleus.http.internal.types.stream.ResetFW;
 import org.reaktivity.nukleus.http.internal.types.stream.WindowFW;
 import org.reaktivity.nukleus.http2.internal.Http2Configuration;
 import org.reaktivity.nukleus.http2.internal.Http2Counters;
-import org.reaktivity.nukleus.http2.internal.Settings;
 import org.reaktivity.nukleus.http2.internal.types.stream.HpackContext;
 import org.reaktivity.nukleus.http2.internal.types.stream.HpackHeaderBlockFW;
 import org.reaktivity.nukleus.http2.internal.types.stream.HpackHeaderFieldFW;
@@ -212,7 +211,7 @@ public final class Http2ServerFactory implements StreamFactory
     private final LongSupplier supplyGroupId;
     private final Http2Counters counters;
     private final Long2ObjectHashMap<Http2Server.Http2Exchange> correlations;
-    private final Settings initialSettings;
+    private final Http2Settings initialSettings;
     private final BufferPool headersPool;
     private final int httpTypeId;
     private final MutableDirectBuffer extensionBuffer;
@@ -237,7 +236,7 @@ public final class Http2ServerFactory implements StreamFactory
         this.supplyGroupId = requireNonNull(supplyGroupId);
         this.counters = new Http2Counters(supplyCounter);
         this.correlations = new Long2ObjectHashMap<>();
-        this.initialSettings = new Settings(config.serverConcurrentStreams(), 0);
+        this.initialSettings = new Http2Settings(config.serverConcurrentStreams(), 0);
         this.headersPool = bufferPool.duplicate();
         this.httpTypeId = supplyTypeId.applyAsInt(HttpNukleus.NAME);
         this.frameBuffer = new UnsafeBuffer(new byte[writeBuffer.capacity()]);
@@ -961,8 +960,8 @@ public final class Http2ServerFactory implements StreamFactory
         private final long replyId;
         private final long groupId;
 
-        private final Settings localSettings;
-        private final Settings remoteSettings;
+        private final Http2Settings localSettings;
+        private final Http2Settings remoteSettings;
         private final HpackContext decodeContext;
         private final HpackContext encodeContext;
 
@@ -1002,8 +1001,8 @@ public final class Http2ServerFactory implements StreamFactory
             this.initialId = initialId;
             this.replyId = supplyReplyId.applyAsLong(initialId);
             this.groupId = groupId;
-            this.localSettings = new Settings();
-            this.remoteSettings = new Settings();
+            this.localSettings = new Http2Settings();
+            this.remoteSettings = new Http2Settings();
             this.streams = new Int2ObjectHashMap<>();
             this.decoder = decodePreface;
             this.decodeContext = new HpackContext(localSettings.headerTableSize, false);
