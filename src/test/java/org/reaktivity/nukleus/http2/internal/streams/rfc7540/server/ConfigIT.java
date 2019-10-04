@@ -13,11 +13,13 @@
  * License for the specific language governing permissions and limitations
  * under the License.
  */
-package org.reaktivity.nukleus.http2.internal.streams.server.rfc7540;
+package org.reaktivity.nukleus.http2.internal.streams.rfc7540.server;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.rules.RuleChain.outerRule;
 import static org.reaktivity.nukleus.http2.internal.Http2Configuration.HTTP2_SERVER_CONCURRENT_STREAMS;
+import static org.reaktivity.nukleus.http2.internal.Http2ConfigurationTest.HTTP2_ACCESS_CONTROL_ALLOW_ORIGIN_NAME;
+import static org.reaktivity.nukleus.http2.internal.Http2ConfigurationTest.HTTP2_SERVER_HEADER_NAME;
 import static org.reaktivity.reaktor.test.ReaktorRule.EXTERNAL_AFFINITY_MASK;
 
 import org.junit.Rule;
@@ -28,13 +30,14 @@ import org.junit.rules.Timeout;
 import org.kaazing.k3po.junit.annotation.Specification;
 import org.kaazing.k3po.junit.rules.K3poRule;
 import org.reaktivity.reaktor.test.ReaktorRule;
+import org.reaktivity.reaktor.test.annotation.Configure;
 
-public class AbortIT
+public class ConfigIT
 {
     private final K3poRule k3po = new K3poRule()
             .addScriptRoot("route", "org/reaktivity/specification/nukleus/http2/control/route")
-            .addScriptRoot("spec", "org/reaktivity/specification/http2/rfc7540/connection.abort")
-            .addScriptRoot("nukleus", "org/reaktivity/specification/nukleus/http2/streams/rfc7540/connection.abort");
+            .addScriptRoot("spec", "org/reaktivity/specification/http2/rfc7540/config")
+            .addScriptRoot("nukleus", "org/reaktivity/specification/nukleus/http2/streams/rfc7540/config");
 
     private final TestRule timeout = new DisableOnDebug(new Timeout(10, SECONDS));
 
@@ -52,41 +55,23 @@ public class AbortIT
     public final TestRule chain = outerRule(reaktor).around(k3po).around(timeout);
 
     @Test
+    @Configure(name = HTTP2_ACCESS_CONTROL_ALLOW_ORIGIN_NAME, value = "true")
     @Specification({
             "${route}/server/controller",
-            "${spec}/client.sent.write.abort.on.open.request.response.buffered/client",
-            "${nukleus}/client.sent.write.abort.on.open.request.response.buffered/server" })
-    public void clientSentWriteAbortOnOpenRequestResponseBuffered() throws Exception
+            "${spec}/access.control.allow.origin/client",
+            "${nukleus}/access.control.allow.origin/server" })
+    public void accessControlAllowOrigin() throws Exception
     {
         k3po.finish();
     }
 
     @Test
+    @Configure(name = HTTP2_SERVER_HEADER_NAME, value = "reaktivity")
     @Specification({
-            "${route}/server/controller",
-            "${spec}/client.sent.read.abort.on.open.request.response.buffered/client",
-            "${nukleus}/client.sent.read.abort.on.open.request.response.buffered/server" })
-    public void clientSentReadAbortOnOpenRequestResponseBuffered() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-            "${route}/server/controller",
-            "${spec}/server.sent.write.abort.on.open.request.response.buffered/client",
-            "${nukleus}/server.sent.write.abort.on.open.request.response.buffered/server" })
-    public void serverSentWriteAbortOnOpenRequestResponseBuffered() throws Exception
-    {
-        k3po.finish();
-    }
-
-    @Test
-    @Specification({
-            "${route}/server/controller",
-            "${spec}/server.sent.read.abort.on.open.request.response.buffered/client",
-            "${nukleus}/server.sent.read.abort.on.open.request.response.buffered/server" })
-    public void serverSentReadAbortOnOpenRequestResponseBuffered() throws Exception
+        "${route}/server/controller",
+        "${spec}/server.header/client",
+        "${nukleus}/server.header/server" })
+    public void server() throws Exception
     {
         k3po.finish();
     }
