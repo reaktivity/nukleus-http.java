@@ -45,6 +45,7 @@ import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
 import org.agrona.collections.Int2ObjectHashMap;
 import org.agrona.collections.Long2ObjectHashMap;
+import org.agrona.collections.MutableBoolean;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.reaktivity.nukleus.buffer.BufferPool;
 import org.reaktivity.nukleus.function.MessageConsumer;
@@ -968,6 +969,8 @@ public final class Http2ServerFactory implements StreamFactory
         private final Int2ObjectHashMap<Http2Exchange> streams;
         private final int[] streamsActive = new int[2];
 
+        private final MutableBoolean expectDynamicTableSizeUpdate = new MutableBoolean(true);
+
         private int initialBudget;
         private int replyPadding;
         private int replyBudget;
@@ -1600,7 +1603,7 @@ public final class Http2ServerFactory implements StreamFactory
             boolean endRequest)
         {
             final HpackHeaderBlockFW headerBlock = headerBlockRO.wrap(buffer, offset, limit);
-            headersDecoder.decodeHeaders(decodeContext, localSettings.headerTableSize, headerBlock);
+            headersDecoder.decodeHeaders(decodeContext, localSettings.headerTableSize, expectDynamicTableSizeUpdate, headerBlock);
 
             if (headersDecoder.error())
             {
@@ -1731,7 +1734,8 @@ public final class Http2ServerFactory implements StreamFactory
             if (exchange != null)
             {
                 final HpackHeaderBlockFW headerBlock = headerBlockRO.wrap(buffer, offset, limit);
-                headersDecoder.decodeTrailers(decodeContext, localSettings.headerTableSize, headerBlock);
+                headersDecoder.decodeTrailers(decodeContext, localSettings.headerTableSize,
+                                              expectDynamicTableSizeUpdate, headerBlock);
 
                 if (headersDecoder.error())
                 {
@@ -2733,7 +2737,7 @@ public final class Http2ServerFactory implements StreamFactory
         private HpackContext context;
         private int headerTableSize;
         private boolean pseudoHeaders;
-        private boolean expectDynamicTableSizeUpdate;
+        private MutableBoolean expectDynamicTableSizeUpdate;
 
         private final Consumer<HpackHeaderFieldFW> decodeHeader;
         private final Consumer<HpackHeaderFieldFW> decodeTrailer;
@@ -2766,9 +2770,10 @@ public final class Http2ServerFactory implements StreamFactory
         void decodeHeaders(
             HpackContext context,
             int headerTableSize,
+            MutableBoolean expectDynamicTableSizeUpdate,
             HpackHeaderBlockFW headerBlock)
         {
-            reset(context, headerTableSize);
+            reset(context, headerTableSize, expectDynamicTableSizeUpdate);
             headerBlock.forEach(decodeHeader);
 
             // All HTTP/2 requests MUST include exactly one valid value for the
@@ -2784,9 +2789,10 @@ public final class Http2ServerFactory implements StreamFactory
         void decodeTrailers(
             HpackContext context,
             int headerTableSize,
+            MutableBoolean expectDynamicTableSizeUpdate,
             HpackHeaderBlockFW headerBlock)
         {
-            reset(context, headerTableSize);
+            reset(context, headerTableSize, expectDynamicTableSizeUpdate);
             headerBlock.forEach(decodeTrailer);
         }
 
@@ -2797,10 +2803,12 @@ public final class Http2ServerFactory implements StreamFactory
 
         private void reset(
             HpackContext context,
-            int headerTableSize)
+            int headerTableSize,
+            MutableBoolean expectDynamicTableSizeUpdate)
         {
             this.context = context;
             this.headerTableSize = headerTableSize;
+            this.expectDynamicTableSizeUpdate = expectDynamicTableSizeUpdate;
             this.headers.clear();
             this.connectionError = null;
             this.streamError = null;
@@ -2829,10 +2837,10 @@ public final class Http2ServerFactory implements StreamFactory
                 {
                 case INDEXED:
                 case LITERAL:
-                    expectDynamicTableSizeUpdate = false;
+                    expectDynamicTableSizeUpdate.value = false;
                     break;
                 case UPDATE:
-                    if (!expectDynamicTableSizeUpdate)
+                    if (!expectDynamicTableSizeUpdate.value)
                     {
                         // dynamic table size update MUST occur at the beginning of the first header block
                         connectionError = Http2ErrorCode.COMPRESSION_ERROR;
