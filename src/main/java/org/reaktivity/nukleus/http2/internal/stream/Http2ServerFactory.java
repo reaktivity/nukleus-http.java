@@ -1530,13 +1530,15 @@ public final class Http2ServerFactory implements StreamFactory
                 doEncodeRstStream(traceId, authorization, streamId, error);
             }
 
-            final DirectBuffer payload = http2Headers.payload();
+            final DirectBuffer dataBuffer = http2Headers.buffer();
+            final int dataOffset = http2Headers.dataOffset();
+
             final boolean endHeaders = http2Headers.endHeaders();
             final boolean endRequest = http2Headers.endStream();
 
             if (endHeaders)
             {
-                onDecodeHeaders(traceId, authorization, streamId, payload, 0, payload.capacity(), endRequest);
+                onDecodeHeaders(traceId, authorization, streamId, dataBuffer, dataOffset, dataOffset + dataLength, endRequest);
             }
             else
             {
@@ -1551,9 +1553,8 @@ public final class Http2ServerFactory implements StreamFactory
                 else
                 {
                     final MutableDirectBuffer headersBuffer = headersPool.buffer(headersSlot);
-                    headersBuffer.putBytes(headersSlotOffset, http2Headers.buffer(),
-                            http2Headers.dataOffset(), http2Headers.dataLength());
-                    headersSlotOffset = http2Headers.dataLength();
+                    headersBuffer.putBytes(headersSlotOffset, dataBuffer, dataOffset, dataLength);
+                    headersSlotOffset = dataLength;
 
                     continuationStreamId = streamId;
                 }
@@ -1691,13 +1692,15 @@ public final class Http2ServerFactory implements StreamFactory
                 doEncodeRstStream(traceId, authorization, streamId, error);
             }
 
-            final DirectBuffer payload = http2Trailers.payload();
+            final DirectBuffer dataBuffer = http2Trailers.buffer();
+            final int dataOffset = http2Trailers.dataOffset();
+
             final boolean endHeaders = http2Trailers.endHeaders();
             final boolean endRequest = http2Trailers.endStream();
 
             if (endHeaders)
             {
-                onDecodeTrailers(traceId, authorization, streamId, payload, 0, payload.capacity(), endRequest);
+                onDecodeTrailers(traceId, authorization, streamId, dataBuffer, dataOffset, dataOffset + dataLength, endRequest);
             }
             else
             {
@@ -1712,9 +1715,8 @@ public final class Http2ServerFactory implements StreamFactory
                 else
                 {
                     final MutableDirectBuffer headersBuffer = headersPool.buffer(headersSlot);
-                    headersBuffer.putBytes(headersSlotOffset, http2Trailers.buffer(),
-                            http2Trailers.dataOffset(), http2Trailers.dataLength());
-                    headersSlotOffset = http2Trailers.dataLength();
+                    headersBuffer.putBytes(headersSlotOffset, dataBuffer, dataOffset, dataLength);
+                    headersSlotOffset = dataLength;
 
                     continuationStreamId = streamId;
                 }
