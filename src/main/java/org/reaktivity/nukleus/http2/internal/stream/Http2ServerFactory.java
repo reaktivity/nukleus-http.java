@@ -2676,7 +2676,8 @@ public final class Http2ServerFactory implements StreamFactory
                 long traceId,
                 long authorization)
             {
-                final int credit = remoteBudget - responseBudget;
+                final int remoteBudgetMax = Math.min(remoteBudget, bufferPool.slotCapacity());
+                final int credit = remoteBudgetMax - responseBudget;
 
                 if (credit > 0)
                 {
@@ -2684,7 +2685,7 @@ public final class Http2ServerFactory implements StreamFactory
                     final int responsePadding = replyPadding +
                             (responseBudget + remoteSettings.maxFrameSize - 1) / remoteSettings.maxFrameSize * framePadding;
 
-                    responseBudget = remoteBudget;
+                    responseBudget = remoteBudgetMax;
 
                     doWindow(application, routeId, responseId, traceId, authorization, credit, responsePadding, groupId);
                 }
