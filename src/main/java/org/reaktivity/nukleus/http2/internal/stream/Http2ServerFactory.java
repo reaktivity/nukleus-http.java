@@ -569,7 +569,7 @@ public final class Http2ServerFactory implements StreamFactory
 
         Http2ErrorCode error = Http2ErrorCode.NO_ERROR;
 
-        if (length != 4)
+        if (length != 8)
         {
             error = Http2ErrorCode.FRAME_SIZE_ERROR;
         }
