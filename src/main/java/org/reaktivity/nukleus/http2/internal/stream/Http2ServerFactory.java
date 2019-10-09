@@ -1337,6 +1337,7 @@ public final class Http2ServerFactory implements StreamFactory
                     final MutableDirectBuffer decodeBuffer = bufferPool.buffer(decodeSlot);
                     decodeBuffer.putBytes(0, buffer, progress, limit - progress);
                     decodeSlotOffset = limit - progress;
+                    decodeSlotReserved = progress == offset ? reserved : 0;
                 }
             }
             else
@@ -2677,17 +2678,20 @@ public final class Http2ServerFactory implements StreamFactory
                 long authorization)
             {
                 final int remoteBudgetMax = Math.min(remoteBudget, bufferPool.slotCapacity());
-                final int credit = remoteBudgetMax - responseBudget;
+                final int remoteCredit = remoteBudgetMax - responseBudget;
 
-                if (credit > 0)
+                if (remoteCredit > 0)
                 {
-                    final int framePadding = 0; // TODO 9 ?
-                    final int responsePadding = replyPadding +
-                            (responseBudget + remoteSettings.maxFrameSize - 1) / remoteSettings.maxFrameSize * framePadding;
+                    final int framePadding = Http2FrameHeaderFW.SIZE_OF_FRAME; // assumes H2 DATA not PADDED
+                    final int maxFrameSize = remoteSettings.maxFrameSize;
+                    final int responsePaddingAdjustment = (remoteBudgetMax + maxFrameSize - 1) / maxFrameSize * framePadding;
 
-                    responseBudget = remoteBudgetMax;
+                    final int responseCredit = remoteCredit + responsePaddingAdjustment;
+                    final int responsePadding = replyPadding + responsePaddingAdjustment;
 
-                    doWindow(application, routeId, responseId, traceId, authorization, credit, responsePadding, groupId);
+                    responseBudget += responseCredit;
+
+                    doWindow(application, routeId, responseId, traceId, authorization, responseCredit, responsePadding, groupId);
                 }
             }
 
