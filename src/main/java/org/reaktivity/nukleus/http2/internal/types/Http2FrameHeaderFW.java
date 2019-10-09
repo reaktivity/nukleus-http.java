@@ -40,7 +40,7 @@ public class Http2FrameHeaderFW extends Flyweight
     private static final int FLAGS_OFFSET = 4;
     private static final int STREAM_ID_OFFSET = 5;
 
-    private static final int SIZE_OF_FRAME = STREAM_ID_OFFSET + 4;
+    public static final int SIZE_OF_FRAME = STREAM_ID_OFFSET + 4;
 
     public int length()
     {
