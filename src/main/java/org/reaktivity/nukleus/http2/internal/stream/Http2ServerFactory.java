@@ -439,7 +439,6 @@ public final class Http2ServerFactory implements StreamFactory
         long traceId,
         long authorization,
         long groupId,
-        int reserved,
         DirectBuffer buffer,
         int offset,
         int limit)
@@ -470,7 +469,6 @@ public final class Http2ServerFactory implements StreamFactory
         long traceId,
         long authorization,
         long groupId,
-        int reserved,
         DirectBuffer buffer,
         int offset,
         int limit)
@@ -513,7 +511,6 @@ public final class Http2ServerFactory implements StreamFactory
         long traceId,
         long authorization,
         long groupId,
-        int reserved,
         DirectBuffer buffer,
         int offset,
         int limit)
@@ -556,7 +553,6 @@ public final class Http2ServerFactory implements StreamFactory
         long traceId,
         long authorization,
         long groupId,
-        int reserved,
         DirectBuffer buffer,
         int offset,
         int limit)
@@ -600,7 +596,6 @@ public final class Http2ServerFactory implements StreamFactory
         long traceId,
         long authorization,
         long groupId,
-        int reserved,
         DirectBuffer buffer,
         int offset,
         int limit)
@@ -637,7 +632,6 @@ public final class Http2ServerFactory implements StreamFactory
         long traceId,
         long authorization,
         long groupId,
-        int reserved,
         DirectBuffer buffer,
         int offset,
         int limit)
@@ -698,7 +692,6 @@ public final class Http2ServerFactory implements StreamFactory
         long traceId,
         long authorization,
         long groupId,
-        int reserved,
         DirectBuffer buffer,
         int offset,
         int limit)
@@ -743,7 +736,6 @@ public final class Http2ServerFactory implements StreamFactory
         long traceId,
         long authorization,
         long groupId,
-        int reserved,
         DirectBuffer buffer,
         int offset,
         int limit)
@@ -782,7 +774,6 @@ public final class Http2ServerFactory implements StreamFactory
         long traceId,
         long authorization,
         long groupId,
-        int reserved,
         DirectBuffer buffer,
         int offset,
         int limit)
@@ -820,7 +811,6 @@ public final class Http2ServerFactory implements StreamFactory
         long traceId,
         long authorization,
         long groupId,
-        int reserved,
         DirectBuffer buffer,
         int offset,
         int limit)
@@ -864,7 +854,6 @@ public final class Http2ServerFactory implements StreamFactory
         long traceId,
         long authorization,
         long groupId,
-        int reserved,
         DirectBuffer buffer,
         int offset,
         int limit)
@@ -909,7 +898,6 @@ public final class Http2ServerFactory implements StreamFactory
         long traceId,
         long authorization,
         long groupId,
-        int reserved,
         DirectBuffer buffer,
         int offset,
         int limit)
@@ -923,7 +911,6 @@ public final class Http2ServerFactory implements StreamFactory
         long traceId,
         long authorization,
         long groupId,
-        int reserved,
         DirectBuffer buffer,
         int offset,
         int limit)
@@ -939,7 +926,6 @@ public final class Http2ServerFactory implements StreamFactory
             long traceId,
             long authorization,
             long groupId,
-            int reserved,
             DirectBuffer buffer,
             int offset,
             int limit);
@@ -978,7 +964,6 @@ public final class Http2ServerFactory implements StreamFactory
 
         private int decodeSlot = NO_SLOT;
         private int decodeSlotOffset;
-        private int decodeSlotReserved;
 
         private int encodeSlot = NO_SLOT;
         private int encodeSlotOffset;
@@ -1073,7 +1058,6 @@ public final class Http2ServerFactory implements StreamFactory
             else
             {
                 final OctetsFW payload = data.payload();
-                int reserved = data.reserved();
                 DirectBuffer buffer = payload.buffer();
                 int offset = payload.offset();
                 int limit = payload.limit();
@@ -1083,14 +1067,12 @@ public final class Http2ServerFactory implements StreamFactory
                     final MutableDirectBuffer slotBuffer = bufferPool.buffer(decodeSlot);
                     slotBuffer.putBytes(decodeSlotOffset, buffer, offset, limit - offset);
                     decodeSlotOffset += limit - offset;
-                    decodeSlotReserved += reserved;
                     buffer = slotBuffer;
                     offset = 0;
                     limit = decodeSlotOffset;
-                    reserved = decodeSlotReserved;
                 }
 
-                decodeNetwork(traceId, authorization, groupId, reserved, buffer, offset, limit);
+                decodeNetwork(traceId, authorization, groupId, buffer, offset, limit);
             }
         }
 
@@ -1308,7 +1290,6 @@ public final class Http2ServerFactory implements StreamFactory
             long traceId,
             long authorization,
             long groupId,
-            int reserved,
             DirectBuffer buffer,
             int offset,
             int limit)
@@ -1318,7 +1299,7 @@ public final class Http2ServerFactory implements StreamFactory
             while (progress <= limit && previous != decoder)
             {
                 previous = decoder;
-                progress = decoder.decode(this, traceId, authorization, groupId, reserved, buffer, progress, limit);
+                progress = decoder.decode(this, traceId, authorization, groupId, buffer, progress, limit);
             }
 
             if (progress < limit)
@@ -1337,7 +1318,6 @@ public final class Http2ServerFactory implements StreamFactory
                     final MutableDirectBuffer decodeBuffer = bufferPool.buffer(decodeSlot);
                     decodeBuffer.putBytes(0, buffer, progress, limit - progress);
                     decodeSlotOffset = limit - progress;
-                    decodeSlotReserved = progress == offset ? reserved : 0;
                 }
             }
             else
