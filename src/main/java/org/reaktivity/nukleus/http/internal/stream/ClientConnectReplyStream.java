@@ -48,6 +48,7 @@ final class ClientConnectReplyStream
 {
     private final ClientStreamFactory factory;
     private final MessageConsumer connectReplyThrottle;
+    private final long connectAffinity;
 
     private MessageConsumer throttleState;
     private DecoderState decoderState;
@@ -94,12 +95,14 @@ final class ClientConnectReplyStream
         ClientStreamFactory factory,
         MessageConsumer connectReplyThrottle,
         long connectRouteId,
-        long connectReplyId)
+        long connectReplyId,
+        long connectAffinity)
     {
         this.factory = factory;
         this.connectReplyThrottle = connectReplyThrottle;
         this.connectRouteId = connectRouteId;
         this.connectReplyId = connectReplyId;
+        this.connectAffinity = connectAffinity;
         this.throttleState = this::handleThrottleBeforeBegin;
         this.windowHandler = this::handleWindow;
     }
@@ -142,7 +145,7 @@ final class ClientConnectReplyStream
         FrameFW frame = this.factory.frameRO.wrap(buffer, index, index + length);
         long streamId = frame.streamId();
 
-        handleUnexpected(streamId, frame.trace());
+        handleUnexpected(streamId, frame.traceId());
     }
 
     private void handleUnexpected(
@@ -192,7 +195,7 @@ final class ClientConnectReplyStream
         BeginFW begin)
     {
         this.connectReplyId = begin.streamId();
-        acceptReplyTraceId = begin.trace();
+        acceptReplyTraceId = begin.traceId();
 
         @SuppressWarnings("unchecked")
         final Correlation<ClientConnectReplyState> correlation =
@@ -212,7 +215,7 @@ final class ClientConnectReplyStream
     private void handleData(
         DataFW data)
     {
-        acceptReplyTraceId = data.trace();
+        acceptReplyTraceId = data.traceId();
         connectReplyBudget -= data.reserved();
 
         if (connectReplyBudget < 0)
@@ -258,7 +261,7 @@ final class ClientConnectReplyStream
             }
             else if (responseState == ResponseState.DATA && !connection.persistent)
             {
-                factory.writer.doEnd(acceptReply, acceptRouteId, acceptReplyId, end.trace());
+                factory.writer.doEnd(acceptReply, acceptRouteId, acceptReplyId, end.traceId());
                 responseState = ResponseState.FINAL;
             }
 
@@ -268,7 +271,7 @@ final class ClientConnectReplyStream
             case HEADERS:
             case DATA:
                 // Incomplete response
-                handleInvalidResponse(CloseAction.END, end.trace());
+                handleInvalidResponse(CloseAction.END, end.traceId());
                 break;
             case FINAL:
                 connection.persistent = false;
@@ -290,7 +293,7 @@ final class ClientConnectReplyStream
         }
         else if (responseState == ResponseState.DATA && !connection.persistent)
         {
-            factory.writer.doAbort(acceptReply, acceptRouteId, acceptReplyId, abort.trace());
+            factory.writer.doAbort(acceptReply, acceptRouteId, acceptReplyId, abort.traceId());
             responseState = ResponseState.FINAL;
         }
 
@@ -300,7 +303,7 @@ final class ClientConnectReplyStream
         case HEADERS:
         case DATA:
             // Incomplete response
-            handleInvalidResponse(CloseAction.ABORT, abort.trace());
+            handleInvalidResponse(CloseAction.ABORT, abort.traceId());
             break;
         case FINAL:
             connection.persistent = false;
@@ -409,7 +412,7 @@ final class ClientConnectReplyStream
             resolveTarget();
 
             factory.router.setThrottle(acceptReplyId, this::handleThrottle);
-            factory.writer.doHttpBegin(acceptReply, acceptRouteId, acceptReplyId, acceptReplyTraceId,
+            factory.writer.doHttpBegin(acceptReply, acceptRouteId, acceptReplyId, acceptReplyTraceId, connectAffinity,
                 hs -> headers.forEach((k, v) -> hs.item(i -> i.name(k).value(v))));
 
             // count all responses
@@ -799,7 +802,7 @@ final class ClientConnectReplyStream
         {
             connectReplyBudget += connectReplyCredit;
             int connectReplyPadding = acceptReplyPadding;
-            final long connectReplyTraceId = window.trace();
+            final long connectReplyTraceId = window.traceId();
             factory.writer.doWindow(connectReplyThrottle, connectRouteId, connectReplyId,
                     connectReplyTraceId, connectReplyCredit, connectReplyPadding);
         }
@@ -809,7 +812,7 @@ final class ClientConnectReplyStream
         ResetFW reset)
     {
         releaseSlotIfNecessary();
-        factory.writer.doReset(connectReplyThrottle, connectRouteId, connectReplyId, reset.trace());
+        factory.writer.doReset(connectReplyThrottle, connectRouteId, connectReplyId, reset.traceId());
         connection.persistent = false;
         connectionPool.release(connection, CloseAction.ABORT);
     }

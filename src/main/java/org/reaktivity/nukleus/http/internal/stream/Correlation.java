@@ -24,26 +24,30 @@ public class Correlation<S>
     private final MessageConsumer reply;
     private final long routeId;
     private final long replyId;
+    private final long affinity;
     private final S state;
 
     public Correlation(
         MessageConsumer reply,
         long routeId,
         long replyId,
+        long affinity,
         S state)
     {
         this.reply = reply;
         this.routeId = routeId;
         this.replyId = replyId;
+        this.affinity = affinity;
         this.state = state;
     }
 
     public Correlation(
         MessageConsumer reply,
         long routeId,
-        long sourceId)
+        long replyId,
+        long affinity)
     {
-        this(reply, routeId, sourceId, null);
+        this(reply, routeId, replyId, affinity, null);
     }
 
     public MessageConsumer reply()
@@ -59,6 +63,11 @@ public class Correlation<S>
     public long replyId()
     {
         return replyId;
+    }
+
+    public long affinity()
+    {
+        return affinity;
     }
 
     public S state()
