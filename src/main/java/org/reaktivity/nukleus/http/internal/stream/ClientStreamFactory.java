@@ -117,8 +117,7 @@ public final class ClientStreamFactory implements StreamFactory
         LongSupplier supplyTrace,
         ToIntFunction<String> supplyTypeId,
         Function<String, LongSupplier> supplyCounter,
-        Function<String, LongConsumer> supplyAccumulator,
-        Long2ObjectHashMap<Correlation<?>> correlations)
+        Function<String, LongConsumer> supplyAccumulator)
     {
         this.supplyTrace = requireNonNull(supplyTrace);
         this.router = requireNonNull(router);
@@ -126,7 +125,7 @@ public final class ClientStreamFactory implements StreamFactory
         this.bufferPool = requireNonNull(bufferPool);
         this.supplyInitialId = requireNonNull(supplyInitialId);
         this.supplyReplyId = requireNonNull(supplyReplyId);
-        this.correlations = requireNonNull(correlations);
+        this.correlations = new Long2ObjectHashMap<>();
         this.connectionPools = new Long2ObjectHashMap<>();
         this.maximumConnectionsPerRoute = configuration.maximumConnectionsPerRoute();
         this.maximumQueuedRequestsPerRoute = configuration.maximumRequestsQueuedPerRoute();
@@ -152,7 +151,7 @@ public final class ClientStreamFactory implements StreamFactory
     {
         final BeginFW begin = beginRO.wrap(buffer, index, index + length);
         final long streamId = begin.streamId();
-        this.supplyTraceId = begin.trace();
+        this.supplyTraceId = begin.traceId();
 
         MessageConsumer newStream;
 
@@ -195,6 +194,7 @@ public final class ClientStreamFactory implements StreamFactory
         {
             final long acceptRouteId = begin.routeId();
             final long acceptId = begin.streamId();
+            final long acceptAffinity = begin.affinity();
             final long connectRouteId = route.correlationId();
             final long acceptReplyId = supplyReplyId.applyAsLong(acceptId);
 
@@ -211,8 +211,8 @@ public final class ClientStreamFactory implements StreamFactory
             }
 
             newStream = new ClientAcceptStream(this,
-                    acceptReply, acceptRouteId, acceptId, acceptReplyId,
-                    connectRouteId, headers);
+                    acceptReply, acceptRouteId, acceptAffinity, acceptId,
+                    acceptReplyId, connectRouteId, headers);
         }
 
         return newStream;
@@ -224,8 +224,10 @@ public final class ClientStreamFactory implements StreamFactory
     {
         final long connectRouteId = begin.routeId();
         final long connectReplyId = begin.streamId();
+        final long connectAffinity = begin.affinity();
 
-        return new ClientConnectReplyStream(this, connectReplyThrottle, connectRouteId, connectReplyId)::handleStream;
+        return new ClientConnectReplyStream(this, connectReplyThrottle, connectRouteId,
+                connectReplyId, connectAffinity)::handleStream;
     }
 
     private RouteFW resolveTarget(

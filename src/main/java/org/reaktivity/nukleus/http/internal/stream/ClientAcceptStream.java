@@ -46,6 +46,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
 
     private final MessageConsumer acceptReply;
     private final long acceptRouteId;
+    private final long acceptAffinity;
     private final long acceptInitialId;
     private final long acceptReplyId;
     private final long connectRouteId;
@@ -61,10 +62,12 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
     private boolean persistent = true;
     private long traceId;
 
+
     ClientAcceptStream(
         ClientStreamFactory factory,
         MessageConsumer acceptReply,
         long acceptRouteId,
+        long acceptAffinity,
         long acceptId,
         long acceptReplyId,
         long connectRouteId,
@@ -73,6 +76,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         this.factory = factory;
         this.acceptReply = acceptReply;
         this.acceptRouteId = acceptRouteId;
+        this.acceptAffinity = acceptAffinity;
         this.acceptInitialId = acceptId;
         this.acceptReplyId = acceptReplyId;
         this.connectRouteId = connectRouteId;
@@ -200,13 +204,13 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         }
         else
         {
-            traceId = factory.frameRO.wrap(buffer, index, index + length).trace();
+            traceId = factory.frameRO.wrap(buffer, index, index + length).traceId();
             headersBuffer = new UnsafeBuffer(bytes);
             headersPosition = bytes.length;
             headersOffset = 0;
             this.streamState = this::streamBeforeHeadersWritten;
             this.throttleState = this::throttleBeforeHeadersWritten;
-            connectionPool = getConnectionPool(connectRouteId);
+            connectionPool = getConnectionPool(connectRouteId, acceptAffinity);
             boolean acquired = connectionPool.acquire(this);
             // No backend connection or cannot store in queue, send 503 with Retry-After
             if (!acquired)
@@ -217,6 +221,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
                 factory.writer.doWindow(acceptReply, acceptRouteId, acceptInitialId, traceId, 0, 0);
 
                 factory.writer.doHttpBegin(acceptReply, acceptRouteId, acceptReplyId, factory.supplyTrace.getAsLong(),
+                    acceptAffinity,
                     hs -> hs.item(h -> h.name(":status").value("503"))
                             .item(h -> h.name("retry-after").value("0")));
                 factory.writer.doHttpEnd(acceptReply, acceptRouteId, acceptReplyId, factory.supplyTrace.getAsLong());
@@ -302,9 +307,10 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
     }
 
     private ConnectionPool getConnectionPool(
-        long targetRouteId)
+        long targetRouteId,
+        long targetAffinity)
     {
-        return factory.connectionPools.computeIfAbsent(targetRouteId, r -> new ConnectionPool(factory, r));
+        return factory.connectionPools.computeIfAbsent(targetRouteId, r -> new ConnectionPool(factory, r, targetAffinity));
     }
 
     private void processData(
@@ -313,7 +319,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         int length)
     {
         DataFW data = factory.dataRO.wrap(buffer, index, index + length);
-        final long traceId = data.trace();
+        final long traceId = data.traceId();
 
         sourceBudget -= data.reserved();
         if (sourceBudget < 0)
@@ -336,7 +342,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         int length)
     {
         final EndFW end = factory.endRO.wrap(buffer, index, index + length);
-        traceId = end.trace();
+        traceId = end.traceId();
         doEnd();
     }
 
@@ -429,7 +435,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
             int padding = this.factory.windowRO.padding();
             connection.budget += credit;
             connection.padding = padding;
-            doSourceWindow(padding, windowFW.trace());
+            doSourceWindow(padding, windowFW.traceId());
             break;
         case ResetFW.TYPE_ID:
             processReset(buffer, index, length);
@@ -494,14 +500,14 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         }
         else
         {
-            Correlation correlation = factory.correlations.remove(connection.connectReplyId);
+            Correlation<?> correlation = factory.correlations.remove(connection.connectReplyId);
             connection.persistent = false;
             connectionPool.release(connection, CloseAction.ABORT);
             MessageConsumer connect = factory.router.supplyReceiver(connection.connectInitialId);
-            factory.writer.doReset(connect, connectRouteId, connection.connectReplyId, abort.trace());
+            factory.writer.doReset(connect, connectRouteId, connection.connectReplyId, abort.traceId());
             if (correlation == null)
             {
-                factory.writer.doAbort(acceptReply, acceptRouteId, acceptReplyId, abort.trace());
+                factory.writer.doAbort(acceptReply, acceptRouteId, acceptReplyId, abort.traceId());
             }
         }
     }
@@ -514,7 +520,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         ResetFW resetFW = factory.resetRO.wrap(buffer, index, index + length);
         connection.persistent = false;
         connectionPool.release(connection);
-        factory.writer.doReset(acceptReply, acceptRouteId, acceptInitialId, resetFW.trace());
+        factory.writer.doReset(acceptReply, acceptRouteId, acceptInitialId, resetFW.traceId());
     }
 
     @Override
@@ -530,7 +536,7 @@ final class ClientAcceptStream implements ConnectionRequest, Consumer<Connection
         connection.persistent = persistent;
         ClientConnectReplyState state = new ClientConnectReplyState(connectionPool, connection);
         final Correlation<ClientConnectReplyState> correlation =
-                new Correlation<>(acceptReply, acceptRouteId, acceptReplyId, state);
+                new Correlation<>(acceptReply, acceptRouteId, acceptReplyId, acceptAffinity, state);
         factory.correlations.put(connection.connectReplyId, correlation);
         factory.router.setThrottle(connection.connectInitialId, this::handleThrottle);
         if (connection.budget > 0)

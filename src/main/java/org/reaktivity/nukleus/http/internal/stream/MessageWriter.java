@@ -62,12 +62,14 @@ final class MessageWriter
         MessageConsumer receiver,
         long routeId,
         long streamId,
-        long traceId)
+        long traceId,
+        long affinity)
     {
         final BeginFW begin = beginRW.wrap(writeBuffer, 0, writeBuffer.capacity())
                 .routeId(routeId)
                 .streamId(streamId)
-                .trace(traceId)
+                .traceId(traceId)
+                .affinity(affinity)
                 .build();
 
         receiver.accept(begin.typeId(), begin.buffer(), begin.offset(), begin.sizeof());
@@ -86,8 +88,8 @@ final class MessageWriter
         final DataFW data = dataRW.wrap(writeBuffer, 0, writeBuffer.capacity())
                 .routeId(routeId)
                 .streamId(streamId)
-                .trace(traceId)
-                .groupId(0)
+                .traceId(traceId)
+                .budgetId(0)
                 .reserved(length + padding)
                 .payload(p -> p.set(payload, offset, length))
                 .build();
@@ -106,8 +108,8 @@ final class MessageWriter
         final DataFW data = dataRW.wrap(writeBuffer, 0, writeBuffer.capacity())
                 .routeId(routeId)
                 .streamId(streamId)
-                .trace(traceId)
-                .groupId(0)
+                .traceId(traceId)
+                .budgetId(0)
                 .reserved(payload.sizeof() + padding)
                 .payload(p -> p.set(payload))
                 .build();
@@ -124,7 +126,7 @@ final class MessageWriter
         final EndFW end = endRW.wrap(writeBuffer, 0, writeBuffer.capacity())
                 .routeId(routeId)
                 .streamId(streamId)
-                .trace(traceId)
+                .traceId(traceId)
                 .build();
 
         receiver.accept(end.typeId(), end.buffer(), end.offset(), end.sizeof());
@@ -139,7 +141,7 @@ final class MessageWriter
         final AbortFW abort = abortRW.wrap(writeBuffer, 0, writeBuffer.capacity())
                 .routeId(routeId)
                 .streamId(streamId)
-                .trace(traceId)
+                .traceId(traceId)
                 .build();
 
         receiver.accept(abort.typeId(), abort.buffer(), abort.offset(), abort.sizeof());
@@ -150,12 +152,14 @@ final class MessageWriter
         long routeId,
         long streamId,
         long traceId,
+        long affinity,
         Consumer<ArrayFW.Builder<HttpHeaderFW.Builder, HttpHeaderFW>> mutator)
     {
         final BeginFW begin = beginRW.wrap(writeBuffer, 0, writeBuffer.capacity())
                 .routeId(routeId)
                 .streamId(streamId)
-                .trace(traceId)
+                .traceId(traceId)
+                .affinity(affinity)
                 .extension(e -> e.set(visitHttpBeginEx(mutator)))
                 .build();
 
@@ -175,8 +179,8 @@ final class MessageWriter
         final DataFW data = dataRW.wrap(writeBuffer, 0, writeBuffer.capacity())
                 .routeId(routeId)
                 .streamId(streamId)
-                .trace(traceId)
-                .groupId(0)
+                .traceId(traceId)
+                .budgetId(0)
                 .reserved(length + padding)
                 .payload(p -> p.set(payload, offset, length))
                 .build();
@@ -193,7 +197,7 @@ final class MessageWriter
         final EndFW end = endRW.wrap(writeBuffer, 0, writeBuffer.capacity())
                 .routeId(routeId)
                 .streamId(streamId)
-                .trace(traceId)
+                .traceId(traceId)
                 .build();
 
         receiver.accept(end.typeId(), end.buffer(), end.offset(), end.sizeof());
@@ -210,10 +214,10 @@ final class MessageWriter
         final WindowFW window = windowRW.wrap(writeBuffer, 0, writeBuffer.capacity())
                 .routeId(routeId)
                 .streamId(streamId)
-                .trace(traceId)
+                .traceId(traceId)
+                .budgetId(0L)
                 .credit(credit)
                 .padding(padding)
-                .groupId(0)
                 .build();
 
         sender.accept(window.typeId(), window.buffer(), window.offset(), window.sizeof());
@@ -228,7 +232,7 @@ final class MessageWriter
         final ResetFW reset = resetRW.wrap(writeBuffer, 0, writeBuffer.capacity())
                 .routeId(routeId)
                 .streamId(streamId)
-                .trace(traceId)
+                .traceId(traceId)
                 .build();
 
         sender.accept(reset.typeId(), reset.buffer(), reset.offset(), reset.sizeof());

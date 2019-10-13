@@ -37,7 +37,7 @@ public final class Http2ServerFactoryBuilder implements StreamFactoryBuilder
     private LongUnaryOperator supplyInitialId;
     private LongUnaryOperator supplyReplyId;
     private ToIntFunction<String> supplyTypeId;
-    private LongSupplier supplyGroupId;
+    private LongSupplier supplyBudgetId;
     private Supplier<BufferPool> supplyBufferPool;
     private Function<String, LongSupplier> supplyCounter;
 
@@ -80,10 +80,10 @@ public final class Http2ServerFactoryBuilder implements StreamFactoryBuilder
     }
 
     @Override
-    public StreamFactoryBuilder setGroupIdSupplier(
-        LongSupplier supplyGroupId)
+    public StreamFactoryBuilder setBudgetIdSupplier(
+        LongSupplier supplyBudgetId)
     {
-        this.supplyGroupId = supplyGroupId;
+        this.supplyBudgetId = supplyBudgetId;
         return this;
     }
 
@@ -123,7 +123,7 @@ public final class Http2ServerFactoryBuilder implements StreamFactoryBuilder
                 bufferPool,
                 supplyInitialId,
                 supplyReplyId,
-                supplyGroupId,
+                supplyBudgetId,
                 supplyTypeId,
                 supplyCounter);
     }

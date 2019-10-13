@@ -23,7 +23,6 @@ import java.util.function.Supplier;
 import java.util.function.ToIntFunction;
 
 import org.agrona.MutableDirectBuffer;
-import org.agrona.collections.Long2ObjectHashMap;
 import org.reaktivity.nukleus.buffer.BufferPool;
 import org.reaktivity.nukleus.http.internal.HttpConfiguration;
 import org.reaktivity.nukleus.route.RouteManager;
@@ -33,13 +32,12 @@ import org.reaktivity.nukleus.stream.StreamFactoryBuilder;
 public final class ClientStreamFactoryBuilder implements StreamFactoryBuilder
 {
     private final HttpConfiguration config;
-    private final Long2ObjectHashMap<Correlation<?>> correlations;
 
     private RouteManager router;
     private MutableDirectBuffer writeBuffer;
     private LongUnaryOperator supplyInitialId;
     private LongUnaryOperator supplyReplyId;
-    private LongSupplier supplyTrace;
+    private LongSupplier supplyTraceId;
     private ToIntFunction<String> supplyTypeId;
     private Supplier<BufferPool> supplyBufferPool;
     private Function<String, LongSupplier> supplyCounter;
@@ -49,7 +47,6 @@ public final class ClientStreamFactoryBuilder implements StreamFactoryBuilder
         HttpConfiguration config)
     {
         this.config = config;
-        this.correlations = new Long2ObjectHashMap<>();
     }
 
     @Override
@@ -85,10 +82,10 @@ public final class ClientStreamFactoryBuilder implements StreamFactoryBuilder
     }
 
     @Override
-    public StreamFactoryBuilder setTraceSupplier(
-        LongSupplier supplyTrace)
+    public StreamFactoryBuilder setTraceIdSupplier(
+        LongSupplier supplyTraceId)
     {
-        this.supplyTrace = supplyTrace;
+        this.supplyTraceId = supplyTraceId;
         return this;
     }
 
@@ -136,10 +133,9 @@ public final class ClientStreamFactoryBuilder implements StreamFactoryBuilder
                 bufferPool,
                 supplyInitialId,
                 supplyReplyId,
-                supplyTrace,
+                supplyTraceId,
                 supplyTypeId,
                 supplyCounter,
-                supplyAccumulator,
-                correlations);
+                supplyAccumulator);
     }
 }

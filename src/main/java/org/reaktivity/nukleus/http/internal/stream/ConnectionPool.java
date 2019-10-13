@@ -40,13 +40,16 @@ final class ConnectionPool
     private final Queue<ConnectionRequest> queuedRequests;
 
     private int connectionsInUse;
+    private long connectAffinity;
 
     ConnectionPool(
         ClientStreamFactory factory,
-        long connectRouteId)
+        long connectRouteId,
+        long connectAffinity)
     {
         this.factory = factory;
         this.connectRouteId = connectRouteId;
+        this.connectAffinity = connectAffinity;
         this.availableConnections = new ArrayDeque<>(factory.maximumConnectionsPerRoute);
         this.queuedRequests = new ArrayDeque<>(factory.maximumQueuedRequestsPerRoute);
     }
@@ -112,7 +115,7 @@ final class ConnectionPool
         final MessageConsumer connectInitial = factory.router.supplyReceiver(connectInitialId);
 
         Connection connection = new Connection(connectInitialId, connectReplyId);
-        factory.writer.doBegin(connectInitial, connectRouteId, connectInitialId, factory.supplyTraceId);
+        factory.writer.doBegin(connectInitial, connectRouteId, connectInitialId, factory.supplyTraceId, connectAffinity);
         factory.router.setThrottle(connectInitialId, connection::handleThrottleDefault);
         connectionsInUse++;
         factory.connectionInUse.accept(1);
@@ -134,6 +137,7 @@ final class ConnectionPool
             long acceptRouteId = correlation.routeId();
             MessageConsumer acceptReply = correlation.reply();
             long acceptReplyId = correlation.replyId();
+            long acceptAffinity = correlation.affinity();
             long traceId = factory.supplyTraceId;
 
             // count abandoned requests
@@ -142,7 +146,7 @@ final class ConnectionPool
             // count all responses
             factory.countResponses.getAsLong();
 
-            factory.writer.doHttpBegin(acceptReply, acceptRouteId, acceptReplyId, traceId,
+            factory.writer.doHttpBegin(acceptReply, acceptRouteId, acceptReplyId, traceId, acceptAffinity,
                 hs -> hs.item(h -> h.name(":status").value("503"))
                         .item(h -> h.name("retry-after").value("0")));
             factory.writer.doHttpEnd(acceptReply, acceptRouteId, acceptReplyId, factory.supplyTrace.getAsLong());
@@ -232,7 +236,7 @@ final class ConnectionPool
                 if (connectInitial != null)
                 {
                     ResetFW resetFW = factory.resetRO.wrap(buffer, index, index + length);
-                    factory.writer.doReset(connectInitial, connectRouteId, connectReplyId, resetFW.trace());
+                    factory.writer.doReset(connectInitial, connectRouteId, connectReplyId, resetFW.traceId());
                 }
                 break;
             case WindowFW.TYPE_ID:
