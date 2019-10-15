@@ -441,7 +441,7 @@ public final class Http2ServerFactory implements StreamFactory
         Http2Server server,
         long traceId,
         long authorization,
-        long groupId,
+        long budgetId,
         DirectBuffer buffer,
         int offset,
         int limit)
@@ -471,7 +471,7 @@ public final class Http2ServerFactory implements StreamFactory
         Http2Server server,
         long traceId,
         long authorization,
-        long groupId,
+        long budgetId,
         DirectBuffer buffer,
         int offset,
         int limit)
@@ -513,7 +513,7 @@ public final class Http2ServerFactory implements StreamFactory
         Http2Server server,
         long traceId,
         long authorization,
-        long groupId,
+        long budgetId,
         DirectBuffer buffer,
         int offset,
         int limit)
@@ -555,7 +555,7 @@ public final class Http2ServerFactory implements StreamFactory
         Http2Server server,
         long traceId,
         long authorization,
-        long groupId,
+        long budgetId,
         DirectBuffer buffer,
         int offset,
         int limit)
@@ -598,7 +598,7 @@ public final class Http2ServerFactory implements StreamFactory
         Http2Server server,
         long traceId,
         long authorization,
-        long groupId,
+        long budgetId,
         DirectBuffer buffer,
         int offset,
         int limit)
@@ -634,7 +634,7 @@ public final class Http2ServerFactory implements StreamFactory
         Http2Server server,
         long traceId,
         long authorization,
-        long groupId,
+        long budgetId,
         DirectBuffer buffer,
         int offset,
         int limit)
@@ -694,7 +694,7 @@ public final class Http2ServerFactory implements StreamFactory
         Http2Server server,
         long traceId,
         long authorization,
-        long groupId,
+        long budgetId,
         DirectBuffer buffer,
         int offset,
         int limit)
@@ -738,7 +738,7 @@ public final class Http2ServerFactory implements StreamFactory
         Http2Server server,
         long traceId,
         long authorization,
-        long groupId,
+        long budgetId,
         DirectBuffer buffer,
         int offset,
         int limit)
@@ -776,7 +776,7 @@ public final class Http2ServerFactory implements StreamFactory
         Http2Server server,
         long traceId,
         long authorization,
-        long groupId,
+        long budgetId,
         DirectBuffer buffer,
         int offset,
         int limit)
@@ -813,7 +813,7 @@ public final class Http2ServerFactory implements StreamFactory
         Http2Server server,
         long traceId,
         long authorization,
-        long groupId,
+        long budgetId,
         DirectBuffer buffer,
         int offset,
         int limit)
@@ -856,7 +856,7 @@ public final class Http2ServerFactory implements StreamFactory
         Http2Server server,
         long traceId,
         long authorization,
-        long groupId,
+        long budgetId,
         DirectBuffer buffer,
         int offset,
         int limit)
@@ -900,7 +900,7 @@ public final class Http2ServerFactory implements StreamFactory
         Http2Server server,
         long traceId,
         long authorization,
-        long groupId,
+        long budgetId,
         DirectBuffer buffer,
         int offset,
         int limit)
@@ -913,7 +913,7 @@ public final class Http2ServerFactory implements StreamFactory
         Http2Server server,
         long traceId,
         long authorization,
-        long groupId,
+        long budgetId,
         DirectBuffer buffer,
         int offset,
         int limit)
@@ -928,7 +928,7 @@ public final class Http2ServerFactory implements StreamFactory
             Http2Server server,
             long traceId,
             long authorization,
-            long groupId,
+            long budgetId,
             DirectBuffer buffer,
             int offset,
             int limit);
@@ -1171,17 +1171,17 @@ public final class Http2ServerFactory implements StreamFactory
         private void doNetworkData(
             long traceId,
             long authorization,
-            long groupId,
+            long budgetId,
             Flyweight payload)
         {
-            doNetworkData(traceId, authorization, groupId, payload.buffer(),
+            doNetworkData(traceId, authorization, budgetId, payload.buffer(),
                           payload.offset(), payload.limit());
         }
 
         private void doNetworkData(
             long traceId,
             long authorization,
-            long groupId,
+            long budgetId,
             DirectBuffer buffer,
             int offset,
             int limit)
@@ -1198,7 +1198,7 @@ public final class Http2ServerFactory implements StreamFactory
                 limit = encodeSlotOffset;
             }
 
-            encodeNetwork(traceId, authorization, groupId, buffer, offset, limit);
+            encodeNetwork(traceId, authorization, budgetId, buffer, offset, limit);
         }
 
         private void doNetworkEnd(
@@ -1231,12 +1231,12 @@ public final class Http2ServerFactory implements StreamFactory
             long authorization,
             int credit,
             int padding,
-            long groupId)
+            long budgetId)
         {
             assert credit > 0;
 
             initialBudget += credit;
-            doWindow(network, routeId, initialId, traceId, authorization, groupId, credit, padding);
+            doWindow(network, routeId, initialId, traceId, authorization, budgetId, credit, padding);
         }
 
         private void encodeNetwork(
@@ -1295,7 +1295,7 @@ public final class Http2ServerFactory implements StreamFactory
         private void decodeNetwork(
             long traceId,
             long authorization,
-            long groupId,
+            long budgetId,
             DirectBuffer buffer,
             int offset,
             int limit)
@@ -1305,7 +1305,7 @@ public final class Http2ServerFactory implements StreamFactory
             while (progress <= limit && previous != decoder)
             {
                 previous = decoder;
-                progress = decoder.decode(this, traceId, authorization, groupId, buffer, progress, limit);
+                progress = decoder.decode(this, traceId, authorization, budgetId, buffer, progress, limit);
             }
 
             if (progress < limit)
@@ -1984,7 +1984,7 @@ public final class Http2ServerFactory implements StreamFactory
             long traceId,
             long authorization,
             int flags,
-            long groupId,
+            long budgetId,
             int reserved,
             int streamId,
             OctetsFW payload)
