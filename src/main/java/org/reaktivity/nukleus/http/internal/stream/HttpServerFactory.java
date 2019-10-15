@@ -438,7 +438,7 @@ public final class HttpServerFactory implements StreamFactory
         HttpServer server,
         long traceId,
         long authorization,
-        long groupId,
+        long budgetId,
         int reserved,
         DirectBuffer buffer,
         int offset,
@@ -781,7 +781,7 @@ public final class HttpServerFactory implements StreamFactory
         HttpServer server,
         long traceId,
         long authorization,
-        long groupId,
+        long budgetId,
         int reserved,
         DirectBuffer buffer,
         int offset,
@@ -796,7 +796,7 @@ public final class HttpServerFactory implements StreamFactory
         HttpServer server,
         long traceId,
         long authorization,
-        long groupId,
+        long budgetId,
         int reserved,
         DirectBuffer buffer,
         int offset,
@@ -832,7 +832,7 @@ public final class HttpServerFactory implements StreamFactory
         HttpServer server,
         long traceId,
         long authorization,
-        long groupId,
+        long budgetId,
         int reserved,
         DirectBuffer buffer,
         int offset,
@@ -843,7 +843,7 @@ public final class HttpServerFactory implements StreamFactory
         int progress = offset;
         if (decodableBytes > 0)
         {
-            progress = server.onDecodeBody(traceId, authorization, groupId,
+            progress = server.onDecodeBody(traceId, authorization, budgetId,
                                            buffer, offset, offset + decodableBytes, EMPTY_OCTETS);
             server.decodableChunkSize -= progress - offset;
 
@@ -860,7 +860,7 @@ public final class HttpServerFactory implements StreamFactory
         HttpServer server,
         long traceId,
         long authorization,
-        long groupId,
+        long budgetId,
         int reserved,
         DirectBuffer buffer,
         int offset,
@@ -888,7 +888,7 @@ public final class HttpServerFactory implements StreamFactory
         HttpServer server,
         long traceId,
         long authorization,
-        long groupId,
+        long budgetId,
         int reserved,
         DirectBuffer buffer,
         int offset,
@@ -899,7 +899,7 @@ public final class HttpServerFactory implements StreamFactory
         int progress = offset;
         if (length > 0)
         {
-            progress = server.onDecodeBody(traceId, authorization, groupId, buffer, offset, offset + length, EMPTY_OCTETS);
+            progress = server.onDecodeBody(traceId, authorization, budgetId, buffer, offset, offset + length, EMPTY_OCTETS);
             server.decodableContentLength -= progress - offset;
         }
 
@@ -918,7 +918,7 @@ public final class HttpServerFactory implements StreamFactory
         HttpServer server,
         long traceId,
         long authorization,
-        long groupId,
+        long budgetId,
         int reserved,
         DirectBuffer buffer,
         int offset,
@@ -953,7 +953,7 @@ public final class HttpServerFactory implements StreamFactory
         HttpServer server,
         long traceId,
         long authorization,
-        long groupId,
+        long budgetId,
         int reserved,
         DirectBuffer buffer,
         int offset,
@@ -979,26 +979,26 @@ public final class HttpServerFactory implements StreamFactory
         HttpServer server,
         long traceId,
         long authorization,
-        long groupId,
+        long budgetId,
         int reserved,
         DirectBuffer buffer,
         int offset,
         int limit)
     {
-        return server.onDecodeBody(traceId, authorization, groupId, buffer, offset, limit, EMPTY_OCTETS);
+        return server.onDecodeBody(traceId, authorization, budgetId, buffer, offset, limit, EMPTY_OCTETS);
     }
 
     private int decodeIgnore(
         HttpServer server,
         long traceId,
         long authorization,
-        long groupId,
+        long budgetId,
         int reserved,
         DirectBuffer buffer,
         int offset,
         int limit)
     {
-        server.doNetworkWindow(traceId, authorization, groupId, reserved, 0);
+        server.doNetworkWindow(traceId, authorization, budgetId, reserved, 0);
         return limit;
     }
 
@@ -1009,7 +1009,7 @@ public final class HttpServerFactory implements StreamFactory
             HttpServer server,
             long traceId,
             long authorization,
-            long groupId,
+            long budgetId,
             int reserved,
             DirectBuffer buffer,
             int offset,
@@ -1347,20 +1347,20 @@ public final class HttpServerFactory implements StreamFactory
         private void decodeNetworkIfBuffered(
             long traceId,
             long authorization,
-            long groupId)
+            long budgetId)
         {
             if (decodeSlot != NO_SLOT)
             {
                 final MutableDirectBuffer decodeBuffer = bufferPool.buffer(decodeSlot);
                 final int decodeLength = decodeSlotOffset;
-                decodeNetwork(traceId, authorization, groupId, decodeSlotReserved, decodeBuffer, 0, decodeLength);
+                decodeNetwork(traceId, authorization, budgetId, decodeSlotReserved, decodeBuffer, 0, decodeLength);
             }
         }
 
         private void decodeNetwork(
             long traceId,
             long authorization,
-            long groupId,
+            long budgetId,
             int reserved,
             DirectBuffer buffer,
             int offset,
@@ -1371,7 +1371,7 @@ public final class HttpServerFactory implements StreamFactory
             while (progress <= limit && previous != decoder)
             {
                 previous = decoder;
-                progress = decoder.decode(this, traceId, authorization, groupId, reserved, buffer, progress, limit);
+                progress = decoder.decode(this, traceId, authorization, budgetId, reserved, buffer, progress, limit);
             }
 
             if (progress < limit)
@@ -1448,13 +1448,13 @@ public final class HttpServerFactory implements StreamFactory
         private int onDecodeBody(
             long traceId,
             long authorization,
-            long groupId,
+            long budgetId,
             DirectBuffer buffer,
             int offset,
             int limit,
             Flyweight extension)
         {
-            return exchange.doRequestData(traceId, authorization, groupId, buffer, offset, limit, extension);
+            return exchange.doRequestData(traceId, authorization, budgetId, buffer, offset, limit, extension);
         }
 
         private void onDecodeTrailers(
@@ -1749,7 +1749,7 @@ public final class HttpServerFactory implements StreamFactory
             private int doRequestData(
                 long traceId,
                 long authorization,
-                long groupId,
+                long budgetId,
                 DirectBuffer buffer,
                 int offset,
                 int limit,
@@ -1765,7 +1765,7 @@ public final class HttpServerFactory implements StreamFactory
 
                     assert requestBudget >= 0;
 
-                    doData(application, routeId, requestId, traceId, authorization, groupId,
+                    doData(application, routeId, requestId, traceId, authorization, budgetId,
                            reserved, buffer, offset, length, extension);
                 }
 
