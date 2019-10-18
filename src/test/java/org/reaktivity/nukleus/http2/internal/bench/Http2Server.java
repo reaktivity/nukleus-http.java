@@ -15,6 +15,8 @@
  */
 package org.reaktivity.nukleus.http2.internal.bench;
 
+import static java.util.Collections.singletonMap;
+
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
@@ -22,9 +24,12 @@ import java.util.Properties;
 import org.reaktivity.nukleus.Configuration;
 import org.reaktivity.nukleus.http2.internal.Http2Configuration;
 import org.reaktivity.nukleus.http2.internal.Http2Controller;
+import org.reaktivity.nukleus.route.RouteKind;
 import org.reaktivity.nukleus.tcp.internal.TcpController;
 import org.reaktivity.reaktor.Reaktor;
 import org.reaktivity.reaktor.ReaktorConfiguration;
+
+import com.google.gson.Gson;
 
 public final class Http2Server
 {
@@ -51,10 +56,11 @@ public final class Http2Server
         reaktor.start();
         Map<String, String> headers = new HashMap<>();
         headers.put(":authority", "127.0.0.1:8080");
-        tcpController.routeServer("tcp#127.0.0.1:8080", "http2#0")
+        tcpController.route(RouteKind.SERVER, "tcp#127.0.0.1:8080", "http2#0")
                      .get();
         // TODO: restore "echo" capability
-        http2Controller.routeServer("http2#0", "echo#0", headers)
+        Gson gson = new Gson();
+        http2Controller.route(RouteKind.SERVER, "http2#0", "echo#0", gson.toJson(singletonMap("headers", headers)))
                        .get();
 
         Thread.sleep(10000000);

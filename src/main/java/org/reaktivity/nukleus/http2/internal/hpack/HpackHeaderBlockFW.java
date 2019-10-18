@@ -23,7 +23,6 @@ import org.agrona.MutableDirectBuffer;
 import org.reaktivity.nukleus.http.internal.types.Flyweight;
 import org.reaktivity.nukleus.http.internal.types.HttpHeaderFW;
 import org.reaktivity.nukleus.http2.internal.types.UnboundedListFW;
-import org.reaktivity.nukleus.http2.internal.types.UnboundedListFW.Builder;
 
 /*
     Flyweight for HPACK Header Block

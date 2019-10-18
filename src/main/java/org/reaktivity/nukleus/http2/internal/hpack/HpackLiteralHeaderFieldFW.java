@@ -87,9 +87,9 @@ public class HpackLiteralHeaderFieldFW extends Flyweight
         case WITHOUT_INDEXING:
         case NEVER_INDEXED:
             return integer4RO.integer();
+        default:
+            return 0;
         }
-
-        return 0;
     }
 
     public NameType nameType()
@@ -101,9 +101,9 @@ public class HpackLiteralHeaderFieldFW extends Flyweight
         case WITHOUT_INDEXING:
         case NEVER_INDEXED:
             return integer4RO.integer() == 0 ? NameType.NEW : NameType.INDEXED;
+        default:
+            return null;
         }
-
-        return null;
     }
 
     public HpackStringFW nameLiteral()
@@ -133,6 +133,8 @@ public class HpackLiteralHeaderFieldFW extends Flyweight
         case NEVER_INDEXED:
             integer4RO.wrap(buffer(), offset, maxLimit());
             literalHeader(integer4RO);
+            break;
+        default:
             break;
         }
 
@@ -185,6 +187,8 @@ public class HpackLiteralHeaderFieldFW extends Flyweight
             case NEVER_INDEXED:
                 buffer().putByte(offset(), (byte) 0b0001_0000);
                 break;
+            default:
+                break;
             }
 
             return this;
@@ -224,6 +228,8 @@ public class HpackLiteralHeaderFieldFW extends Flyweight
                 integer4RW.wrap(buffer(), offset(), maxLimit());
                 integer4RW.integer(indexedName);
                 valueRW.wrap(buffer(), integer4RW.limit(), maxLimit());
+                break;
+            default:
                 break;
             }
 

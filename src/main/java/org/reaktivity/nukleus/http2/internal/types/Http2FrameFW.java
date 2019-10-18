@@ -139,6 +139,7 @@ public class Http2FrameFW extends Flyweight
                 type(), length(), flags(), streamId());
     }
 
+    @SuppressWarnings("rawtypes")
     protected static class Builder<B extends Builder, T extends Http2FrameFW> extends Flyweight.Builder<T>
     {
         private final Http2FrameFW frame;
@@ -150,6 +151,7 @@ public class Http2FrameFW extends Flyweight
         }
 
         @Override
+        @SuppressWarnings("unchecked")
         public B wrap(MutableDirectBuffer buffer, int offset, int maxLimit)
         {
             super.wrap(buffer, offset, maxLimit);
@@ -162,6 +164,7 @@ public class Http2FrameFW extends Flyweight
             return (B) this;
         }
 
+        @SuppressWarnings("unchecked")
         public final B flags(byte f)
         {
             byte flags = buffer().getByte(offset() + FLAGS_OFFSET);
@@ -170,6 +173,7 @@ public class Http2FrameFW extends Flyweight
             return (B) this;
         }
 
+        @SuppressWarnings("unchecked")
         public final B streamId(int streamId)
         {
             buffer().putInt(offset() + STREAM_ID_OFFSET, streamId, BIG_ENDIAN);
@@ -181,6 +185,7 @@ public class Http2FrameFW extends Flyweight
             return payload(buffer, 0, buffer.capacity());
         }
 
+        @SuppressWarnings("unchecked")
         public B payload(DirectBuffer payload, int offset, int length)
         {
             buffer().putBytes(offset() + PAYLOAD_OFFSET, payload, offset, length);
@@ -188,6 +193,7 @@ public class Http2FrameFW extends Flyweight
             return (B) this;
         }
 
+        @SuppressWarnings("unchecked")
         protected final B payloadLength(int length)
         {
             buffer().putShort(offset() + LENGTH_OFFSET, (short) ((length & 0x00_FF_FF_00) >>> 8), BIG_ENDIAN);
@@ -196,7 +202,5 @@ public class Http2FrameFW extends Flyweight
             limit(offset() + PAYLOAD_OFFSET + length);
             return (B) this;
         }
-
     }
-
 }

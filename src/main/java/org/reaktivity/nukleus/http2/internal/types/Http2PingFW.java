@@ -42,7 +42,6 @@ import org.reaktivity.nukleus.http2.internal.stream.Http2Flags;
 public class Http2PingFW extends Http2FrameFW
 {
     private static final int FLAGS_OFFSET = 4;
-    private static final int PAYLOAD_OFFSET = 9;
 
     @Override
     public Http2FrameType type()

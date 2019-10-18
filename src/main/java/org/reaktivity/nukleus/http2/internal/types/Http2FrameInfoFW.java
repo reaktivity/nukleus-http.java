@@ -18,7 +18,6 @@ package org.reaktivity.nukleus.http2.internal.types;
 import static java.nio.ByteOrder.BIG_ENDIAN;
 
 import org.agrona.DirectBuffer;
-import org.agrona.MutableDirectBuffer;
 import org.reaktivity.nukleus.http.internal.types.Flyweight;
 import org.reaktivity.nukleus.http2.internal.stream.Http2Flags;
 
@@ -111,51 +110,4 @@ public class Http2FrameInfoFW extends Flyweight
         return String.format("%s frame <length=%s, flags=%s, id=%s>",
                 type(), length(), flags(), streamId());
     }
-
-    protected static class Builder<B extends Builder<?, T>, T extends Http2FrameInfoFW> extends Flyweight.Builder<T>
-    {
-        private final Http2FrameInfoFW frame;
-
-        public Builder(T frame)
-        {
-            super(frame);
-            this.frame = frame;
-        }
-
-        @Override
-        public B wrap(MutableDirectBuffer buffer, int offset, int maxLimit)
-        {
-            super.wrap(buffer, offset, maxLimit);
-
-            buffer.putByte(offset + TYPE_OFFSET, frame.type().type());
-            buffer.putByte(offset + FLAGS_OFFSET, (byte) 0);
-            buffer.putInt(offset + STREAM_ID_OFFSET, 0, BIG_ENDIAN);
-            payloadLength(0);
-
-            return (B) this;
-        }
-
-        public final B flags(byte f)
-        {
-            byte flags = buffer().getByte(offset() + FLAGS_OFFSET);
-            flags |= f;
-            buffer().putByte(offset() + FLAGS_OFFSET, flags);
-            return (B) this;
-        }
-
-        public final B streamId(int streamId)
-        {
-            buffer().putInt(offset() + STREAM_ID_OFFSET, streamId, BIG_ENDIAN);
-            return (B) this;
-        }
-
-        protected final B payloadLength(int length)
-        {
-            buffer().putShort(offset() + LENGTH_OFFSET, (short) ((length & 0x00_FF_FF_00) >>> 8), BIG_ENDIAN);
-            buffer().putByte(offset() + LENGTH_OFFSET + 2, (byte) (length & 0x00_00_00_FF));
-            return (B) this;
-        }
-
-    }
-
 }

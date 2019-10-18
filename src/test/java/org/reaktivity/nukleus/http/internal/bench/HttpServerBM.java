@@ -18,7 +18,6 @@ package org.reaktivity.nukleus.http.internal.bench;
 import static java.lang.String.format;
 import static java.nio.ByteBuffer.allocateDirect;
 import static java.nio.file.FileVisitOption.FOLLOW_LINKS;
-import static java.util.Collections.emptyMap;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.agrona.BitUtil.SIZE_OF_INT;
 import static org.agrona.BitUtil.SIZE_OF_LONG;
@@ -60,7 +59,6 @@ import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 import org.openjdk.jmh.runner.options.TimeValue;
-import org.reaktivity.nukleus.Configuration;
 import org.reaktivity.nukleus.function.MessageConsumer;
 import org.reaktivity.nukleus.function.MessagePredicate;
 import org.reaktivity.nukleus.http.internal.HttpController;
@@ -68,7 +66,9 @@ import org.reaktivity.nukleus.http.internal.types.stream.BeginFW;
 import org.reaktivity.nukleus.http.internal.types.stream.DataFW;
 import org.reaktivity.nukleus.http.internal.types.stream.ResetFW;
 import org.reaktivity.nukleus.http.internal.types.stream.WindowFW;
+import org.reaktivity.nukleus.route.RouteKind;
 import org.reaktivity.reaktor.Reaktor;
+import org.reaktivity.reaktor.ReaktorConfiguration;
 
 @State(Scope.Benchmark)
 @BenchmarkMode(Mode.Throughput)
@@ -81,7 +81,7 @@ public class HttpServerBM
     @State(Scope.Group)
     public static class GroupState
     {
-        private final Configuration configuration;
+        private final ReaktorConfiguration configuration;
         private final Reaktor reaktor;
 
         {
@@ -89,7 +89,7 @@ public class HttpServerBM
             properties.setProperty(REAKTOR_DIRECTORY.name(), "target/nukleus-benchmarks");
             properties.setProperty(REAKTOR_STREAMS_BUFFER_CAPACITY.name(), Long.toString(1024L * 1024L * 16L));
 
-            configuration = new Configuration(properties);
+            configuration = new ReaktorConfiguration(properties);
             ensureDirectoryExists(configuration.directory().toFile(), configuration.directory().toString());
 
             try
@@ -140,7 +140,7 @@ public class HttpServerBM
             final Random random = new Random();
             final HttpController controller = reaktor.controller(HttpController.class);
 
-            this.sourceRouteId = controller.routeServer("http#0", "echo", emptyMap()).get();
+            this.sourceRouteId = controller.route(RouteKind.SERVER, "http#0", "echo").get();
 
             this.sourceInputId = random.nextLong();
             this.sourceOutputEstHandler = this::processBegin;
@@ -150,7 +150,6 @@ public class HttpServerBM
             BeginFW begin = beginRW.wrap(writeBuffer, 0, writeBuffer.capacity())
                     .routeId(sourceRouteId)
                     .streamId(sourceInputId)
-                    .extension(e -> e.reset())
                     .build();
 
             this.sourceInput.streams.test(begin.typeId(), begin.buffer(), begin.offset(), begin.sizeof());
@@ -166,7 +165,6 @@ public class HttpServerBM
             this.data = dataRW.wrap(writeBuffer, 0, writeBuffer.capacity())
                               .streamId(sourceInputId)
                               .payload(p -> p.set(sendArray))
-                              .extension(e -> e.reset())
                               .build();
 
             this.throttleBuffer = new UnsafeBuffer(allocateDirect(SIZE_OF_LONG + SIZE_OF_INT));
