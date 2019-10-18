@@ -33,7 +33,7 @@ import org.reaktivity.nukleus.http2.internal.stream.Http2Flags;
     |R|                 Stream Identifier (31)                      |
     +-+-------------------------------------------------------------+
  */
-public class Http2FrameHeaderFW extends Flyweight
+public class Http2FrameInfoFW extends Flyweight
 {
     private static final int LENGTH_OFFSET = 0;
     private static final int TYPE_OFFSET = 3;
@@ -75,7 +75,7 @@ public class Http2FrameHeaderFW extends Flyweight
         return offset() + SIZE_OF_FRAME;
     }
 
-    public Http2FrameHeaderFW tryWrap(
+    public Http2FrameInfoFW tryWrap(
         DirectBuffer buffer,
         int offset,
         int maxLimit)
@@ -89,7 +89,7 @@ public class Http2FrameHeaderFW extends Flyweight
     }
 
     @Override
-    public Http2FrameHeaderFW wrap(
+    public Http2FrameInfoFW wrap(
         DirectBuffer buffer,
         int offset,
         int maxLimit)
@@ -112,9 +112,9 @@ public class Http2FrameHeaderFW extends Flyweight
                 type(), length(), flags(), streamId());
     }
 
-    protected static class Builder<B extends Builder<?, T>, T extends Http2FrameHeaderFW> extends Flyweight.Builder<T>
+    protected static class Builder<B extends Builder<?, T>, T extends Http2FrameInfoFW> extends Flyweight.Builder<T>
     {
-        private final Http2FrameHeaderFW frame;
+        private final Http2FrameInfoFW frame;
 
         public Builder(T frame)
         {
