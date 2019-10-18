@@ -921,6 +921,16 @@ public final class Http2ServerFactory implements StreamFactory
         return limit;
     }
 
+    private static int framePadding(
+        final int dataLength,
+        final int maxFrameSize)
+    {
+        final int framePadding = Http2FrameHeaderFW.SIZE_OF_FRAME; // assumes H2 DATA not PADDED
+        final int responsePaddingAdjustment = (dataLength + maxFrameSize - 1) / maxFrameSize * framePadding;
+
+        return responsePaddingAdjustment;
+    }
+
     @FunctionalInterface
     private interface Http2ServerDecoder
     {
@@ -997,6 +1007,7 @@ public final class Http2ServerFactory implements StreamFactory
             this.budgetId = budgetId;
             this.localSettings = new Http2Settings();
             this.remoteSettings = new Http2Settings();
+            this.connectionBudget = remoteSettings.initialWindowSize;
             this.streams = new Int2ObjectHashMap<>();
             this.decoder = decodePreface;
             this.decodeContext = new HpackContext(localSettings.headerTableSize, false);
@@ -1474,8 +1485,8 @@ public final class Http2ServerFactory implements StreamFactory
             if (streamId == 0)
             {
                 connectionBudget += credit;
-                // TODO: update shared connection budget, may be limited by reply budget
-                //       triggers flush race
+
+                streams.values().forEach(ex -> ex.flushResponseWindow(traceId, authorization));
             }
             else
             {
@@ -1990,20 +2001,24 @@ public final class Http2ServerFactory implements StreamFactory
             OctetsFW payload)
         {
             final DirectBuffer buffer = payload.buffer();
+            final int offset = payload.offset();
             final int limit = payload.limit();
 
             int frameOffset = 0;
-            int offset = payload.offset();
-            while (offset < limit)
+            int progress = offset;
+            while (progress < limit)
             {
-                final int length = Math.min(limit - offset, remoteSettings.maxFrameSize);
+                final int length = Math.min(limit - progress, remoteSettings.maxFrameSize);
                 final Http2DataFW http2Data = http2DataRW.wrap(frameBuffer, frameOffset, frameBuffer.capacity())
                         .streamId(streamId)
-                        .payload(buffer, offset, length)
+                        .payload(buffer, progress, length)
                         .build();
                 frameOffset = http2Data.limit();
-                offset += length;
+                progress += length;
             }
+
+            assert progress == limit;
+            connectionBudget -= progress - offset;
 
             doNetworkData(traceId, authorization, 0L, frameBuffer, 0, frameOffset);
 
@@ -2663,17 +2678,16 @@ public final class Http2ServerFactory implements StreamFactory
                 long traceId,
                 long authorization)
             {
-                final int remoteBudgetMax = Math.min(remoteBudget, bufferPool.slotCapacity());
-                final int remoteCredit = remoteBudgetMax - responseBudget;
+                final int maxFrameSize = remoteSettings.maxFrameSize;
+                final int connectionPadding = framePadding(connectionBudget, maxFrameSize);
+                final int remotePadding = framePadding(remoteBudget, maxFrameSize);
+                final int paddedBudgetMax = Math.min(connectionBudget + connectionPadding, remoteBudget + remotePadding);
+                final int responseBudgetMax = Math.min(paddedBudgetMax, bufferPool.slotCapacity() - encodeSlotOffset);
+                final int responseCredit = responseBudgetMax - responseBudget;
 
-                if (remoteCredit > 0)
+                if (responseCredit > 0)
                 {
-                    final int framePadding = Http2FrameHeaderFW.SIZE_OF_FRAME; // assumes H2 DATA not PADDED
-                    final int maxFrameSize = remoteSettings.maxFrameSize;
-                    final int responsePaddingAdjustment = (remoteBudgetMax + maxFrameSize - 1) / maxFrameSize * framePadding;
-
-                    final int responseCredit = remoteCredit + responsePaddingAdjustment;
-                    final int responsePadding = replyPadding + responsePaddingAdjustment;
+                    final int responsePadding = replyPadding + framePadding(responseBudgetMax, maxFrameSize);
 
                     responseBudget += responseCredit;
 
