@@ -905,8 +905,11 @@ public final class Http2ServerFactory implements StreamFactory
         int offset,
         int limit)
     {
+        final Http2FrameHeaderFW http2Frame = http2FrameRO.wrap(buffer, offset, limit);
+        final int progress = http2Frame.limit();
+
         server.decoder = decodeFrameType;
-        return limit;
+        return progress;
     }
 
     private int decodeIgnoreAll(
