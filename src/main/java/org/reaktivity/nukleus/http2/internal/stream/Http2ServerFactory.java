@@ -925,10 +925,9 @@ public final class Http2ServerFactory implements StreamFactory
         final int dataLength,
         final int maxFrameSize)
     {
-        final int framePadding = Http2FrameHeaderFW.SIZE_OF_FRAME; // assumes H2 DATA not PADDED
-        final int responsePaddingAdjustment = (dataLength + maxFrameSize - 1) / maxFrameSize * framePadding;
+        final int frameCount = (dataLength + maxFrameSize - 1) / maxFrameSize;
 
-        return responsePaddingAdjustment;
+        return frameCount * Http2FrameHeaderFW.SIZE_OF_FRAME; // assumes H2 DATA not PADDED
     }
 
     @FunctionalInterface
