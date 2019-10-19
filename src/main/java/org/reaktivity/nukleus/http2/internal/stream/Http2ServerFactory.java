@@ -80,7 +80,7 @@ import org.reaktivity.nukleus.http2.internal.hpack.HpackStringFW;
 import org.reaktivity.nukleus.http2.internal.types.Http2ContinuationFW;
 import org.reaktivity.nukleus.http2.internal.types.Http2DataFW;
 import org.reaktivity.nukleus.http2.internal.types.Http2ErrorCode;
-import org.reaktivity.nukleus.http2.internal.types.Http2FrameHeaderFW;
+import org.reaktivity.nukleus.http2.internal.types.Http2FrameInfoFW;
 import org.reaktivity.nukleus.http2.internal.types.Http2FrameType;
 import org.reaktivity.nukleus.http2.internal.types.Http2GoawayFW;
 import org.reaktivity.nukleus.http2.internal.types.Http2HeadersFW;
@@ -146,7 +146,7 @@ public final class Http2ServerFactory implements StreamFactory
     private final ResetFW.Builder resetRW = new ResetFW.Builder();
 
     private final Http2PrefaceFW http2PrefaceRO = new Http2PrefaceFW();
-    private final Http2FrameHeaderFW http2FrameRO = new Http2FrameHeaderFW();
+    private final Http2FrameInfoFW http2FrameInfoRO = new Http2FrameInfoFW();
     private final Http2SettingsFW http2SettingsRO = new Http2SettingsFW();
     private final Http2GoawayFW http2GoawayRO = new Http2GoawayFW();
     private final Http2PingFW http2PingRO = new Http2PingFW();
@@ -476,12 +476,12 @@ public final class Http2ServerFactory implements StreamFactory
         int offset,
         int limit)
     {
-        final Http2FrameHeaderFW http2FrameHeader = http2FrameRO.tryWrap(buffer, offset, limit);
+        final Http2FrameInfoFW http2FrameInfo = http2FrameInfoRO.tryWrap(buffer, offset, limit);
 
-        if (http2FrameHeader != null)
+        if (http2FrameInfo != null)
         {
-            final int length = http2FrameHeader.length();
-            final Http2FrameType type = http2FrameHeader.type();
+            final int length = http2FrameInfo.length();
+            final Http2FrameType type = http2FrameInfo.type();
             final Http2ServerDecoder decoder = decodersByFrameType.getOrDefault(type, decodeIgnoreOne);
 
             Http2ErrorCode error = Http2ErrorCode.NO_ERROR;
@@ -500,7 +500,7 @@ public final class Http2ServerFactory implements StreamFactory
                 server.onDecodeError(traceId, authorization, error);
                 server.decoder = decodeIgnoreAll;
             }
-            else if (limit - http2FrameHeader.limit() >= length)
+            else if (limit - http2FrameInfo.limit() >= length)
             {
                 server.decoder = decoder;
             }
@@ -562,9 +562,9 @@ public final class Http2ServerFactory implements StreamFactory
     {
         int progress = offset;
 
-        final Http2FrameHeaderFW http2Frame = http2FrameRO.wrap(buffer, offset, limit);
-        final int streamId = http2Frame.streamId();
-        final int length = http2Frame.length();
+        final Http2FrameInfoFW http2FrameInfo = http2FrameInfoRO.wrap(buffer, offset, limit);
+        final int streamId = http2FrameInfo.streamId();
+        final int length = http2FrameInfo.length();
 
         Http2ErrorCode error = Http2ErrorCode.NO_ERROR;
 
@@ -641,8 +641,8 @@ public final class Http2ServerFactory implements StreamFactory
     {
         int progress = offset;
 
-        final Http2FrameHeaderFW http2Frame = http2FrameRO.wrap(buffer, offset, limit);
-        final int length = http2Frame.length();
+        final Http2FrameInfoFW http2FrameInfo = http2FrameInfoRO.wrap(buffer, offset, limit);
+        final int length = http2FrameInfo.length();
 
         Http2ErrorCode error = Http2ErrorCode.NO_ERROR;
 
@@ -820,9 +820,9 @@ public final class Http2ServerFactory implements StreamFactory
     {
         int progress = offset;
 
-        final Http2FrameHeaderFW http2Frame = http2FrameRO.wrap(buffer, offset, limit);
-        final int streamId = http2Frame.streamId();
-        final int length = http2Frame.length();
+        final Http2FrameInfoFW http2FrameInfo = http2FrameInfoRO.wrap(buffer, offset, limit);
+        final int streamId = http2FrameInfo.streamId();
+        final int length = http2FrameInfo.length();
 
         Http2ErrorCode error = Http2ErrorCode.NO_ERROR;
 
@@ -863,9 +863,9 @@ public final class Http2ServerFactory implements StreamFactory
     {
         int progress = offset;
 
-        final Http2FrameHeaderFW http2Frame = http2FrameRO.wrap(buffer, offset, limit);
-        final int streamId = http2Frame.streamId();
-        final int length = http2Frame.length();
+        final Http2FrameInfoFW http2FrameInfo = http2FrameInfoRO.wrap(buffer, offset, limit);
+        final int streamId = http2FrameInfo.streamId();
+        final int length = http2FrameInfo.length();
 
         Http2ErrorCode error = Http2ErrorCode.NO_ERROR;
 
@@ -905,8 +905,11 @@ public final class Http2ServerFactory implements StreamFactory
         int offset,
         int limit)
     {
+        final Http2FrameInfoFW http2FrameInfo = http2FrameInfoRO.wrap(buffer, offset, limit);
+        final int progress = http2FrameInfo.limit();
+
         server.decoder = decodeFrameType;
-        return limit;
+        return progress;
     }
 
     private int decodeIgnoreAll(
@@ -925,10 +928,9 @@ public final class Http2ServerFactory implements StreamFactory
         final int dataLength,
         final int maxFrameSize)
     {
-        final int framePadding = Http2FrameHeaderFW.SIZE_OF_FRAME; // assumes H2 DATA not PADDED
-        final int responsePaddingAdjustment = (dataLength + maxFrameSize - 1) / maxFrameSize * framePadding;
+        final int frameCount = (dataLength + maxFrameSize - 1) / maxFrameSize;
 
-        return responsePaddingAdjustment;
+        return frameCount * Http2FrameInfoFW.SIZE_OF_FRAME; // assumes H2 DATA not PADDED
     }
 
     @FunctionalInterface

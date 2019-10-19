@@ -18,7 +18,6 @@ package org.reaktivity.nukleus.http.internal.bench;
 import static java.lang.String.format;
 import static java.nio.ByteBuffer.allocateDirect;
 import static java.nio.file.FileVisitOption.FOLLOW_LINKS;
-import static java.util.Collections.emptyMap;
 import static java.util.concurrent.TimeUnit.MICROSECONDS;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
@@ -34,7 +33,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Properties;
-import java.util.Random;
 import java.util.function.BooleanSupplier;
 import java.util.function.LongSupplier;
 import java.util.function.ToIntFunction;
@@ -66,7 +64,6 @@ import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 import org.openjdk.jmh.runner.options.TimeValue;
-import org.reaktivity.nukleus.Configuration;
 import org.reaktivity.nukleus.function.MessageConsumer;
 import org.reaktivity.nukleus.function.MessagePredicate;
 import org.reaktivity.nukleus.http.internal.HttpController;
@@ -77,7 +74,9 @@ import org.reaktivity.nukleus.http.internal.types.stream.EndFW;
 import org.reaktivity.nukleus.http.internal.types.stream.HttpBeginExFW;
 import org.reaktivity.nukleus.http.internal.types.stream.ResetFW;
 import org.reaktivity.nukleus.http.internal.types.stream.WindowFW;
+import org.reaktivity.nukleus.route.RouteKind;
 import org.reaktivity.reaktor.Reaktor;
+import org.reaktivity.reaktor.ReaktorConfiguration;
 
 @State(Scope.Benchmark)
 @BenchmarkMode(Mode.Throughput)
@@ -98,7 +97,7 @@ public class HttpClientBM
     @State(Scope.Group)
     public static class SharedState
     {
-        private final Configuration configuration;
+        private final ReaktorConfiguration configuration;
         private volatile Reaktor reaktor;
 
         private volatile Writer clientAcceptStreams;
@@ -117,7 +116,7 @@ public class HttpClientBM
             properties.setProperty(REAKTOR_DIRECTORY.name(), "target/nukleus-benchmarks");
             properties.setProperty(REAKTOR_STREAMS_BUFFER_CAPACITY.name(), Long.toString(1024L * 1024L * 16L));
 
-            configuration = new Configuration(properties);
+            configuration = new ReaktorConfiguration(properties);
             ensureDirectoryExists(configuration.directory().toFile(), configuration.directory().toString());
 
             reaktor = Reaktor.builder()
@@ -155,12 +154,12 @@ public class HttpClientBM
 
             this.streamsSourced = 0;
 
-            final Random random = new Random();
-            final long targetRef = random.nextLong();
+            //final Random random = new Random();
+            //final long targetRef = random.nextLong();
 
             this.clientAccept = "http#0";
             this.clientConnect = "target#0";
-            this.clientRouteId = controller.routeClient(clientAccept, clientConnect, emptyMap()).get();
+            this.clientRouteId = controller.route(RouteKind.CLIENT, clientAccept, clientConnect).get();
 
             // Map file streams/source/http#target created by routeOutputNew TODO: the following may not do this
             // TODO: clientConnectStreams = controller.supplyTarget("target", Reader::new);
@@ -298,7 +297,7 @@ public class HttpClientBM
         private long streamId;
         IdleStrategy idleStrategy = new BackoffIdleStrategy(64, 64, NANOSECONDS.toNanos(64L), MICROSECONDS.toNanos(64L));
         private int availableWindow;
-        private int padding;
+        //private int padding;
         int requestCount;
 
         @Setup(Level.Iteration)
@@ -324,12 +323,10 @@ public class HttpClientBM
 
             final AtomicBuffer outputDataBuffer = new UnsafeBuffer(new byte[256]);
             dataRW.wrap(outputDataBuffer, 0, outputDataBuffer.capacity())
-                        .payload(p -> p.set(PAYLOAD))
-                        .extension(e -> e.reset());
+                        .payload(p -> p.set(PAYLOAD));
 
             final AtomicBuffer outputEndBuffer = new UnsafeBuffer(new byte[20]);
-            endRW.wrap(outputDataBuffer, 0, outputEndBuffer.capacity())
-                        .extension(e -> e.reset());
+            endRW.wrap(outputDataBuffer, 0, outputEndBuffer.capacity());
             prepareNextStream();
         }
 
@@ -402,7 +399,7 @@ public class HttpClientBM
                 if (windowRO.streamId() == streamId)
                 {
                     availableWindow += windowRO.credit();
-                    padding = windowRO.padding();
+                    //padding = windowRO.padding();
                 }
                 break;
             case ResetFW.TYPE_ID:
@@ -581,17 +578,14 @@ public class HttpClientBM
             final AtomicBuffer outputBeginBuffer = new UnsafeBuffer(new byte[256]);
             beginRW.wrap(outputBeginBuffer, 0, outputBeginBuffer.capacity())
                    .routeId(state.clientRouteId)
-                   .streamId(0L)
-                   .extension(e -> e.reset());
+                   .streamId(0L);
 
             final AtomicBuffer outputDataBuffer = new UnsafeBuffer(new byte[256]);
             dataRW.wrap(outputDataBuffer, 0, outputDataBuffer.capacity())
-                   .payload(p -> p.set(RESPONSE_BYTES))
-                   .extension(e -> e.reset());
+                   .payload(p -> p.set(RESPONSE_BYTES));
 
             final AtomicBuffer outputEndBuffer = new UnsafeBuffer(new byte[20]);
-            endRW.wrap(outputDataBuffer, 0, outputEndBuffer.capacity())
-                 .extension(e -> e.reset());
+            endRW.wrap(outputDataBuffer, 0, outputEndBuffer.capacity());
         }
 
         boolean writeBegin()

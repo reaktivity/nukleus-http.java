@@ -44,8 +44,9 @@ public class HpackHeaderFieldFW extends Flyweight
             return literalRO.limit();
         case UPDATE:
             return updateRO.limit();
+        default:
+            return 0;
         }
-        return 0;
     }
 
     public boolean error()
@@ -117,6 +118,8 @@ public class HpackHeaderFieldFW extends Flyweight
             break;
         case UPDATE:
             updateRO.wrap(buffer(), offset, maxLimit());
+            break;
+        default:
             break;
         }
 
