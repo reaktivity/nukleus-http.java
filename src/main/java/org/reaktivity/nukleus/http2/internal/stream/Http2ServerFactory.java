@@ -42,6 +42,7 @@ import java.util.function.LongUnaryOperator;
 import java.util.function.ToIntFunction;
 
 import org.agrona.DirectBuffer;
+import org.agrona.ExpandableArrayBuffer;
 import org.agrona.MutableDirectBuffer;
 import org.agrona.collections.Int2ObjectHashMap;
 import org.agrona.collections.Long2ObjectHashMap;
@@ -100,7 +101,8 @@ public final class Http2ServerFactory implements StreamFactory
     private static final int CLIENT_INITIATED = 1;
     private static final int SERVER_INITIATED = 0;
 
-    private static final OctetsFW EMPTY_OCTETS = new OctetsFW().wrap(new UnsafeBuffer(new byte[0]), 0, 0);
+    private static final DirectBuffer EMPTY_BUFFER = new UnsafeBuffer(new byte[0]);
+    private static final OctetsFW EMPTY_OCTETS = new OctetsFW().wrap(EMPTY_BUFFER, 0, 0);
 
     private static final ArrayFW<HttpHeaderFW> HEADERS_200_OK =
             new ArrayFW.Builder<>(new HttpHeaderFW.Builder(), new HttpHeaderFW())
@@ -985,6 +987,10 @@ public final class Http2ServerFactory implements StreamFactory
         private int encodeSlotOffset;
         private long encodeSlotTraceId;
 
+        private MutableDirectBuffer encodeHeadersBuffer;
+        private int encodeHeadersSlotOffset;
+        private long encodeHeadersSlotTraceId;
+
         private int headersSlot = NO_SLOT;
         private int headersSlotOffset;
 
@@ -1014,6 +1020,7 @@ public final class Http2ServerFactory implements StreamFactory
             this.decoder = decodePreface;
             this.decodeContext = new HpackContext(localSettings.headerTableSize, false);
             this.encodeContext = new HpackContext(remoteSettings.headerTableSize, true);
+            this.encodeHeadersBuffer = new ExpandableArrayBuffer();
         }
 
         private void onNetwork(
@@ -1159,6 +1166,11 @@ public final class Http2ServerFactory implements StreamFactory
             replyBudget += credit;
             replyPadding = padding;
 
+            if (encodeHeadersSlotOffset != 0)
+            {
+                encodeNetwork(encodeSlotTraceId, authorization, budgetId, EMPTY_BUFFER, 0, 0);
+            }
+
             if (encodeSlot != NO_SLOT)
             {
                 final MutableDirectBuffer buffer = bufferPool.buffer(encodeSlot);
@@ -1214,6 +1226,31 @@ public final class Http2ServerFactory implements StreamFactory
             encodeNetwork(traceId, authorization, budgetId, buffer, offset, limit);
         }
 
+        private void doNetworkHeadersData(
+            long traceId,
+            long authorization,
+            long budgetId,
+            Flyweight payload)
+        {
+            doNetworkHeadersData(traceId, authorization, budgetId, payload.buffer(),
+                                 payload.offset(), payload.limit());
+        }
+
+        private void doNetworkHeadersData(
+            long traceId,
+            long authorization,
+            long budgetId,
+            DirectBuffer buffer,
+            int offset,
+            int limit)
+        {
+            encodeHeadersBuffer.putBytes(encodeHeadersSlotOffset, buffer, offset, limit - offset);
+            encodeHeadersSlotOffset += limit - offset;
+            encodeHeadersSlotTraceId = traceId;
+
+            encodeNetwork(traceId, authorization, budgetId, EMPTY_BUFFER, 0, 0);
+        }
+
         private void doNetworkEnd(
             long traceId,
             long authorization)
@@ -1260,6 +1297,29 @@ public final class Http2ServerFactory implements StreamFactory
             int offset,
             int limit)
         {
+            if (encodeHeadersSlotOffset != 0)
+            {
+                final int maxLength = encodeHeadersSlotOffset;
+                final int length = Math.max(Math.min(replyBudget - replyPadding, maxLength), 0);
+                final int reserved = length + replyPadding;
+
+                if (length > 0)
+                {
+                    replyBudget -= reserved;
+
+                    assert replyBudget >= 0;
+
+                    doData(network, routeId, replyId, encodeHeadersSlotTraceId, authorization, budgetId,
+                            reserved, encodeHeadersBuffer, 0, length, EMPTY_OCTETS);
+
+                    encodeHeadersSlotOffset -= length;
+
+                    assert encodeHeadersSlotOffset >= 0;
+
+                    encodeHeadersBuffer.putBytes(0, encodeHeadersBuffer, length, encodeHeadersSlotOffset);
+                }
+            }
+
             final int maxLength = limit - offset;
             final int length = Math.max(Math.min(replyBudget - replyPadding, maxLength), 0);
 
@@ -1988,7 +2048,7 @@ public final class Http2ServerFactory implements StreamFactory
                     .endStream(endResponse)
                     .build();
 
-            doNetworkData(traceId, authorization, 0L, http2Headers);
+            doNetworkHeadersData(traceId, authorization, 0L, http2Headers);
 
             counters.headersFramesWritten.getAsLong();
         }
@@ -2071,7 +2131,7 @@ public final class Http2ServerFactory implements StreamFactory
                     .endHeaders()
                     .build();
 
-            doNetworkData(traceId, authorization, 0L, http2PushPromise);
+            doNetworkHeadersData(traceId, authorization, 0L, http2PushPromise);
 
             counters.pushPromiseFramesWritten.getAsLong();
         }
