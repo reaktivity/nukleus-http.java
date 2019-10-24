@@ -828,7 +828,7 @@ public final class Http2ServerFactory implements StreamFactory
 
         Http2ErrorCode error = Http2ErrorCode.NO_ERROR;
 
-        if (length != 4)
+        if (length != 5)
         {
             error = Http2ErrorCode.FRAME_SIZE_ERROR;
         }
@@ -986,6 +986,7 @@ public final class Http2ServerFactory implements StreamFactory
         private int encodeSlot = NO_SLOT;
         private int encodeSlotOffset;
         private long encodeSlotTraceId;
+        private int encodeSlotMaxLimit = Integer.MAX_VALUE;
 
         private MutableDirectBuffer encodeHeadersBuffer;
         private int encodeHeadersSlotOffset;
@@ -1174,7 +1175,7 @@ public final class Http2ServerFactory implements StreamFactory
             if (encodeSlot != NO_SLOT)
             {
                 final MutableDirectBuffer buffer = bufferPool.buffer(encodeSlot);
-                final int limit = encodeSlotOffset;
+                final int limit = Math.min(encodeSlotOffset, encodeSlotMaxLimit);
 
                 encodeNetwork(encodeSlotTraceId, authorization, budgetId, buffer, 0, limit);
             }
@@ -1220,7 +1221,7 @@ public final class Http2ServerFactory implements StreamFactory
 
                 buffer = encodeBuffer;
                 offset = 0;
-                limit = encodeSlotOffset;
+                limit = Math.min(encodeSlotOffset, encodeSlotMaxLimit);
             }
 
             encodeNetwork(traceId, authorization, budgetId, buffer, offset, limit);
@@ -1244,6 +1245,12 @@ public final class Http2ServerFactory implements StreamFactory
             int offset,
             int limit)
         {
+            if (encodeHeadersSlotOffset == 0)
+            {
+                encodeSlotMaxLimit = encodeSlotOffset;
+                assert encodeSlotMaxLimit >= 0;
+            }
+
             encodeHeadersBuffer.putBytes(encodeHeadersSlotOffset, buffer, offset, limit - offset);
             encodeHeadersSlotOffset += limit - offset;
             encodeHeadersSlotTraceId = traceId;
@@ -1297,29 +1304,6 @@ public final class Http2ServerFactory implements StreamFactory
             int offset,
             int limit)
         {
-            if (encodeHeadersSlotOffset != 0)
-            {
-                final int maxLength = encodeHeadersSlotOffset;
-                final int length = Math.max(Math.min(replyBudget - replyPadding, maxLength), 0);
-                final int reserved = length + replyPadding;
-
-                if (length > 0)
-                {
-                    replyBudget -= reserved;
-
-                    assert replyBudget >= 0;
-
-                    doData(network, routeId, replyId, encodeHeadersSlotTraceId, authorization, budgetId,
-                            reserved, encodeHeadersBuffer, 0, length, EMPTY_OCTETS);
-
-                    encodeHeadersSlotOffset -= length;
-
-                    assert encodeHeadersSlotOffset >= 0;
-
-                    encodeHeadersBuffer.putBytes(0, encodeHeadersBuffer, length, encodeHeadersSlotOffset);
-                }
-            }
-
             final int maxLength = limit - offset;
             final int length = Math.max(Math.min(replyBudget - replyPadding, maxLength), 0);
 
@@ -1342,6 +1326,11 @@ public final class Http2ServerFactory implements StreamFactory
                 {
                     encodeSlot = bufferPool.acquire(replyId);
                 }
+                else
+                {
+                    encodeSlotMaxLimit -= length;
+                    assert encodeSlotMaxLimit >= 0;
+                }
 
                 if (encodeSlot == NO_SLOT)
                 {
@@ -1362,6 +1351,34 @@ public final class Http2ServerFactory implements StreamFactory
                 {
                     doNetworkEnd(traceId, authorization);
                 }
+            }
+
+            if (encodeHeadersSlotOffset != 0 && encodeSlotMaxLimit == 0)
+            {
+                final int maxHeadersLength = encodeHeadersSlotOffset;
+                final int headersLength = Math.max(Math.min(replyBudget - replyPadding, maxHeadersLength), 0);
+                final int headersReserved = headersLength + replyPadding;
+
+                if (headersLength > 0)
+                {
+                    replyBudget -= headersReserved;
+
+                    assert replyBudget >= 0;
+
+                    doData(network, routeId, replyId, encodeHeadersSlotTraceId, authorization, budgetId,
+                            headersReserved, encodeHeadersBuffer, 0, headersLength, EMPTY_OCTETS);
+
+                    encodeHeadersSlotOffset -= headersLength;
+
+                    assert encodeHeadersSlotOffset >= 0;
+
+                    encodeHeadersBuffer.putBytes(0, encodeHeadersBuffer, headersLength, encodeHeadersSlotOffset);
+                }
+            }
+
+            if (encodeHeadersSlotOffset == 0)
+            {
+                encodeSlotMaxLimit = Integer.MAX_VALUE;
             }
         }
 
