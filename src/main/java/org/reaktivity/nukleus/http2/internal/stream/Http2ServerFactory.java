@@ -1856,8 +1856,7 @@ public final class Http2ServerFactory implements StreamFactory
             {
                 Http2ErrorCode error = Http2ErrorCode.NO_ERROR;
 
-                if (exchange.state == Http2StreamState.HALF_CLOSED_REMOTE ||
-                    dataLength < 0)
+                if (Http2State.initialClosing(exchange.state) || dataLength < 0)
                 {
                     error = Http2ErrorCode.STREAM_CLOSED;
                 }
@@ -2242,7 +2241,7 @@ public final class Http2ServerFactory implements StreamFactory
             private final int streamId;
             private final long contentLength;
 
-            private Http2StreamState state;
+            private int state;
             private long contentObserved;
 
             private int requestBudget;
@@ -2267,7 +2266,6 @@ public final class Http2ServerFactory implements StreamFactory
                 this.requestId = supplyInitialId.applyAsLong(routeId);
                 this.application = router.supplyReceiver(requestId);
                 this.responseId = supplyReplyId.applyAsLong(requestId);
-                this.state = Http2StreamState.UNKNOWN;
             }
 
             private void doRequestBegin(
@@ -2275,7 +2273,8 @@ public final class Http2ServerFactory implements StreamFactory
                 long authorization,
                 Flyweight extension)
             {
-                assert state == Http2StreamState.UNKNOWN;
+                assert state == 0;
+                state = Http2State.openingInitial(state);
 
                 doBegin(application, routeId, requestId, traceId, authorization, affinity, extension);
                 router.setThrottle(requestId, this::onRequest);
@@ -2291,9 +2290,7 @@ public final class Http2ServerFactory implements StreamFactory
                 int offset,
                 int limit)
             {
-                assert state == Http2StreamState.UNKNOWN ||
-                       state == Http2StreamState.OPEN ||
-                       state == Http2StreamState.HALF_CLOSED_LOCAL;
+                assert Http2State.initialOpening(state);
 
                 final int length = limit - offset;
 
@@ -2329,16 +2326,9 @@ public final class Http2ServerFactory implements StreamFactory
                 long authorization,
                 Flyweight extension)
             {
-                assert state == Http2StreamState.UNKNOWN ||
-                       state == Http2StreamState.OPEN ||
-                       state == Http2StreamState.HALF_CLOSED_LOCAL;
-
-                final boolean pending = state == Http2StreamState.UNKNOWN || requestSlot != NO_SLOT;
-
-
-                if (pending)
+                if (!Http2State.initialOpened(state) || requestSlot != NO_SLOT)
                 {
-                    setRequestClosing();
+                    state = Http2State.closingInitial(state);
                 }
                 else
                 {
@@ -2351,13 +2341,6 @@ public final class Http2ServerFactory implements StreamFactory
                 long authorization,
                 Flyweight extension)
             {
-                assert state == Http2StreamState.UNKNOWN ||
-                       state == Http2StreamState.OPEN ||
-                       state == Http2StreamState.HALF_CLOSED_LOCAL ||
-                       state == Http2StreamState.HALF_CLOSED_LOCAL_CLOSING_REMOTE ||
-                       state == Http2StreamState.HALF_CLOSING_REMOTE;
-
-
                 setRequestClosed();
 
                 doAbort(application, routeId, requestId, traceId, authorization, extension);
@@ -2367,14 +2350,9 @@ public final class Http2ServerFactory implements StreamFactory
                 long traceId,
                 long authorization)
             {
-                switch (state)
+                if (!Http2State.initialClosed(state))
                 {
-                case HALF_CLOSED_REMOTE:
-                case CLOSED:
-                    break;
-                default:
                     doRequestAbort(traceId, authorization, EMPTY_OCTETS);
-                    break;
                 }
             }
 
@@ -2400,12 +2378,6 @@ public final class Http2ServerFactory implements StreamFactory
             private void onRequestReset(
                 ResetFW reset)
             {
-                assert state == Http2StreamState.UNKNOWN ||
-                       state == Http2StreamState.OPEN ||
-                       state == Http2StreamState.HALF_CLOSED_LOCAL ||
-                       state == Http2StreamState.HALF_CLOSED_LOCAL_CLOSING_REMOTE ||
-                       state == Http2StreamState.HALF_CLOSING_REMOTE;
-
                 final boolean correlated = correlations.remove(responseId) == null;
 
                 setRequestClosed();
@@ -2433,10 +2405,7 @@ public final class Http2ServerFactory implements StreamFactory
                 final int credit = window.credit();
                 final int padding = window.padding();
 
-                if (state == Http2StreamState.UNKNOWN)
-                {
-                    state = Http2StreamState.OPEN;
-                }
+                state = Http2State.openInitial(state);
 
                 requestBudget += credit;
                 requestPadding = padding;
@@ -2452,19 +2421,17 @@ public final class Http2ServerFactory implements StreamFactory
 
                 if (requestSlot == NO_SLOT)
                 {
-                    switch (state)
+                    if (!Http2State.initialClosed(padding))
                     {
-                    case HALF_CLOSED_REMOTE:
-                    case CLOSED:
-                        break;
-                    case HALF_CLOSING_REMOTE:
-                    case HALF_CLOSED_LOCAL_CLOSING_REMOTE:
-                        // TODO: trailers extension?
-                        flushRequestEnd(traceId, authorization, EMPTY_OCTETS);
-                        break;
-                    default:
-                        flushRequestWindowUpdate(traceId, authorization);
-                        break;
+                        if (Http2State.initialClosing(state))
+                        {
+                            // TODO: trailers extension?
+                            flushRequestEnd(traceId, authorization, EMPTY_OCTETS);
+                        }
+                        else
+                        {
+                            flushRequestWindowUpdate(traceId, authorization);
+                        }
                     }
                 }
             }
@@ -2539,41 +2506,17 @@ public final class Http2ServerFactory implements StreamFactory
                 }
             }
 
-            private void setRequestClosing()
-            {
-                switch (state)
-                {
-                case UNKNOWN:
-                case OPEN:
-                    state = Http2StreamState.HALF_CLOSING_REMOTE;
-                    break;
-                case HALF_CLOSED_LOCAL:
-                    state = Http2StreamState.HALF_CLOSED_LOCAL_CLOSING_REMOTE;
-                    break;
-                default:
-                    break;
-                }
-            }
-
             private void setRequestClosed()
             {
-                switch (state)
+                assert !Http2State.initialClosed(state);
+
+                state = Http2State.closeInitial(state);
+                cleanupRequestSlotIfNecessary();
+
+                if (Http2State.closed(state))
                 {
-                case UNKNOWN:
-                case OPEN:
-                case HALF_CLOSING_REMOTE:
-                    cleanupRequestSlotIfNecessary();
-                    state = Http2StreamState.HALF_CLOSED_REMOTE;
-                    break;
-                case HALF_CLOSED_LOCAL:
-                case HALF_CLOSED_LOCAL_CLOSING_REMOTE:
-                    state = Http2StreamState.CLOSED;
                     streams.remove(streamId);
                     streamsActive[streamId & 0x01]--;
-                    cleanupRequestSlotIfNecessary();
-                    break;
-                default:
-                    break;
                 }
             }
 
@@ -2590,9 +2533,7 @@ public final class Http2ServerFactory implements StreamFactory
 
             private boolean isResponseOpen()
             {
-                return state == Http2StreamState.OPEN ||
-                       state == Http2StreamState.HALF_CLOSING_REMOTE ||
-                       state == Http2StreamState.HALF_CLOSED_REMOTE;
+                return Http2State.replyOpened(state);
             }
 
             private void onResponse(
@@ -2625,6 +2566,8 @@ public final class Http2ServerFactory implements StreamFactory
             private void onResponseBegin(
                 BeginFW begin)
             {
+                state = Http2State.openReply(state);
+
                 final HttpBeginExFW beginEx = begin.extension().get(beginExRO::tryWrap);
                 final ArrayFW<HttpHeaderFW> headers = beginEx != null ? beginEx.headers() : HEADERS_200_OK;
 
@@ -2706,10 +2649,6 @@ public final class Http2ServerFactory implements StreamFactory
                 long traceId,
                 long authorization)
             {
-                assert state == Http2StreamState.OPEN ||
-                       state == Http2StreamState.HALF_CLOSING_REMOTE ||
-                       state == Http2StreamState.HALF_CLOSED_REMOTE;
-
                 setResponseClosed();
 
                 doReset(application, routeId, responseId, traceId, authorization);
@@ -2721,15 +2660,9 @@ public final class Http2ServerFactory implements StreamFactory
             {
                 correlations.remove(responseId);
 
-                switch (state)
+                if (!Http2State.replyClosed(state))
                 {
-                case HALF_CLOSED_LOCAL:
-                case HALF_CLOSED_LOCAL_CLOSING_REMOTE:
-                case CLOSED:
-                    break;
-                default:
                     doResponseReset(traceId, authorization);
-                    break;
                 }
             }
 
@@ -2757,41 +2690,37 @@ public final class Http2ServerFactory implements StreamFactory
                 long traceId,
                 long authorization)
             {
-                final int maxFrameSize = remoteSettings.maxFrameSize;
-                final int connectionPadding = framePadding(connectionBudget, maxFrameSize);
-                final int remotePadding = framePadding(remoteBudget, maxFrameSize);
-                final int paddedBudgetMax = Math.min(connectionBudget + connectionPadding, remoteBudget + remotePadding);
-                final int responseBudgetMax = Math.min(paddedBudgetMax, bufferPool.slotCapacity() - encodeSlotOffset);
-                final int responseCredit = responseBudgetMax - responseBudget;
-
-                if (responseCredit > 0)
+                if (isResponseOpen())
                 {
-                    final int responsePadding = replyPadding + framePadding(responseBudgetMax, maxFrameSize);
+                    final int maxFrameSize = remoteSettings.maxFrameSize;
+                    final int connectionPadding = framePadding(connectionBudget, maxFrameSize);
+                    final int remotePadding = framePadding(remoteBudget, maxFrameSize);
+                    final int paddedBudgetMax = Math.min(connectionBudget + connectionPadding, remoteBudget + remotePadding);
+                    final int responseBudgetMax = Math.min(paddedBudgetMax, bufferPool.slotCapacity() - encodeSlotOffset);
+                    final int responseCredit = responseBudgetMax - responseBudget;
 
-                    responseBudget += responseCredit;
+                    if (responseCredit > 0)
+                    {
+                        final int responsePadding = replyPadding + framePadding(responseBudgetMax, maxFrameSize);
 
-                    doWindow(application, routeId, responseId, traceId, authorization, budgetId, responseCredit, responsePadding);
+                        responseBudget += responseCredit;
+
+                        doWindow(application, routeId, responseId, traceId, authorization,
+                                 budgetId, responseCredit, responsePadding);
+                    }
                 }
             }
 
             private void setResponseClosed()
             {
-                switch (state)
+                assert !Http2State.replyClosed(state);
+
+                state = Http2State.closeReply(state);
+
+                if (Http2State.closed(state))
                 {
-                case OPEN:
-                    state = Http2StreamState.HALF_CLOSED_LOCAL;
-                    break;
-                case HALF_CLOSING_REMOTE:
-                    state = Http2StreamState.HALF_CLOSED_LOCAL_CLOSING_REMOTE;
-                    break;
-                case HALF_CLOSED_REMOTE:
-                    state = Http2StreamState.CLOSED;
                     streams.remove(streamId);
                     streamsActive[streamId & 0x01]--;
-                    break;
-                default:
-                    assert false;
-                    break;
                 }
             }
 
@@ -2805,17 +2734,99 @@ public final class Http2ServerFactory implements StreamFactory
         }
     }
 
-    private enum Http2StreamState
+    private static final class Http2State
     {
-        UNKNOWN,
-        RESERVED_LOCAL,
-        RESERVED_REMOTE,
-        OPEN,
-        HALF_CLOSED_LOCAL,
-        HALF_CLOSED_LOCAL_CLOSING_REMOTE,
-        HALF_CLOSING_REMOTE,
-        HALF_CLOSED_REMOTE,
-        CLOSED
+        private static final int INITIAL_OPENING = 0x10;
+        private static final int INITIAL_OPENED = 0x20;
+        private static final int INITIAL_CLOSING = 0x40;
+        private static final int INITIAL_CLOSED = 0x80;
+        private static final int REPLY_OPENED = 0x01;
+        private static final int REPLY_CLOSING = 0x02;
+        private static final int REPLY_CLOSED = 0x04;
+
+        static int openingInitial(
+            int state)
+        {
+            return state | INITIAL_OPENING;
+        }
+
+        static int openInitial(
+            int state)
+        {
+            return openingInitial(state) | INITIAL_OPENED;
+        }
+
+        static int closingInitial(
+            int state)
+        {
+            return state | INITIAL_CLOSING;
+        }
+
+        static int closeInitial(
+            int state)
+        {
+            return closingInitial(state) | INITIAL_CLOSED;
+        }
+
+        static boolean initialOpening(
+            int state)
+        {
+            return (state & INITIAL_OPENING) != 0;
+        }
+
+        static boolean initialOpened(
+            int state)
+        {
+            return (state & INITIAL_OPENED) != 0;
+        }
+
+        static boolean initialClosing(
+            int state)
+        {
+            return (state & INITIAL_CLOSING) != 0;
+        }
+
+        static boolean initialClosed(
+            int state)
+        {
+            return (state & INITIAL_CLOSED) != 0;
+        }
+
+        static boolean closed(
+            int state)
+        {
+            return initialClosed(state) && replyClosed(state);
+        }
+
+        static int openReply(
+            int state)
+        {
+            return state | REPLY_OPENED;
+        }
+
+        static boolean replyOpened(
+            int state)
+        {
+            return (state & REPLY_OPENED) != 0;
+        }
+
+        static int closingReply(
+            int state)
+        {
+            return state | REPLY_CLOSING;
+        }
+
+        static int closeReply(
+            int state)
+        {
+            return closingReply(state) | REPLY_CLOSED;
+        }
+
+        static boolean replyClosed(
+            int state)
+        {
+            return (state & REPLY_CLOSED) != 0;
+        }
     }
 
     private final class Http2HeadersDecoder
