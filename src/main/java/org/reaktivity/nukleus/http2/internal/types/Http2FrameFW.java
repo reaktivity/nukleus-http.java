@@ -49,9 +49,11 @@ public class Http2FrameFW extends Flyweight
 
     public int length()
     {
-        int length = (buffer().getByte(offset() + LENGTH_OFFSET) & 0xFF) << 16;
-        length += buffer().getShort(offset() + LENGTH_OFFSET + 1, BIG_ENDIAN) & 0xFF_FF;
-        return length;
+        final DirectBuffer buffer = buffer();
+        final int offset = offset();
+
+        return ((buffer.getByte(offset + LENGTH_OFFSET) & 0xFF) << Short.SIZE) |
+               (buffer.getShort(offset + LENGTH_OFFSET + Byte.BYTES, BIG_ENDIAN) & 0xFF_FF);
     }
 
     public Http2FrameType type()
@@ -194,12 +196,16 @@ public class Http2FrameFW extends Flyweight
         }
 
         @SuppressWarnings("unchecked")
-        protected final B payloadLength(int length)
+        protected final B payloadLength(
+            int length)
         {
-            buffer().putShort(offset() + LENGTH_OFFSET, (short) ((length & 0x00_FF_FF_00) >>> 8), BIG_ENDIAN);
-            buffer().putByte(offset() + LENGTH_OFFSET + 2, (byte) (length & 0x00_00_00_FF));
+            final MutableDirectBuffer buffer = buffer();
+            final int offset = offset();
 
-            limit(offset() + PAYLOAD_OFFSET + length);
+            buffer.putByte(offset + LENGTH_OFFSET, (byte) ((length & 0x00_FF_00_00) >>> Short.SIZE));
+            buffer.putShort(offset + LENGTH_OFFSET + Byte.BYTES, (short) (length & 0x00_00_FF_FF), BIG_ENDIAN);
+
+            limit(offset + PAYLOAD_OFFSET + length);
             return (B) this;
         }
     }

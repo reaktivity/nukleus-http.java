@@ -50,6 +50,29 @@ public class Http2DataFWTest
     }
 
     @Test
+    public void encodeLarge()
+    {
+        DirectBuffer payload = new UnsafeBuffer(new byte[0x010203]);
+        byte[] bytes = new byte[1 + 9 + payload.capacity()];
+        MutableDirectBuffer buf = new UnsafeBuffer(bytes);
+
+        Http2DataFW fw = new Http2DataFW.Builder()
+                .wrap(buf, 1, buf.capacity())   // non-zero offset
+                .endStream()
+                .streamId(3)
+                .payload(payload)
+                .build();
+
+        assertEquals(payload.capacity(), fw.length());
+        assertEquals(1, fw.offset());
+        assertEquals(1 + 9 + 0x010203, fw.limit());
+        assertTrue(fw.endStream());
+        assertEquals(DATA, fw.type());
+        assertEquals(3, fw.streamId());
+        assertEquals(payload, fw.data());
+    }
+
+    @Test
     public void encodeEmpty()
     {
         DirectBuffer payload = new UnsafeBuffer(new byte[0]);
