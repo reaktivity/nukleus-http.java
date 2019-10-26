@@ -54,9 +54,9 @@ public class AbortIT
     @Test
     @Specification({
             "${route}/server/controller",
-            "${spec}/client.sent.write.abort.on.open.request.response.buffered/client",
-            "${nukleus}/client.sent.write.abort.on.open.request.response.buffered/server" })
-    public void clientSentWriteAbortOnOpenRequestResponseBuffered() throws Exception
+            "${spec}/client.sent.write.abort.on.open.request.response/client",
+            "${nukleus}/client.sent.write.abort.on.open.request.response/server" })
+    public void clientSentWriteAbortOnOpenRequestResponse() throws Exception
     {
         k3po.finish();
     }
@@ -64,9 +64,9 @@ public class AbortIT
     @Test
     @Specification({
             "${route}/server/controller",
-            "${spec}/client.sent.read.abort.on.open.request.response.buffered/client",
-            "${nukleus}/client.sent.read.abort.on.open.request.response.buffered/server" })
-    public void clientSentReadAbortOnOpenRequestResponseBuffered() throws Exception
+            "${spec}/client.sent.read.abort.on.open.request.response/client",
+            "${nukleus}/client.sent.read.abort.on.open.request.response/server" })
+    public void clientSentReadAbortOnOpenRequestResponse() throws Exception
     {
         k3po.finish();
     }
@@ -74,9 +74,9 @@ public class AbortIT
     @Test
     @Specification({
             "${route}/server/controller",
-            "${spec}/server.sent.write.abort.on.open.request.response.buffered/client",
-            "${nukleus}/server.sent.write.abort.on.open.request.response.buffered/server" })
-    public void serverSentWriteAbortOnOpenRequestResponseBuffered() throws Exception
+            "${spec}/server.sent.write.abort.on.open.request.response/client",
+            "${nukleus}/server.sent.write.abort.on.open.request.response/server" })
+    public void serverSentWriteAbortOnOpenRequestResponse() throws Exception
     {
         k3po.finish();
     }
@@ -84,11 +84,10 @@ public class AbortIT
     @Test
     @Specification({
             "${route}/server/controller",
-            "${spec}/server.sent.read.abort.on.open.request.response.buffered/client",
-            "${nukleus}/server.sent.read.abort.on.open.request.response.buffered/server" })
-    public void serverSentReadAbortOnOpenRequestResponseBuffered() throws Exception
+            "${spec}/server.sent.read.abort.on.open.request.response/client",
+            "${nukleus}/server.sent.read.abort.on.open.request.response/server" })
+    public void serverSentReadAbortOnOpenRequestResponse() throws Exception
     {
         k3po.finish();
     }
-
 }

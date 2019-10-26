@@ -1167,18 +1167,7 @@ public final class Http2ServerFactory implements StreamFactory
             replyBudget += credit;
             replyPadding = padding;
 
-            if (encodeSlot != NO_SLOT)
-            {
-                final MutableDirectBuffer buffer = bufferPool.buffer(encodeSlot);
-                final int limit = Math.min(encodeSlotOffset, encodeSlotMaxLimit);
-                final int maxLimit = encodeSlotOffset;
-
-                encodeNetwork(encodeSlotTraceId, authorization, budgetId, buffer, 0, limit, maxLimit);
-            }
-            else if (encodeHeadersSlotOffset != 0)
-            {
-                encodeNetworkHeaders(authorization, budgetId);
-            }
+            flushNetwork(authorization, budgetId);
 
             if (encodeSlot == NO_SLOT)
             {
@@ -1258,7 +1247,7 @@ public final class Http2ServerFactory implements StreamFactory
             encodeHeadersSlotOffset += limit - offset;
             encodeHeadersSlotTraceId = traceId;
 
-            encodeNetworkHeaders(authorization, budgetId);
+            flushNetwork(authorization, budgetId);
         }
 
         private void doNetworkEnd(
@@ -1401,6 +1390,24 @@ public final class Http2ServerFactory implements StreamFactory
             if (encodeHeadersSlotOffset == 0)
             {
                 encodeSlotMaxLimit = Integer.MAX_VALUE;
+            }
+        }
+
+        private void flushNetwork(
+            long authorization,
+            long budgetId)
+        {
+            if (encodeSlot != NO_SLOT)
+            {
+                final MutableDirectBuffer buffer = bufferPool.buffer(encodeSlot);
+                final int limit = Math.min(encodeSlotOffset, encodeSlotMaxLimit);
+                final int maxLimit = encodeSlotOffset;
+
+                encodeNetwork(encodeSlotTraceId, authorization, budgetId, buffer, 0, limit, maxLimit);
+            }
+            else if (encodeHeadersSlotOffset != 0)
+            {
+                encodeNetworkHeaders(authorization, budgetId);
             }
         }
 
@@ -2718,7 +2725,7 @@ public final class Http2ServerFactory implements StreamFactory
                     final int connectionPadding = framePadding(connectionBudget, maxFrameSize);
                     final int remotePadding = framePadding(remoteBudget, maxFrameSize);
                     final int paddedBudgetMax = Math.min(connectionBudget + connectionPadding, remoteBudget + remotePadding);
-                    final int responseBudgetMax = Math.min(paddedBudgetMax, bufferPool.slotCapacity() - encodeSlotOffset);
+                    final int responseBudgetMax = Math.min(paddedBudgetMax, replyBudget - encodeSlotOffset);
                     final int responseCredit = responseBudgetMax - responseBudget;
 
                     if (responseCredit > 0)
