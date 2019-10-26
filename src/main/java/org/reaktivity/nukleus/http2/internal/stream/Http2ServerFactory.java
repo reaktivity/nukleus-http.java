@@ -2725,7 +2725,7 @@ public final class Http2ServerFactory implements StreamFactory
                     final int connectionPadding = framePadding(connectionBudget, maxFrameSize);
                     final int remotePadding = framePadding(remoteBudget, maxFrameSize);
                     final int paddedBudgetMax = Math.min(connectionBudget + connectionPadding, remoteBudget + remotePadding);
-                    final int responseBudgetMax = Math.min(paddedBudgetMax, bufferPool.slotCapacity() - encodeSlotOffset);
+                    final int responseBudgetMax = Math.min(paddedBudgetMax, replyBudget - encodeSlotOffset);
                     final int responseCredit = responseBudgetMax - responseBudget;
 
                     if (responseCredit > 0)
