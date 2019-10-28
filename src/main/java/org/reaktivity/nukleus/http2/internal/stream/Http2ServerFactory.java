@@ -1202,6 +1202,7 @@ public final class Http2ServerFactory implements StreamFactory
             int limit)
         {
             int maxLimit = limit;
+            limit = Math.min(maxLimit, encodeSlotMaxLimit);
 
             if (encodeSlot != NO_SLOT)
             {
@@ -1212,8 +1213,8 @@ public final class Http2ServerFactory implements StreamFactory
 
                 buffer = encodeBuffer;
                 offset = 0;
-                limit = Math.min(encodeSlotOffset, encodeSlotMaxLimit);
                 maxLimit = encodeSlotOffset;
+                limit = Math.min(maxLimit, encodeSlotMaxLimit);
             }
 
             encodeNetwork(traceId, authorization, budgetId, buffer, offset, limit, maxLimit);
@@ -1322,6 +1323,12 @@ public final class Http2ServerFactory implements StreamFactory
 
                 doData(network, routeId, replyId, traceId, authorization, budgetId,
                        reserved, buffer, offset, length, EMPTY_OCTETS);
+
+                if (encodeSlot != NO_SLOT)
+                {
+                    encodeSlotMaxLimit -= length;
+                    assert encodeSlotMaxLimit >= 0;
+                }
             }
 
             final int maxLength = maxLimit - offset;
@@ -1331,11 +1338,6 @@ public final class Http2ServerFactory implements StreamFactory
                 if (encodeSlot == NO_SLOT)
                 {
                     encodeSlot = bufferPool.acquire(replyId);
-                }
-                else
-                {
-                    encodeSlotMaxLimit -= length;
-                    assert encodeSlotMaxLimit >= 0;
                 }
 
                 if (encodeSlot == NO_SLOT)
@@ -1387,7 +1389,7 @@ public final class Http2ServerFactory implements StreamFactory
                 }
             }
 
-            if (encodeHeadersSlotOffset == 0)
+            if (encodeHeadersSlotOffset == 0 && encodeSlotMaxLimit != Integer.MAX_VALUE)
             {
                 encodeSlotMaxLimit = Integer.MAX_VALUE;
             }
