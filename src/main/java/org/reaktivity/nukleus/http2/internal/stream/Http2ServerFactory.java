@@ -1407,7 +1407,7 @@ public final class Http2ServerFactory implements StreamFactory
 
                 encodeNetwork(encodeSlotTraceId, authorization, budgetId, buffer, 0, limit, maxLimit);
             }
-            else if (encodeHeadersSlotOffset != 0)
+            else
             {
                 encodeNetworkHeaders(authorization, budgetId);
             }
