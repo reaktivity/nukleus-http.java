@@ -908,7 +908,7 @@ public final class Http2ServerFactory implements StreamFactory
         int limit)
     {
         final Http2FrameInfoFW http2FrameInfo = http2FrameInfoRO.wrap(buffer, offset, limit);
-        final int progress = http2FrameInfo.limit();
+        final int progress = http2FrameInfo.limit() + http2FrameInfo.length();
 
         server.decoder = decodeFrameType;
         return progress;
