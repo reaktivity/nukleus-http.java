@@ -2074,6 +2074,7 @@ public final class Http2ServerFactory implements StreamFactory
             final Http2PingFW http2Ping = http2PingRW.wrap(frameBuffer, 0, frameBuffer.capacity())
                     .streamId(0)
                     .ack()
+                    .payload(payload)
                     .build();
 
             doNetworkData(traceId, authorization, 0L, http2Ping);
