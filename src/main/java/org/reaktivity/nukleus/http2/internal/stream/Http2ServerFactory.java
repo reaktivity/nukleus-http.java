@@ -1169,7 +1169,7 @@ public final class Http2ServerFactory implements StreamFactory
 
             flushNetwork(authorization, budgetId);
 
-            if (encodeSlot == NO_SLOT)
+            if (encodeSlot == NO_SLOT && headersSlotOffset == 0)
             {
                 streams.values().forEach(ex -> ex.flushResponseWindow(traceId, authorization));
             }
