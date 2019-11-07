@@ -22,6 +22,7 @@ import java.util.function.Supplier;
 import java.util.function.ToIntFunction;
 
 import org.agrona.MutableDirectBuffer;
+import org.reaktivity.nukleus.budget.BudgetCreditor;
 import org.reaktivity.nukleus.buffer.BufferPool;
 import org.reaktivity.nukleus.http2.internal.Http2Configuration;
 import org.reaktivity.nukleus.route.RouteManager;
@@ -40,6 +41,7 @@ public final class Http2ServerFactoryBuilder implements StreamFactoryBuilder
     private LongSupplier supplyBudgetId;
     private Supplier<BufferPool> supplyBufferPool;
     private Function<String, LongSupplier> supplyCounter;
+    private BudgetCreditor creditor;
 
     public Http2ServerFactoryBuilder(
         Http2Configuration config)
@@ -88,6 +90,14 @@ public final class Http2ServerFactoryBuilder implements StreamFactoryBuilder
     }
 
     @Override
+    public StreamFactoryBuilder setBudgetCreditor(
+        BudgetCreditor creditor)
+    {
+        this.creditor = creditor;
+        return this;
+    }
+
+    @Override
     public StreamFactoryBuilder setTypeIdSupplier(
         ToIntFunction<String> supplyTypeId)
     {
@@ -121,6 +131,7 @@ public final class Http2ServerFactoryBuilder implements StreamFactoryBuilder
                 router,
                 writeBuffer,
                 bufferPool,
+                creditor,
                 supplyInitialId,
                 supplyReplyId,
                 supplyBudgetId,

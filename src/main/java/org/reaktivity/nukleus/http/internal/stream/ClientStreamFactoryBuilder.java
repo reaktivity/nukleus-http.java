@@ -17,12 +17,14 @@ package org.reaktivity.nukleus.http.internal.stream;
 
 import java.util.function.Function;
 import java.util.function.LongConsumer;
+import java.util.function.LongFunction;
 import java.util.function.LongSupplier;
 import java.util.function.LongUnaryOperator;
 import java.util.function.Supplier;
 import java.util.function.ToIntFunction;
 
 import org.agrona.MutableDirectBuffer;
+import org.reaktivity.nukleus.budget.BudgetDebitor;
 import org.reaktivity.nukleus.buffer.BufferPool;
 import org.reaktivity.nukleus.http.internal.HttpConfiguration;
 import org.reaktivity.nukleus.route.RouteManager;
@@ -42,6 +44,7 @@ public final class ClientStreamFactoryBuilder implements StreamFactoryBuilder
     private Supplier<BufferPool> supplyBufferPool;
     private Function<String, LongSupplier> supplyCounter;
     private Function<String, LongConsumer> supplyAccumulator;
+    private LongFunction<BudgetDebitor> supplyDebitor;
 
     public ClientStreamFactoryBuilder(
         HttpConfiguration config)
@@ -122,6 +125,14 @@ public final class ClientStreamFactoryBuilder implements StreamFactoryBuilder
     }
 
     @Override
+    public StreamFactoryBuilder setBudgetDebitorSupplier(
+        LongFunction<BudgetDebitor> supplyDebitor)
+    {
+        this.supplyDebitor = supplyDebitor;
+        return this;
+    }
+
+    @Override
     public StreamFactory build()
     {
         final BufferPool bufferPool = supplyBufferPool.get();
@@ -136,6 +147,7 @@ public final class ClientStreamFactoryBuilder implements StreamFactoryBuilder
                 supplyTraceId,
                 supplyTypeId,
                 supplyCounter,
-                supplyAccumulator);
+                supplyAccumulator,
+                supplyDebitor);
     }
 }

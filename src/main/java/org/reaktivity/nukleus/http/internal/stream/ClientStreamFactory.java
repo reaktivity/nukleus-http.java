@@ -25,6 +25,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.function.Function;
 import java.util.function.LongConsumer;
+import java.util.function.LongFunction;
 import java.util.function.LongSupplier;
 import java.util.function.LongUnaryOperator;
 import java.util.function.ToIntFunction;
@@ -33,6 +34,7 @@ import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
 import org.agrona.collections.Long2ObjectHashMap;
 import org.agrona.concurrent.UnsafeBuffer;
+import org.reaktivity.nukleus.budget.BudgetDebitor;
 import org.reaktivity.nukleus.buffer.BufferPool;
 import org.reaktivity.nukleus.function.MessageConsumer;
 import org.reaktivity.nukleus.function.MessagePredicate;
@@ -86,6 +88,7 @@ public final class ClientStreamFactory implements StreamFactory
     final LongSupplier enqueues;
     final LongSupplier dequeues;
     final LongSupplier supplyTrace;
+    final LongFunction<BudgetDebitor> supplyDebitor;
     final BufferPool bufferPool;
     final MessageWriter writer;
     long supplyTraceId;
@@ -117,7 +120,8 @@ public final class ClientStreamFactory implements StreamFactory
         LongSupplier supplyTrace,
         ToIntFunction<String> supplyTypeId,
         Function<String, LongSupplier> supplyCounter,
-        Function<String, LongConsumer> supplyAccumulator)
+        Function<String, LongConsumer> supplyAccumulator,
+        LongFunction<BudgetDebitor> supplyDebitor)
     {
         this.supplyTrace = requireNonNull(supplyTrace);
         this.router = requireNonNull(router);
@@ -125,6 +129,7 @@ public final class ClientStreamFactory implements StreamFactory
         this.bufferPool = requireNonNull(bufferPool);
         this.supplyInitialId = requireNonNull(supplyInitialId);
         this.supplyReplyId = requireNonNull(supplyReplyId);
+        this.supplyDebitor = requireNonNull(supplyDebitor);
         this.correlations = new Long2ObjectHashMap<>();
         this.connectionPools = new Long2ObjectHashMap<>();
         this.maximumConnectionsPerRoute = configuration.maximumConnectionsPerRoute();
