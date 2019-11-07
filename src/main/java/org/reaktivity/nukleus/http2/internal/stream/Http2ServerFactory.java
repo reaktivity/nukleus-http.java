@@ -97,6 +97,7 @@ import org.reaktivity.nukleus.http2.internal.types.Http2SettingsFW;
 import org.reaktivity.nukleus.http2.internal.types.Http2WindowUpdateFW;
 import org.reaktivity.nukleus.route.RouteManager;
 import org.reaktivity.nukleus.stream.StreamFactory;
+import org.reaktivity.reaktor.ReaktorConfiguration;
 
 public final class Http2ServerFactory implements StreamFactory
 {
@@ -1227,6 +1228,12 @@ public final class Http2ServerFactory implements StreamFactory
                 encodeSlotReserved += reserved;
                 encodeSlotTraceId = traceId;
 
+                if (ReaktorConfiguration.DEBUG_BUDGETS)
+                {
+                    System.out.format("[%d] [0x%016x] [0x%016x] encode slot %d => %d\n",
+                            System.nanoTime(), traceId, budgetId, limit - offset, encodeSlotOffset);
+                }
+
                 reserved = encodeSlotReserved;
                 buffer = encodeBuffer;
                 offset = 0;
@@ -1367,6 +1374,12 @@ public final class Http2ServerFactory implements StreamFactory
                 final int minReserved = length + replyPadding;
                 final int reserved = remaining == 0 ? Math.max(minReserved, maxReserved) : minReserved;
 
+                if (ReaktorConfiguration.DEBUG_BUDGETS)
+                {
+                    System.out.format("[%d] [0x%016x] [0x%016x] encode data %d / %d (%d) [%d]\n",
+                        System.nanoTime(), traceId, budgetId, length, limit - offset, reserved, replySharedBudget);
+                }
+
                 maxReserved -= reserved;
 
                 replyBudget -= reserved;
@@ -1402,6 +1415,12 @@ public final class Http2ServerFactory implements StreamFactory
                     encodeBuffer.putBytes(0, buffer, offset + length, remaining);
                     encodeSlotOffset = remaining;
                     encodeSlotReserved = maxReserved;
+
+                    if (ReaktorConfiguration.DEBUG_BUDGETS)
+                    {
+                        System.out.format("[%d] [0x%016x] [0x%016x] encode slot %d - %d => %d\n",
+                            System.nanoTime(), traceId, budgetId, limit - offset, length, encodeSlotOffset);
+                    }
                 }
             }
             else
@@ -2056,6 +2075,12 @@ public final class Http2ServerFactory implements StreamFactory
 
             if (replySharedBudgetCredit > 0 && newReplySharedBudget > 0)
             {
+                if (ReaktorConfiguration.DEBUG_BUDGETS)
+                {
+                    System.out.format("[%d] [0x%016x] [0x%016x] flush reply shared budget %d @ %d => %d\n",
+                        System.nanoTime(), traceId, budgetId, replySharedBudgetCredit, replySharedBudget, newReplySharedBudget);
+                }
+
                 replySharedBudget = newReplySharedBudget;
 
                 final int slotCapacity = bufferPool.slotCapacity();
@@ -2392,6 +2417,12 @@ public final class Http2ServerFactory implements StreamFactory
                 encodeSlot = NO_SLOT;
                 encodeSlotOffset = 0;
                 encodeSlotTraceId = 0;
+
+                if (ReaktorConfiguration.DEBUG_BUDGETS)
+                {
+                    System.out.format("[%d] [0x%016x] [0x%016x] encode slot => %d\n",
+                        System.nanoTime(), 0, budgetId, encodeSlotOffset);
+                }
             }
         }
 
