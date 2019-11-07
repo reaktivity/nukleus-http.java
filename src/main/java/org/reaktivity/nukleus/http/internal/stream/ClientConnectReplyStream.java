@@ -16,6 +16,7 @@
 package org.reaktivity.nukleus.http.internal.stream;
 
 import static java.lang.Integer.parseInt;
+import static org.reaktivity.nukleus.budget.BudgetDebitor.NO_DEBITOR_INDEX;
 import static org.reaktivity.nukleus.buffer.BufferPool.NO_SLOT;
 import static org.reaktivity.nukleus.http.internal.stream.ClientStreamFactory.CRLFCRLF_BYTES;
 import static org.reaktivity.nukleus.http.internal.stream.ClientStreamFactory.CRLF_BYTES;
@@ -31,6 +32,7 @@ import java.util.regex.Pattern;
 
 import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
+import org.reaktivity.nukleus.budget.BudgetDebitor;
 import org.reaktivity.nukleus.buffer.BufferPool;
 import org.reaktivity.nukleus.function.MessageConsumer;
 import org.reaktivity.nukleus.http.internal.stream.ConnectionPool.CloseAction;
@@ -83,6 +85,9 @@ final class ClientConnectReplyStream
     private Consumer<WindowFW> windowHandler;
 
     private int acceptReplyPadding;
+    private long acceptReplyDebitorId;
+    private BudgetDebitor acceptReplyDebitor;
+    private long acceptReplyDebitorIndex = NO_DEBITOR_INDEX;
 
     @Override
     public String toString()
@@ -354,6 +359,7 @@ final class ClientConnectReplyStream
         decoderState = (b, o, l) -> o;
         responseState = ResponseState.FINAL;
         releaseSlotIfNecessary();
+        cleanupResponseIfNecessary();
         if (connection != null)
         {
             connectionPool.release(connection, action);
@@ -531,12 +537,29 @@ final class ClientConnectReplyStream
         final int remainingBytes = Math.min(length, contentRemaining);
         final int writableBytes = Math.min(acceptReplyBudget - acceptReplyPadding, remainingBytes);
 
+        int progress = offset;
+
         if (writableBytes > 0)
         {
-            factory.writer.doHttpData(acceptReply, acceptRouteId, acceptReplyId, acceptReplyTraceId, acceptReplyPadding, payload,
-                    offset, writableBytes);
-            acceptReplyBudget -= writableBytes + acceptReplyPadding;
-            contentRemaining -= writableBytes;
+            final int maximum = writableBytes + acceptReplyPadding;
+            final int minimum = Math.min(maximum, 1024);
+
+            int claimed = maximum;
+            if (acceptReplyDebitorIndex != NO_DEBITOR_INDEX)
+            {
+                claimed = acceptReplyDebitor.claim(acceptReplyDebitorIndex, acceptReplyId, minimum, maximum);
+            }
+
+            final int required = claimed;
+            final int writableMax = required - acceptReplyPadding;
+            if (writableMax > 0)
+            {
+                factory.writer.doHttpData(acceptReply, acceptRouteId, acceptReplyId, acceptReplyTraceId, acceptReplyPadding,
+                        payload, offset, writableMax);
+                acceptReplyBudget -= writableMax + acceptReplyPadding;
+                contentRemaining -= writableMax;
+                progress += writableMax;
+            }
         }
 
         if (contentRemaining == 0)
@@ -544,7 +567,7 @@ final class ClientConnectReplyStream
             decoderState = this::decodeHttpResponseComplete;
         }
 
-        return offset + Math.max(writableBytes, 0);
+        return progress;
     }
 
     private int decodeHttpChunk(
@@ -619,13 +642,31 @@ final class ClientConnectReplyStream
         final int remainingBytes = Math.min(length, chunkSizeRemaining);
         final int writableBytes = Math.min(acceptReplyBudget - acceptReplyPadding, remainingBytes);
 
+        int progress = offset;
+
         if (writableBytes > 0)
         {
-            factory.writer.doHttpData(acceptReply, acceptRouteId, acceptReplyId, acceptReplyTraceId, acceptReplyPadding,
-                                      payload, offset, writableBytes);
-            acceptReplyBudget -= writableBytes + acceptReplyPadding;
-            chunkSizeRemaining -= writableBytes;
-            contentRemaining -= writableBytes;
+            final int maximum = writableBytes + acceptReplyPadding;
+            final int minimum = Math.min(maximum, 1024);
+
+            int claimed = maximum;
+            if (acceptReplyDebitorIndex != NO_DEBITOR_INDEX)
+            {
+                claimed = acceptReplyDebitor.claim(acceptReplyDebitorIndex, acceptReplyId, minimum, maximum);
+            }
+
+            final int required = claimed;
+            final int writableMax = required - acceptReplyPadding;
+            if (writableMax > 0)
+            {
+                factory.writer.doHttpData(acceptReply, acceptRouteId, acceptReplyId, acceptReplyTraceId, acceptReplyPadding,
+                                          payload, offset, writableMax);
+                acceptReplyBudget -= writableMax + acceptReplyPadding;
+                chunkSizeRemaining -= writableMax;
+                contentRemaining -= writableMax;
+
+                progress += writableMax;
+            }
         }
 
         if (chunkSizeRemaining == 0)
@@ -633,7 +674,7 @@ final class ClientConnectReplyStream
             decoderState = this::decodeHttpChunkEnd;
         }
 
-        return offset + Math.max(writableBytes, 0);
+        return progress;
     }
 
     private int decodeHttpDataAfterUpgrade(
@@ -703,6 +744,8 @@ final class ClientConnectReplyStream
     {
         factory.writer.doHttpEnd(acceptReply, acceptRouteId, acceptReplyId, factory.supplyTrace.getAsLong());
         acceptReply = null;
+
+        cleanupResponseIfNecessary();
 
         if (connection.persistent)
         {
@@ -778,9 +821,24 @@ final class ClientConnectReplyStream
     private void handleWindow(
         WindowFW window)
     {
+        final long connectReplyTraceId = window.traceId();
+
+        acceptReplyDebitorId = window.budgetId();
         acceptReplyBudget += window.credit();
         acceptReplyPadding = window.padding();
 
+        if (acceptReplyDebitorId != 0L && acceptReplyDebitorIndex == NO_DEBITOR_INDEX)
+        {
+            acceptReplyDebitor = factory.supplyDebitor.apply(acceptReplyDebitorId);
+            acceptReplyDebitorIndex = acceptReplyDebitor.acquire(acceptReplyDebitorId, acceptReplyId, this::doFlush);
+        }
+
+        doFlush(connectReplyTraceId);
+    }
+
+    private void doFlush(
+        final long traceId)
+    {
         if (slotIndex != NO_SLOT)
         {
             MutableDirectBuffer slot = factory.bufferPool.buffer(slotIndex);
@@ -802,9 +860,8 @@ final class ClientConnectReplyStream
         {
             connectReplyBudget += connectReplyCredit;
             int connectReplyPadding = acceptReplyPadding;
-            final long connectReplyTraceId = window.traceId();
             factory.writer.doWindow(connectReplyThrottle, connectRouteId, connectReplyId,
-                    connectReplyTraceId, connectReplyCredit, connectReplyPadding);
+                    traceId, connectReplyCredit, connectReplyPadding);
         }
     }
 
@@ -812,6 +869,7 @@ final class ClientConnectReplyStream
         ResetFW reset)
     {
         releaseSlotIfNecessary();
+        cleanupResponseIfNecessary();
         factory.writer.doReset(connectReplyThrottle, connectRouteId, connectReplyId, reset.traceId());
         connection.persistent = false;
         connectionPool.release(connection, CloseAction.ABORT);
@@ -824,6 +882,16 @@ final class ClientConnectReplyStream
             factory.bufferPool.release(slotIndex);
             slotIndex = NO_SLOT;
             slotOffset = 0;
+        }
+    }
+
+    private void cleanupResponseIfNecessary()
+    {
+        if (acceptReplyDebitorIndex != NO_DEBITOR_INDEX)
+        {
+            acceptReplyDebitor.release(acceptReplyDebitorIndex, acceptReplyId);
+            acceptReplyDebitorIndex = NO_DEBITOR_INDEX;
+            acceptReplyDebitor = null;
         }
     }
 
