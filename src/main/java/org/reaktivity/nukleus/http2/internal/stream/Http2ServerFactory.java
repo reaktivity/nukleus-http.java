@@ -97,7 +97,6 @@ import org.reaktivity.nukleus.http2.internal.types.Http2SettingsFW;
 import org.reaktivity.nukleus.http2.internal.types.Http2WindowUpdateFW;
 import org.reaktivity.nukleus.route.RouteManager;
 import org.reaktivity.nukleus.stream.StreamFactory;
-import org.reaktivity.reaktor.ReaktorConfiguration;
 
 public final class Http2ServerFactory implements StreamFactory
 {
@@ -1189,6 +1188,13 @@ public final class Http2ServerFactory implements StreamFactory
 
             replyBudgetReserved = Math.max(replyBudgetReserved - credit, 0);
 
+            if (Http2Configuration.DEBUG_HTTP2_BUDGETS)
+            {
+                System.out.format("[%d] [0x%016x] [0x%016x] replyBudget %d + %d => %d\n",
+                        System.nanoTime(), encodeReservedSlotTraceId, budgetId,
+                        replyBudget, credit, replyBudget + credit);
+            }
+
             replyBudget += credit;
             replyPadding = padding;
 
@@ -1228,7 +1234,7 @@ public final class Http2ServerFactory implements StreamFactory
                 encodeSlotReserved += reserved;
                 encodeSlotTraceId = traceId;
 
-                if (ReaktorConfiguration.DEBUG_BUDGETS)
+                if (Http2Configuration.DEBUG_HTTP2_BUDGETS)
                 {
                     System.out.format("[%d] [0x%016x] [0x%016x] encode slot %d => %d\n",
                             System.nanoTime(), traceId, budgetId, limit - offset, encodeSlotOffset);
@@ -1369,13 +1375,17 @@ public final class Http2ServerFactory implements StreamFactory
             final int length = Math.max(Math.min(replyBudget - replyPadding, limit - offset), 0);
             final int remaining = maxLength - length;
 
-            if (length > 0)
-            {
-                final int minReserved = length + replyPadding;
-                final int reserved = remaining == 0 ? Math.max(minReserved, maxReserved) : minReserved;
+            final int minReserved = length + replyPadding;
+            final int reserved = remaining == 0 ? Math.max(minReserved, maxReserved) : minReserved;
 
-                if (ReaktorConfiguration.DEBUG_BUDGETS)
+            if (length > 0 && replyBudget >= reserved)
+            {
+                if (Http2Configuration.DEBUG_HTTP2_BUDGETS)
                 {
+                    System.out.format("[%d] [0x%016x] [0x%016x] replyBudget %d - %d => %d\n",
+                            System.nanoTime(), traceId, budgetId,
+                            replyBudget, reserved, replyBudget - reserved);
+
                     System.out.format("[%d] [0x%016x] [0x%016x] replySharedBudget %d - %d => %d\n",
                         System.nanoTime(), traceId, budgetId,
                         replySharedBudget, reserved, replySharedBudget - reserved);
@@ -1417,7 +1427,7 @@ public final class Http2ServerFactory implements StreamFactory
                     encodeSlotOffset = remaining;
                     encodeSlotReserved = maxReserved;
 
-                    if (ReaktorConfiguration.DEBUG_BUDGETS)
+                    if (Http2Configuration.DEBUG_HTTP2_BUDGETS)
                     {
                         System.out.format("[%d] [0x%016x] [0x%016x] encode slot %d - %d => %d\n",
                             System.nanoTime(), traceId, budgetId, limit - offset, length, encodeSlotOffset);
@@ -1447,6 +1457,13 @@ public final class Http2ServerFactory implements StreamFactory
 
                 if (encodeLength > 0)
                 {
+                    if (Http2Configuration.DEBUG_HTTP2_BUDGETS)
+                    {
+                        System.out.format("[%d] [0x%016x] [0x%016x] replyBudget %d - %d => %d\n",
+                                System.nanoTime(), encodeHeadersSlotTraceId, budgetId,
+                                replyBudget, encodeReserved, replyBudget - encodeReserved);
+                    }
+
                     replyBudget -= encodeReserved;
 
                     assert replyBudget >= 0;
@@ -1482,6 +1499,13 @@ public final class Http2ServerFactory implements StreamFactory
 
                 if (encodeLength > 0)
                 {
+                    if (Http2Configuration.DEBUG_HTTP2_BUDGETS)
+                    {
+                        System.out.format("[%d] [0x%016x] [0x%016x] replyBudget %d - %d => %d\n",
+                                System.nanoTime(), encodeReservedSlotTraceId, budgetId,
+                                replyBudget, encodeReserved, replyBudget - encodeReserved);
+                    }
+
                     replyBudget -= encodeReserved;
 
                     assert replyBudget >= 0;
@@ -2076,7 +2100,7 @@ public final class Http2ServerFactory implements StreamFactory
 
             if (replySharedCredit > 0 && newReplySharedBudget > 0)
             {
-                if (ReaktorConfiguration.DEBUG_BUDGETS)
+                if (Http2Configuration.DEBUG_HTTP2_BUDGETS)
                 {
                     System.out.format("[%d] [0x%016x] [0x%016x] replySharedBudget %d + %d => %d\n",
                         System.nanoTime(), traceId, budgetId,
@@ -2093,7 +2117,7 @@ public final class Http2ServerFactory implements StreamFactory
                 final long responseSharedPrevious =
                         creditor.credit(traceId, responseSharedBudgetIndex, responseSharedCredit);
 
-                if (ReaktorConfiguration.DEBUG_BUDGETS)
+                if (Http2Configuration.DEBUG_HTTP2_BUDGETS)
                 {
                     System.out.format("[%d] [0x%016x] [0x%016x] responseSharedBudget %d + %d => %d\n",
                         System.nanoTime(), traceId, budgetId,
@@ -2428,7 +2452,7 @@ public final class Http2ServerFactory implements StreamFactory
                 encodeSlotOffset = 0;
                 encodeSlotTraceId = 0;
 
-                if (ReaktorConfiguration.DEBUG_BUDGETS)
+                if (Http2Configuration.DEBUG_HTTP2_BUDGETS)
                 {
                     System.out.format("[%d] [0x%016x] [0x%016x] encode slot => %d\n",
                         System.nanoTime(), 0, budgetId, encodeSlotOffset);
@@ -2797,7 +2821,7 @@ public final class Http2ServerFactory implements StreamFactory
             {
                 final int reserved = data.reserved();
 
-                if (ReaktorConfiguration.DEBUG_BUDGETS)
+                if (Http2Configuration.DEBUG_HTTP2_BUDGETS)
                 {
                     final long traceId = data.traceId();
 
@@ -2932,7 +2956,7 @@ public final class Http2ServerFactory implements StreamFactory
 
                     if (responseCredit > 0)
                     {
-                        if (ReaktorConfiguration.DEBUG_BUDGETS)
+                        if (Http2Configuration.DEBUG_HTTP2_BUDGETS)
                         {
                             System.out.format("[%d] [0x%016x] [0x%016x] responseBudget %d + %d => %d\n",
                                 System.nanoTime(), traceId, budgetId,

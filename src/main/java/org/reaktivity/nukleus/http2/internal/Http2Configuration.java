@@ -20,9 +20,13 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import org.agrona.DirectBuffer;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.reaktivity.nukleus.Configuration;
+import org.reaktivity.reaktor.ReaktorConfiguration;
 
 public class Http2Configuration extends Configuration
 {
+    public static final boolean DEBUG_HTTP2_BUDGETS =
+            ReaktorConfiguration.DEBUG_BUDGETS || Boolean.getBoolean("nukleus.http2.debug.budgets");
+
     public static final IntPropertyDef HTTP2_SERVER_CONCURRENT_STREAMS;
     public static final BooleanPropertyDef HTTP2_ACCESS_CONTROL_ALLOW_ORIGIN;
     public static final PropertyDef<String> HTTP2_SERVER_HEADER;
