@@ -993,9 +993,11 @@ public final class Http2ServerFactory implements StreamFactory
 
         private int decodeSlot = NO_SLOT;
         private int decodeSlotOffset;
+        private int decodeSlotReserved;
 
         private int encodeSlot = NO_SLOT;
         private int encodeSlotOffset;
+        private int encodeSlotReserved;
         private long encodeSlotTraceId;
         private int encodeSlotMaxLimit = Integer.MAX_VALUE;
 
@@ -1015,7 +1017,6 @@ public final class Http2ServerFactory implements StreamFactory
         private int maxClientStreamId;
         private int maxServerStreamId;
         private int continuationStreamId;
-        private int encodeSlotReserved;
 
         private Http2Server(
             MessageConsumer network,
@@ -1104,23 +1105,27 @@ public final class Http2ServerFactory implements StreamFactory
                 DirectBuffer buffer = payload.buffer();
                 int offset = payload.offset();
                 int limit = payload.limit();
+                int reserved = data.reserved();
 
                 if (decodeSlot != NO_SLOT)
                 {
                     final MutableDirectBuffer slotBuffer = bufferPool.buffer(decodeSlot);
                     slotBuffer.putBytes(decodeSlotOffset, buffer, offset, limit - offset);
                     decodeSlotOffset += limit - offset;
+                    decodeSlotReserved += reserved;
+
                     buffer = slotBuffer;
                     offset = 0;
                     limit = decodeSlotOffset;
+                    reserved = decodeSlotReserved;
                 }
 
-                final int progress = decodeNetwork(traceId, authorization, budgetId, buffer, offset, limit);
-                final int length = progress - offset;
+                decodeNetwork(traceId, authorization, budgetId, reserved, buffer, offset, limit);
 
-                if (length > 0)
+                final int initialCredit = reserved - decodeSlotReserved;
+                if (initialCredit > 0)
                 {
-                    doNetworkWindow(traceId, authorization, length, 0, 0);
+                    doNetworkWindow(traceId, authorization, initialCredit, 0, 0);
                 }
             }
         }
@@ -1548,6 +1553,7 @@ public final class Http2ServerFactory implements StreamFactory
             long traceId,
             long authorization,
             long budgetId,
+            int reserved,
             DirectBuffer buffer,
             int offset,
             int limit)
@@ -1576,6 +1582,7 @@ public final class Http2ServerFactory implements StreamFactory
                     final MutableDirectBuffer decodeBuffer = bufferPool.buffer(decodeSlot);
                     decodeBuffer.putBytes(0, buffer, progress, limit - progress);
                     decodeSlotOffset = limit - progress;
+                    decodeSlotReserved = (limit - progress) * reserved / (limit - offset);
                 }
             }
             else
@@ -2430,6 +2437,7 @@ public final class Http2ServerFactory implements StreamFactory
                 bufferPool.release(decodeSlot);
                 decodeSlot = NO_SLOT;
                 decodeSlotOffset = 0;
+                decodeSlotReserved = 0;
             }
         }
 
