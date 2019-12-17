@@ -1496,7 +1496,8 @@ public final class Http2ServerFactory implements StreamFactory
             long authorization,
             long budgetId)
         {
-            if (encodeReservedSlotOffset != 0)
+            if (encodeReservedSlotOffset != 0 &&
+                (encodeSlotMaxLimit == 0 || encodeSlotMaxLimit == Integer.MAX_VALUE))
             {
                 final int maxEncodeLength = encodeReservedSlotOffset;
                 final int encodeLength = Math.max(Math.min(replyBudget - replyPadding, maxEncodeLength), 0);
