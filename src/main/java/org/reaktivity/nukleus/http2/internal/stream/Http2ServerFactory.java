@@ -49,6 +49,7 @@ import org.agrona.ExpandableArrayBuffer;
 import org.agrona.MutableDirectBuffer;
 import org.agrona.collections.Int2ObjectHashMap;
 import org.agrona.collections.Long2ObjectHashMap;
+import org.agrona.collections.LongLongConsumer;
 import org.agrona.collections.MutableBoolean;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.reaktivity.nukleus.budget.BudgetCreditor;
@@ -107,11 +108,7 @@ public final class Http2ServerFactory implements StreamFactory
     private static final int CLIENT_INITIATED = 1;
     private static final int SERVER_INITIATED = 0;
 
-    private static final int NETWORK_END_SIGNAL = 0;
-    private static final int NETWORK_ABORT_SIGNAL = 1;
-    private static final int NETWORK_RESET_SIGNAL = 2;
-    private static final int NETWORK_CLEANUP_SIGNAL = 3;
-    private static final int DECODE_ERROR_SIGNAL = 4;
+    private static final int CLEANUP_SIGNAL = 0;
 
     private static final DirectBuffer EMPTY_BUFFER = new UnsafeBuffer(new byte[0]);
     private static final OctetsFW EMPTY_OCTETS = new OctetsFW().wrap(EMPTY_BUFFER, 0, 0);
@@ -1002,6 +999,7 @@ public final class Http2ServerFactory implements StreamFactory
         private int decodeSlot = NO_SLOT;
         private int decodeSlotOffset;
         private int decodeSlotReserved;
+        private int serverCredit;
 
         private int encodeSlot = NO_SLOT;
         private int encodeSlotOffset;
@@ -1026,7 +1024,9 @@ public final class Http2ServerFactory implements StreamFactory
         private int maxServerStreamId;
         private int continuationStreamId;
         private long authorization;
+        private long traceId;
         private Http2ErrorCode error;
+        private LongLongConsumer cleanupHandler;
 
         private Http2Server(
             MessageConsumer network,
@@ -1137,13 +1137,14 @@ public final class Http2ServerFactory implements StreamFactory
                     limit = decodeSlotOffset;
                     reserved = decodeSlotReserved;
                 }
-
                 decodeNetwork(traceId, authorization, budgetId, reserved, buffer, offset, limit);
 
                 final int initialCredit = reserved - decodeSlotReserved;
-                if (initialCredit > 0)
+                serverCredit += initialCredit;
+                if (serverCredit > 16384)
                 {
-                    doNetworkWindow(traceId, authorization, initialCredit, 0, 0);
+                    doNetworkWindow(traceId, authorization, serverCredit, 0, 0);
+                    serverCredit -= serverCredit;
                 }
             }
         }
@@ -1153,7 +1154,7 @@ public final class Http2ServerFactory implements StreamFactory
         {
             if (decodeSlot == NO_SLOT)
             {
-                final long traceId = end.traceId();
+                traceId = end.traceId();
                 authorization = end.authorization();
 
                 cleanupDecodeSlotIfNecessary();
@@ -1164,7 +1165,9 @@ public final class Http2ServerFactory implements StreamFactory
                 }
                 else
                 {
-                    cleanup(NETWORK_END_SIGNAL, traceId);
+                    assert cleanupHandler == null;
+                    cleanupHandler = this::doNetworkEnd;
+                    cleanup();
                 }
             }
 
@@ -1174,12 +1177,17 @@ public final class Http2ServerFactory implements StreamFactory
         private void onNetworkSignal(
             SignalFW signal)
         {
-            cleanup(signal.signalId(), signal.traceId());
+            if (signal.signalId() == CLEANUP_SIGNAL)
+            {
+                cleanup();
+            }
+            else
+            {
+                assert false;
+            }
         }
 
-        private void cleanup(
-            int signalId,
-            long traceId)
+        private void cleanup()
         {
             int remaining = config.maxCleanupStreams();
             for (Iterator<Http2Exchange> iterator = streams.values().iterator();
@@ -1191,55 +1199,39 @@ public final class Http2ServerFactory implements StreamFactory
 
             if (!streams.isEmpty())
             {
-                executor.schedule(100, TimeUnit.MILLISECONDS, routeId, replyId, signalId);
+                executor.schedule(100, TimeUnit.MILLISECONDS, routeId, replyId, CLEANUP_SIGNAL);
             }
             else
             {
-                switch (signalId)
-                {
-                case NETWORK_END_SIGNAL:
-                    doNetworkEnd(traceId, authorization);
-                    break;
-                case NETWORK_ABORT_SIGNAL:
-                    doNetworkAbort(traceId, authorization);
-                    break;
-                case NETWORK_RESET_SIGNAL:
-                    doNetworkReset(traceId, authorization);
-                    break;
-                case NETWORK_CLEANUP_SIGNAL:
-                    doNetworkReset(traceId, authorization);
-                    doNetworkAbort(traceId, authorization);
-                    break;
-                case DECODE_ERROR_SIGNAL:
-                    doEncodeGoaway(traceId, authorization, error);
-                    break;
-                default:
-                    break;
-                }
+                cleanupHandler.accept(traceId, authorization);
             }
         }
 
         private void onNetworkAbort(
             AbortFW abort)
         {
-            final long traceId = abort.traceId();
+            traceId = abort.traceId();
             authorization = abort.authorization();
 
             cleanupDecodeSlotIfNecessary();
 
-            cleanup(NETWORK_ABORT_SIGNAL, traceId);
+            assert cleanupHandler == null;
+            cleanupHandler = this::doNetworkAbort;
+            cleanup();
         }
 
         private void onNetworkReset(
             ResetFW reset)
         {
-            final long traceId = reset.traceId();
+            traceId = reset.traceId();
             authorization = reset.authorization();
 
             cleanupBudgetCreditorIfNecessary();
             cleanupEncodeSlotIfNecessary();
 
-            cleanup(NETWORK_RESET_SIGNAL, traceId);
+            assert cleanupHandler == null;
+            cleanupHandler = this::doNetworkReset;
+            cleanup();
         }
 
         private void onNetworkWindow(
@@ -1659,8 +1651,12 @@ public final class Http2ServerFactory implements StreamFactory
             long authorization,
             Http2ErrorCode error)
         {
+            this.traceId = traceId;
+            this.authorization = authorization;
             this.error = error;
-            cleanup(DECODE_ERROR_SIGNAL, traceId);
+            assert cleanupHandler == null;
+            cleanupHandler = this::doEncodeGoaway;
+            cleanup();
         }
 
         private void onDecodePreface(
@@ -2311,8 +2307,7 @@ public final class Http2ServerFactory implements StreamFactory
 
         private void doEncodeGoaway(
             long traceId,
-            long authorization,
-            Http2ErrorCode error)
+            long authorization)
         {
             final Http2GoawayFW http2Goaway = http2GoawayRW.wrap(frameBuffer, 0, frameBuffer.capacity())
                     .streamId(0)
@@ -2485,8 +2480,19 @@ public final class Http2ServerFactory implements StreamFactory
             long traceId,
             long authorization)
         {
+            this.traceId = traceId;
             this.authorization = authorization;
-            cleanup(NETWORK_CLEANUP_SIGNAL, traceId);
+            assert cleanupHandler == null;
+            cleanupHandler = this::cleanStream;
+            cleanup();
+        }
+
+        private void cleanStream(
+            long traceId,
+            long authorization)
+        {
+            doNetworkReset(traceId, authorization);
+            doNetworkAbort(traceId, authorization);
         }
 
         private void cleanupDecodeSlotIfNecessary()
@@ -2497,6 +2503,7 @@ public final class Http2ServerFactory implements StreamFactory
                 decodeSlot = NO_SLOT;
                 decodeSlotOffset = 0;
                 decodeSlotReserved = 0;
+                serverCredit = 0;
             }
         }
 
@@ -2819,8 +2826,7 @@ public final class Http2ServerFactory implements StreamFactory
 
                 if (Http2State.closed(state))
                 {
-                    streams.remove(streamId);
-                    streamsActive[streamId & 0x01]--;
+                    removeStream();
                 }
             }
 
@@ -2983,9 +2989,14 @@ public final class Http2ServerFactory implements StreamFactory
             {
                 correlations.remove(responseId);
 
-                if (!Http2State.replyClosed(state))
+                if (Http2State.replyOpened(state) && !Http2State.replyClosed(state))
                 {
                     doResponseReset(traceId, authorization);
+                }
+                else if (streams.containsKey(streamId))
+                {
+                    setResponseClosed();
+                    removeStream();
                 }
             }
 
@@ -3046,9 +3057,14 @@ public final class Http2ServerFactory implements StreamFactory
 
                 if (Http2State.closed(state))
                 {
-                    streams.remove(streamId);
-                    streamsActive[streamId & 0x01]--;
+                    removeStream();
                 }
+            }
+
+            private void removeStream()
+            {
+                streams.remove(streamId);
+                streamsActive[streamId & 0x01]--;
             }
 
             private void cleanup(
