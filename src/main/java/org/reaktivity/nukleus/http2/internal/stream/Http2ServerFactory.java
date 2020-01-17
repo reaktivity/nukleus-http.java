@@ -999,7 +999,6 @@ public final class Http2ServerFactory implements StreamFactory
         private int decodeSlot = NO_SLOT;
         private int decodeSlotOffset;
         private int decodeSlotReserved;
-        private int serverCredit;
 
         private int encodeSlot = NO_SLOT;
         private int encodeSlotOffset;
@@ -1140,11 +1139,9 @@ public final class Http2ServerFactory implements StreamFactory
                 decodeNetwork(traceId, authorization, budgetId, reserved, buffer, offset, limit);
 
                 final int initialCredit = reserved - decodeSlotReserved;
-                serverCredit += initialCredit;
-                if (serverCredit > 16384)
+                if (initialCredit > 0)
                 {
-                    doNetworkWindow(traceId, authorization, serverCredit, 0, 0);
-                    serverCredit -= serverCredit;
+                    doNetworkWindow(traceId, authorization, initialCredit, 0, 0);
                 }
             }
         }
@@ -2503,7 +2500,6 @@ public final class Http2ServerFactory implements StreamFactory
                 decodeSlot = NO_SLOT;
                 decodeSlotOffset = 0;
                 decodeSlotReserved = 0;
-                serverCredit = 0;
             }
         }
 
