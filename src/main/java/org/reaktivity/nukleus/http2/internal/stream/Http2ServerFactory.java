@@ -49,6 +49,7 @@ import org.agrona.ExpandableArrayBuffer;
 import org.agrona.MutableDirectBuffer;
 import org.agrona.collections.Int2ObjectHashMap;
 import org.agrona.collections.Long2ObjectHashMap;
+import org.agrona.collections.LongHashSet;
 import org.agrona.collections.LongLongConsumer;
 import org.agrona.collections.MutableBoolean;
 import org.agrona.concurrent.UnsafeBuffer;
@@ -736,17 +737,20 @@ public final class Http2ServerFactory implements StreamFactory
         }
         else
         {
-            counters.headersFramesRead.getAsLong();
-            if (server.streams.containsKey(streamId))
+            if (server.applicationHeadersProcessed.size() <= config.maxConcurrentApplicationHeaders())
             {
-                server.onDecodeTrailers(traceId, authorization, http2Headers);
+                counters.headersFramesRead.getAsLong();
+                if (server.streams.containsKey(streamId))
+                {
+                    server.onDecodeTrailers(traceId, authorization, http2Headers);
+                }
+                else
+                {
+                    server.onDecodeHeaders(traceId, authorization, http2Headers);
+                }
+                server.decoder = decodeFrameType;
+                progress = http2Headers.limit();
             }
-            else
-            {
-                server.onDecodeHeaders(traceId, authorization, http2Headers);
-            }
-            server.decoder = decodeFrameType;
-            progress = http2Headers.limit();
         }
 
         return progress;
@@ -904,11 +908,14 @@ public final class Http2ServerFactory implements StreamFactory
         }
         else
         {
-            final Http2RstStreamFW http2RstStream = http2RstStreamRO.wrap(buffer, offset, limit);
-            counters.resetStreamFramesRead.getAsLong();
-            server.onDecodeRstStream(traceId, authorization, http2RstStream);
-            server.decoder = decodeFrameType;
-            progress = http2RstStream.limit();
+            if (server.applicationHeadersProcessed.size() <= config.maxConcurrentApplicationHeaders())
+            {
+                final Http2RstStreamFW http2RstStream = http2RstStreamRO.wrap(buffer, offset, limit);
+                counters.resetStreamFramesRead.getAsLong();
+                server.onDecodeRstStream(traceId, authorization, http2RstStream);
+                server.decoder = decodeFrameType;
+                progress = http2RstStream.limit();
+            }
         }
 
         return progress;
@@ -981,6 +988,7 @@ public final class Http2ServerFactory implements StreamFactory
         private final HpackContext encodeContext;
 
         private final Int2ObjectHashMap<Http2Exchange> streams;
+        private final LongHashSet applicationHeadersProcessed;
         private final int[] streamsActive = new int[2];
 
         private final MutableBoolean expectDynamicTableSizeUpdate = new MutableBoolean(true);
@@ -1047,6 +1055,7 @@ public final class Http2ServerFactory implements StreamFactory
             this.localSettings = new Http2Settings();
             this.remoteSettings = new Http2Settings();
             this.streams = new Int2ObjectHashMap<>();
+            this.applicationHeadersProcessed = new LongHashSet();
             this.decoder = decodePreface;
             this.decodeContext = new HpackContext(localSettings.headerTableSize, false);
             this.encodeContext = new HpackContext(remoteSettings.headerTableSize, true);
@@ -1596,6 +1605,17 @@ public final class Http2ServerFactory implements StreamFactory
             {
                 encodeNetworkHeaders(authorization, budgetId);
                 encodeNetworkReserved(authorization, budgetId);
+            }
+        }
+
+        private void resumeNetworkDecoding(
+            long traceId,
+            long authorization)
+        {
+            if (decodeSlot != NO_SLOT)
+            {
+                final MutableDirectBuffer decodeBuffer = bufferPool.buffer(decodeSlot);
+                decodeNetwork(traceId, authorization, budgetId, decodeSlotReserved, decodeBuffer, 0, decodeSlotOffset);
             }
         }
 
@@ -2587,6 +2607,7 @@ public final class Http2ServerFactory implements StreamFactory
                 router.setThrottle(requestId, this::onRequest);
                 streams.put(streamId, this);
                 streamsActive[streamId & 0x01]++;
+                applicationHeadersProcessed.add(streamId);
                 localBudget = localSettings.initialWindowSize;
             }
 
@@ -2701,6 +2722,7 @@ public final class Http2ServerFactory implements StreamFactory
                     doEncodeHeaders(traceId, authorization, streamId, HEADERS_404_NOT_FOUND, true);
                 }
 
+                resumeNetworkDecoding(traceId, authorization);
                 cleanup(traceId, authorization);
             }
 
@@ -2741,6 +2763,9 @@ public final class Http2ServerFactory implements StreamFactory
                         }
                     }
                 }
+
+                applicationHeadersProcessed.remove(streamId);
+                resumeNetworkDecoding(traceId, authorization);
             }
 
             private void flushRequestData(

@@ -29,6 +29,7 @@ public class Http2Configuration extends Configuration
 
     public static final IntPropertyDef HTTP2_SERVER_CONCURRENT_STREAMS;
     public static final IntPropertyDef HTTP2_MAX_CLEANUP_STREAMS;
+    public static final IntPropertyDef HTTP2_MAX_CONCURRENT_APPLICATION_HEADERS;
     public static final BooleanPropertyDef HTTP2_ACCESS_CONTROL_ALLOW_ORIGIN;
     public static final PropertyDef<String> HTTP2_SERVER_HEADER;
 
@@ -41,6 +42,7 @@ public class Http2Configuration extends Configuration
         HTTP2_ACCESS_CONTROL_ALLOW_ORIGIN = config.property("server.access.control.allow.origin", false);
         HTTP2_SERVER_HEADER = config.property("server.header");
         HTTP2_MAX_CLEANUP_STREAMS = config.property("max.cleanup.streams", 1000);
+        HTTP2_MAX_CONCURRENT_APPLICATION_HEADERS = config.property("max.concurrent.application.headers", 10000);
         HTTP2_CONFIG = config;
     }
 
@@ -61,6 +63,10 @@ public class Http2Configuration extends Configuration
     public int maxCleanupStreams()
     {
         return HTTP2_MAX_CLEANUP_STREAMS.getAsInt(this);
+    }
+    public int maxConcurrentApplicationHeaders()
+    {
+        return HTTP2_MAX_CONCURRENT_APPLICATION_HEADERS.getAsInt(this);
     }
 
     public boolean accessControlAllowOrigin()
