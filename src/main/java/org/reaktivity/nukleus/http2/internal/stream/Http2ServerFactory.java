@@ -1145,9 +1145,10 @@ public final class Http2ServerFactory implements StreamFactory
                     limit = decodeSlotOffset;
                     reserved = decodeSlotReserved;
                 }
-                decodeNetwork(traceId, authorization, budgetId, reserved, buffer, offset, limit);
 
-                final int initialCredit = reserved - decodeSlotReserved;
+                final int progressed = decodeNetwork(traceId, authorization, budgetId, reserved, buffer, offset, limit);
+                final int initialCredit = progressed - offset;
+
                 if (initialCredit > 0)
                 {
                     doNetworkWindow(traceId, authorization, initialCredit, 0, 0);
@@ -1406,6 +1407,7 @@ public final class Http2ServerFactory implements StreamFactory
             assert credit > 0;
 
             initialBudget += credit;
+            assert initialBudget <= bufferPool.slotCapacity();
             doWindow(network, routeId, initialId, traceId, authorization, budgetId, credit, padding);
         }
 
