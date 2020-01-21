@@ -1175,7 +1175,9 @@ public final class Http2ServerFactory implements StreamFactory
             SignalFW signal)
         {
             assert signal.signalId() == CLEANUP_SIGNAL;
-            cleanupStreams(signal.traceId(), signal.authorization());
+            final long traceId = signal.traceId();
+            final long authorization = signal.authorization();
+            cleanupStreams(traceId, authorization);
         }
 
         private void cleanup(
@@ -1202,7 +1204,8 @@ public final class Http2ServerFactory implements StreamFactory
 
             if (!streams.isEmpty())
             {
-                signaler.signalAt(Instant.now().plusMillis(100).toEpochMilli(), routeId, replyId, CLEANUP_SIGNAL);
+                final long timeMillis = Instant.now().plusMillis(100).toEpochMilli();
+                signaler.signalAt(timeMillis, routeId, replyId, CLEANUP_SIGNAL);
             }
             else
             {
@@ -2836,11 +2839,7 @@ public final class Http2ServerFactory implements StreamFactory
 
                 state = Http2State.closeInitial(state);
                 cleanupRequestSlotIfNecessary();
-
-                if (Http2State.closed(state))
-                {
-                    removeStreamIfNecessary();
-                }
+                removeStreamIfNecessary();
             }
 
             private void cleanupRequestSlotIfNecessary()
@@ -3062,11 +3061,7 @@ public final class Http2ServerFactory implements StreamFactory
                 assert !Http2State.replyClosed(state);
 
                 state = Http2State.closeReply(state);
-
-                if (Http2State.closed(state))
-                {
-                    removeStreamIfNecessary();
-                }
+                removeStreamIfNecessary();
             }
 
             private void removeStreamIfNecessary()
