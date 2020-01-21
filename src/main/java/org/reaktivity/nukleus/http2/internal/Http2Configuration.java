@@ -60,6 +60,7 @@ public class Http2Configuration extends Configuration
     {
         return HTTP2_SERVER_CONCURRENT_STREAMS.getAsInt(this);
     }
+
     public int maxCleanupStreams()
     {
         return HTTP2_MAX_CLEANUP_STREAMS.getAsInt(this);
