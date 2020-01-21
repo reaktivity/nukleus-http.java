@@ -737,7 +737,7 @@ public final class Http2ServerFactory implements StreamFactory
         }
         else
         {
-            if (server.applicationHeadersProcessed.size() <= config.maxConcurrentApplicationHeaders())
+            if (server.applicationHeadersProcessed.size() < config.maxConcurrentApplicationHeaders())
             {
                 counters.headersFramesRead.getAsLong();
                 if (server.streams.containsKey(streamId))
@@ -908,7 +908,7 @@ public final class Http2ServerFactory implements StreamFactory
         }
         else
         {
-            if (server.applicationHeadersProcessed.size() <= config.maxConcurrentApplicationHeaders())
+            if (server.applicationHeadersProcessed.size() < config.maxConcurrentApplicationHeaders())
             {
                 final Http2RstStreamFW http2RstStream = http2RstStreamRO.wrap(buffer, offset, limit);
                 counters.resetStreamFramesRead.getAsLong();
@@ -1146,8 +1146,8 @@ public final class Http2ServerFactory implements StreamFactory
                     reserved = decodeSlotReserved;
                 }
 
-                final int progressed = decodeNetwork(traceId, authorization, budgetId, reserved, buffer, offset, limit);
-                final int initialCredit = progressed - offset;
+                decodeNetwork(traceId, authorization, budgetId, reserved, buffer, offset, limit);
+                final int initialCredit = reserved - decodeSlotReserved;
 
                 if (initialCredit > 0)
                 {
@@ -1617,7 +1617,15 @@ public final class Http2ServerFactory implements StreamFactory
             if (decodeSlot != NO_SLOT)
             {
                 final MutableDirectBuffer decodeBuffer = bufferPool.buffer(decodeSlot);
-                decodeNetwork(traceId, authorization, budgetId, decodeSlotReserved, decodeBuffer, 0, decodeSlotOffset);
+                final int reserved = decodeSlotReserved;
+                decodeNetwork(traceId, authorization, budgetId, decodeSlotReserved, decodeBuffer,
+                    0, decodeSlotOffset);
+
+                final int initialCredit = reserved - decodeSlotReserved;
+                if (initialCredit > 0)
+                {
+                    doNetworkWindow(traceId, authorization, initialCredit, 0, 0);
+                }
             }
         }
 
@@ -1654,7 +1662,7 @@ public final class Http2ServerFactory implements StreamFactory
                     final MutableDirectBuffer decodeBuffer = bufferPool.buffer(decodeSlot);
                     decodeBuffer.putBytes(0, buffer, progress, limit - progress);
                     decodeSlotOffset = limit - progress;
-                    decodeSlotReserved = (limit - progress) * reserved / (limit - offset);
+                    decodeSlotReserved = (limit - progress) * (reserved / (limit - offset));
                 }
             }
             else
