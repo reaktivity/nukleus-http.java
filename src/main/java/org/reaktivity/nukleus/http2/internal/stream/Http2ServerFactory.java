@@ -1164,7 +1164,7 @@ public final class Http2ServerFactory implements StreamFactory
                 }
                 else
                 {
-                    cleanup(traceId, authorization, this::doNetworkAbort);
+                    cleanup(traceId, authorization, this::doNetworkEnd);
                 }
             }
 
