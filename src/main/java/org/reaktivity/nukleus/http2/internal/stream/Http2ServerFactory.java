@@ -2493,7 +2493,6 @@ public final class Http2ServerFactory implements StreamFactory
             long traceId,
             long authorization)
         {
-            cleanupHandler = this::doNetworkResetAndAbort;
             cleanup(traceId, authorization, this::doNetworkResetAndAbort);
         }
 
