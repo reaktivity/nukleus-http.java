@@ -1157,7 +1157,7 @@ public final class Http2ServerFactory implements StreamFactory
             {
                 final long traceId = end.traceId();
                 final long authorization = end.authorization();
-                state = Http2State.closingInitial(state);
+                state = Http2State.closeInitial(state);
 
                 cleanupDecodeSlotIfNecessary();
 
@@ -1234,7 +1234,7 @@ public final class Http2ServerFactory implements StreamFactory
         {
             final long traceId = reset.traceId();
             final long authorization = reset.authorization();
-            state = Http2State.closingReply(state);
+            state = Http2State.closeReply(state);
 
             cleanupBudgetCreditorIfNecessary();
             cleanupEncodeSlotIfNecessary();
