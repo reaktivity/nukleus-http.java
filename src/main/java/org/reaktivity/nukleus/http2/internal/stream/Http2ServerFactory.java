@@ -1162,7 +1162,7 @@ public final class Http2ServerFactory implements StreamFactory
                 if (!Http2State.replyClosing(state))
                 {
                     cleanupDecodeSlotIfNecessary();
-                    cleanup(traceId, authorization, this::doNetworkAbort);
+                    cleanup(traceId, authorization, this::doNetworkEnd);
                 }
             }
 
@@ -2341,6 +2341,13 @@ public final class Http2ServerFactory implements StreamFactory
                     .build();
 
             doNetworkReservedData(traceId, authorization, 0L, http2Goaway);
+            doEnd(network, routeId, replyId, traceId, authorization, EMPTY_OCTETS);
+
+            cleanupDecodeSlotIfNecessary();
+            cleanupEncodeSlotIfNecessary();
+            cleanupBudgetCreditorIfNecessary();
+
+            state = Http2State.closingReply(state);
 
             counters.goawayFramesWritten.getAsLong();
         }
