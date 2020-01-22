@@ -1159,15 +1159,10 @@ public final class Http2ServerFactory implements StreamFactory
                 final long authorization = end.authorization();
                 state = Http2State.closingInitial(state);
 
-                cleanupDecodeSlotIfNecessary();
-
-                if (streams.isEmpty())
+                if (!Http2State.replyClosing(state))
                 {
-                    doNetworkEnd(traceId, authorization);
-                }
-                else
-                {
-                    cleanup(traceId, authorization, this::doNetworkEnd);
+                    cleanupDecodeSlotIfNecessary();
+                    cleanup(traceId, authorization, this::doNetworkAbort);
                 }
             }
 
