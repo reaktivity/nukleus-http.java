@@ -1030,6 +1030,7 @@ public final class Http2ServerFactory implements StreamFactory
         private int continuationStreamId;
         private Http2ErrorCode decodeError;
         private LongLongConsumer cleanupHandler;
+        private int state;
 
         private Http2Server(
             MessageConsumer network,
@@ -1101,6 +1102,7 @@ public final class Http2ServerFactory implements StreamFactory
             final long authorization = begin.authorization();
 
             doNetworkWindow(traceId, authorization, bufferPool.slotCapacity(), 0, 0);
+            state = Http2State.openInitial(state);
             doNetworkBegin(traceId, authorization);
         }
 
@@ -1155,6 +1157,7 @@ public final class Http2ServerFactory implements StreamFactory
             {
                 final long traceId = end.traceId();
                 final long authorization = end.authorization();
+                state = Http2State.closingInitial(state);
 
                 cleanupDecodeSlotIfNecessary();
 
@@ -1219,8 +1222,12 @@ public final class Http2ServerFactory implements StreamFactory
             final long traceId = abort.traceId();
             final long authorization = abort.authorization();
 
-            cleanupDecodeSlotIfNecessary();
-            cleanup(traceId, authorization, this::doNetworkAbort);
+            if (!Http2State.replyClosing(state))
+            {
+                cleanupDecodeSlotIfNecessary();
+                cleanup(traceId, authorization, this::doNetworkAbort);
+                state = Http2State.closeInitial(state);
+            }
         }
 
         private void onNetworkReset(
@@ -1228,10 +1235,14 @@ public final class Http2ServerFactory implements StreamFactory
         {
             final long traceId = reset.traceId();
             final long authorization = reset.authorization();
+            state = Http2State.closingReply(state);
 
-            cleanupBudgetCreditorIfNecessary();
-            cleanupEncodeSlotIfNecessary();
-            cleanup(traceId, authorization, this::doNetworkReset);
+            if (!Http2State.initialClosing(state))
+            {
+                cleanupBudgetCreditorIfNecessary();
+                cleanupEncodeSlotIfNecessary();
+                cleanup(traceId, authorization, this::doNetworkReset);
+            }
         }
 
         private void onNetworkWindow(
@@ -1269,6 +1280,7 @@ public final class Http2ServerFactory implements StreamFactory
 
             assert responseSharedBudgetIndex == NO_CREDITOR_INDEX;
             responseSharedBudgetIndex = creditor.acquire(budgetId);
+            state = Http2State.openReply(state);
         }
 
         private void doNetworkData(
@@ -1370,6 +1382,7 @@ public final class Http2ServerFactory implements StreamFactory
             cleanupBudgetCreditorIfNecessary();
             cleanupEncodeSlotIfNecessary();
             doEnd(network, routeId, replyId, traceId, authorization, EMPTY_OCTETS);
+            state = Http2State.closeInitial(state);
         }
 
         private void doNetworkAbort(
@@ -1379,6 +1392,7 @@ public final class Http2ServerFactory implements StreamFactory
             cleanupBudgetCreditorIfNecessary();
             cleanupEncodeSlotIfNecessary();
             doAbort(network, routeId, replyId, traceId, authorization, EMPTY_OCTETS);
+            state = Http2State.closeInitial(state);
         }
 
         private void doNetworkReset(
@@ -3163,6 +3177,12 @@ public final class Http2ServerFactory implements StreamFactory
             int state)
         {
             return state | REPLY_CLOSING;
+        }
+
+        static boolean replyClosing(
+            int state)
+        {
+            return (state & REPLY_CLOSING) != 0;
         }
 
         static int closeReply(
