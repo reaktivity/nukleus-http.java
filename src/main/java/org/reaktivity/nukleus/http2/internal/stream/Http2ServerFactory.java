@@ -1221,12 +1221,12 @@ public final class Http2ServerFactory implements StreamFactory
         {
             final long traceId = abort.traceId();
             final long authorization = abort.authorization();
+            state = Http2State.closeInitial(state);
 
             if (!Http2State.replyClosing(state))
             {
                 cleanupDecodeSlotIfNecessary();
                 cleanup(traceId, authorization, this::doNetworkAbort);
-                state = Http2State.closeInitial(state);
             }
         }
 
@@ -1239,7 +1239,6 @@ public final class Http2ServerFactory implements StreamFactory
 
             if (!Http2State.initialClosing(state))
             {
-                cleanupBudgetCreditorIfNecessary();
                 cleanupEncodeSlotIfNecessary();
                 cleanup(traceId, authorization, this::doNetworkReset);
             }
@@ -1389,10 +1388,10 @@ public final class Http2ServerFactory implements StreamFactory
             long traceId,
             long authorization)
         {
+            state = Http2State.closeInitial(state);
             cleanupBudgetCreditorIfNecessary();
             cleanupEncodeSlotIfNecessary();
             doAbort(network, routeId, replyId, traceId, authorization, EMPTY_OCTETS);
-            state = Http2State.closeInitial(state);
         }
 
         private void doNetworkReset(
@@ -1401,6 +1400,7 @@ public final class Http2ServerFactory implements StreamFactory
         {
             cleanupDecodeSlotIfNecessary();
             cleanupHeadersSlotIfNecessary();
+            cleanupBudgetCreditorIfNecessary();
             doReset(network, routeId, initialId, traceId, authorization);
         }
 
