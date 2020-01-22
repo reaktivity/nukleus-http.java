@@ -1025,6 +1025,7 @@ public final class Http2ServerFactory implements StreamFactory
 
         private Http2ServerDecoder decoder;
 
+        private int state;
         private int maxClientStreamId;
         private int maxServerStreamId;
         private int continuationStreamId;
@@ -1101,6 +1102,7 @@ public final class Http2ServerFactory implements StreamFactory
             final long authorization = begin.authorization();
 
             doNetworkWindow(traceId, authorization, bufferPool.slotCapacity(), 0, 0);
+            state = Http2State.openInitial(state);
             doNetworkBegin(traceId, authorization);
         }
 
@@ -1155,15 +1157,13 @@ public final class Http2ServerFactory implements StreamFactory
             {
                 final long traceId = end.traceId();
                 final long authorization = end.authorization();
+                state = Http2State.closeInitial(state);
 
                 cleanupDecodeSlotIfNecessary();
 
-                if (streams.isEmpty())
+                if (!Http2State.replyClosing(state))
                 {
-                    doNetworkEnd(traceId, authorization);
-                }
-                else
-                {
+                    state = Http2State.closingReply(state);
                     cleanup(traceId, authorization, this::doNetworkEnd);
                 }
             }
@@ -1218,9 +1218,15 @@ public final class Http2ServerFactory implements StreamFactory
         {
             final long traceId = abort.traceId();
             final long authorization = abort.authorization();
+            state = Http2State.closeInitial(state);
 
             cleanupDecodeSlotIfNecessary();
-            cleanup(traceId, authorization, this::doNetworkAbort);
+
+            if (!Http2State.replyClosing(state))
+            {
+                state = Http2State.closingReply(state);
+                cleanup(traceId, authorization, this::doNetworkAbort);
+            }
         }
 
         private void onNetworkReset(
@@ -1228,10 +1234,16 @@ public final class Http2ServerFactory implements StreamFactory
         {
             final long traceId = reset.traceId();
             final long authorization = reset.authorization();
+            state = Http2State.closeReply(state);
 
             cleanupBudgetCreditorIfNecessary();
             cleanupEncodeSlotIfNecessary();
-            cleanup(traceId, authorization, this::doNetworkReset);
+
+            if (!Http2State.initialClosing(state))
+            {
+                state = Http2State.closingInitial(state);
+                cleanup(traceId, authorization, this::doNetworkReset);
+            }
         }
 
         private void onNetworkWindow(
@@ -1269,6 +1281,7 @@ public final class Http2ServerFactory implements StreamFactory
 
             assert responseSharedBudgetIndex == NO_CREDITOR_INDEX;
             responseSharedBudgetIndex = creditor.acquire(budgetId);
+            state = Http2State.openReply(state);
         }
 
         private void doNetworkData(
@@ -1370,6 +1383,7 @@ public final class Http2ServerFactory implements StreamFactory
             cleanupBudgetCreditorIfNecessary();
             cleanupEncodeSlotIfNecessary();
             doEnd(network, routeId, replyId, traceId, authorization, EMPTY_OCTETS);
+            state = Http2State.closeReply(state);
         }
 
         private void doNetworkAbort(
@@ -1379,6 +1393,7 @@ public final class Http2ServerFactory implements StreamFactory
             cleanupBudgetCreditorIfNecessary();
             cleanupEncodeSlotIfNecessary();
             doAbort(network, routeId, replyId, traceId, authorization, EMPTY_OCTETS);
+            state = Http2State.closeReply(state);
         }
 
         private void doNetworkReset(
@@ -1388,6 +1403,7 @@ public final class Http2ServerFactory implements StreamFactory
             cleanupDecodeSlotIfNecessary();
             cleanupHeadersSlotIfNecessary();
             doReset(network, routeId, initialId, traceId, authorization);
+            state = Http2State.closeInitial(state);
         }
 
         private void doNetworkWindow(
@@ -2332,6 +2348,7 @@ public final class Http2ServerFactory implements StreamFactory
                     .build();
 
             doNetworkReservedData(traceId, authorization, 0L, http2Goaway);
+            doNetworkEnd(traceId, authorization);
 
             counters.goawayFramesWritten.getAsLong();
         }
@@ -3163,6 +3180,12 @@ public final class Http2ServerFactory implements StreamFactory
             int state)
         {
             return state | REPLY_CLOSING;
+        }
+
+        static boolean replyClosing(
+            int state)
+        {
+            return (state & REPLY_CLOSING) != 0;
         }
 
         static int closeReply(
