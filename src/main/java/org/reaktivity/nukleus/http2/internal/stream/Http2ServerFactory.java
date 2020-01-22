@@ -1025,12 +1025,12 @@ public final class Http2ServerFactory implements StreamFactory
 
         private Http2ServerDecoder decoder;
 
+        private int state;
         private int maxClientStreamId;
         private int maxServerStreamId;
         private int continuationStreamId;
         private Http2ErrorCode decodeError;
         private LongLongConsumer cleanupHandler;
-        private int state;
 
         private Http2Server(
             MessageConsumer network,
