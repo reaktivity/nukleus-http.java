@@ -1159,9 +1159,10 @@ public final class Http2ServerFactory implements StreamFactory
                 final long authorization = end.authorization();
                 state = Http2State.closingInitial(state);
 
+                cleanupDecodeSlotIfNecessary();
+
                 if (!Http2State.replyClosing(state))
                 {
-                    cleanupDecodeSlotIfNecessary();
                     cleanup(traceId, authorization, this::doNetworkEnd);
                 }
             }
@@ -1218,9 +1219,10 @@ public final class Http2ServerFactory implements StreamFactory
             final long authorization = abort.authorization();
             state = Http2State.closeInitial(state);
 
+            cleanupDecodeSlotIfNecessary();
+
             if (!Http2State.replyClosing(state))
             {
-                cleanupDecodeSlotIfNecessary();
                 cleanup(traceId, authorization, this::doNetworkAbort);
             }
         }
@@ -1232,9 +1234,11 @@ public final class Http2ServerFactory implements StreamFactory
             final long authorization = reset.authorization();
             state = Http2State.closingReply(state);
 
+            cleanupEncodeSlotIfNecessary();
+            cleanupBudgetCreditorIfNecessary();
+
             if (!Http2State.initialClosing(state))
             {
-                cleanupEncodeSlotIfNecessary();
                 cleanup(traceId, authorization, this::doNetworkReset);
             }
         }
@@ -1395,7 +1399,6 @@ public final class Http2ServerFactory implements StreamFactory
         {
             cleanupDecodeSlotIfNecessary();
             cleanupHeadersSlotIfNecessary();
-            cleanupBudgetCreditorIfNecessary();
             doReset(network, routeId, initialId, traceId, authorization);
         }
 
@@ -2341,11 +2344,7 @@ public final class Http2ServerFactory implements StreamFactory
                     .build();
 
             doNetworkReservedData(traceId, authorization, 0L, http2Goaway);
-            doEnd(network, routeId, replyId, traceId, authorization, EMPTY_OCTETS);
-
-            cleanupDecodeSlotIfNecessary();
-            cleanupEncodeSlotIfNecessary();
-            cleanupBudgetCreditorIfNecessary();
+            doNetworkEnd(traceId, authorization);
 
             state = Http2State.closingReply(state);
 
