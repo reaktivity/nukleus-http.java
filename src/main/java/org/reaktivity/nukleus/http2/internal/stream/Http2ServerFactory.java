@@ -1234,8 +1234,8 @@ public final class Http2ServerFactory implements StreamFactory
             final long authorization = reset.authorization();
             state = Http2State.closingReply(state);
 
-            cleanupEncodeSlotIfNecessary();
             cleanupBudgetCreditorIfNecessary();
+            cleanupEncodeSlotIfNecessary();
 
             if (!Http2State.initialClosing(state))
             {
@@ -1380,14 +1380,12 @@ public final class Http2ServerFactory implements StreamFactory
             cleanupBudgetCreditorIfNecessary();
             cleanupEncodeSlotIfNecessary();
             doEnd(network, routeId, replyId, traceId, authorization, EMPTY_OCTETS);
-            state = Http2State.closeInitial(state);
         }
 
         private void doNetworkAbort(
             long traceId,
             long authorization)
         {
-            state = Http2State.closeInitial(state);
             cleanupBudgetCreditorIfNecessary();
             cleanupEncodeSlotIfNecessary();
             doAbort(network, routeId, replyId, traceId, authorization, EMPTY_OCTETS);
