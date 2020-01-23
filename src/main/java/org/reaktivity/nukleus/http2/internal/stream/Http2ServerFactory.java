@@ -196,6 +196,9 @@ public final class Http2ServerFactory implements StreamFactory
     private final Http2ServerDecoder decodeIgnoreAll = this::decodeIgnoreAll;
 
     private final EnumMap<Http2FrameType, Http2ServerDecoder> decodersByFrameType;
+
+    private final int windowThreshold;
+
     {
         final EnumMap<Http2FrameType, Http2ServerDecoder> decodersByFrameType = new EnumMap<>(Http2FrameType.class);
         decodersByFrameType.put(Http2FrameType.SETTINGS, decodeSettings);
@@ -261,6 +264,7 @@ public final class Http2ServerFactory implements StreamFactory
         this.httpTypeId = supplyTypeId.applyAsInt(HttpNukleus.NAME);
         this.frameBuffer = new UnsafeBuffer(new byte[writeBuffer.capacity()]);
         this.extensionBuffer = new UnsafeBuffer(new byte[writeBuffer.capacity()]);
+        this.windowThreshold = (bufferPool.slotCapacity() * config.windowThreshold()) / 100;
     }
 
     @Override
@@ -1029,6 +1033,7 @@ public final class Http2ServerFactory implements StreamFactory
         private int maxClientStreamId;
         private int maxServerStreamId;
         private int continuationStreamId;
+        private int bytesProcessed;
         private Http2ErrorCode decodeError;
         private LongLongConsumer cleanupHandler;
 
@@ -1411,9 +1416,15 @@ public final class Http2ServerFactory implements StreamFactory
         {
             assert credit > 0;
 
-            initialBudget += credit;
-            assert initialBudget <= bufferPool.slotCapacity();
-            doWindow(network, routeId, initialId, traceId, authorization, budgetId, credit, padding);
+            bytesProcessed += credit;
+
+            if (bytesProcessed >= windowThreshold)
+            {
+                initialBudget += credit;
+                assert initialBudget <= bufferPool.slotCapacity();
+                doWindow(network, routeId, initialId, traceId, authorization, budgetId, bytesProcessed, padding);
+                bytesProcessed = 0;
+            }
         }
 
         private void encodeNetwork(
