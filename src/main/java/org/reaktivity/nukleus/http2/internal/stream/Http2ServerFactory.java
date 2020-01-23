@@ -1033,7 +1033,7 @@ public final class Http2ServerFactory implements StreamFactory
         private int maxClientStreamId;
         private int maxServerStreamId;
         private int continuationStreamId;
-        private int deferedCredit;
+        private int deferredCredit;
         private Http2ErrorCode decodeError;
         private LongLongConsumer cleanupHandler;
 
@@ -1416,14 +1416,14 @@ public final class Http2ServerFactory implements StreamFactory
         {
             assert credit > 0;
 
-            deferedCredit += credit;
+            deferredCredit += credit;
 
-            if (deferedCredit >= windowThreshold)
+            if (deferredCredit >= windowThreshold)
             {
-                initialBudget += deferedCredit;
+                initialBudget += deferredCredit;
                 assert initialBudget <= bufferPool.slotCapacity();
-                doWindow(network, routeId, initialId, traceId, authorization, budgetId, deferedCredit, padding);
-                deferedCredit = 0;
+                doWindow(network, routeId, initialId, traceId, authorization, budgetId, deferredCredit, padding);
+                deferredCredit = 0;
             }
         }
 
