@@ -17,7 +17,9 @@ package org.reaktivity.nukleus.http2.internal;
 
 import static org.junit.Assert.assertEquals;
 import static org.reaktivity.nukleus.http2.internal.Http2Configuration.HTTP2_ACCESS_CONTROL_ALLOW_ORIGIN;
+import static org.reaktivity.nukleus.http2.internal.Http2Configuration.HTTP2_MAX_CONCURRENT_STREAMS_CLEANUP;
 import static org.reaktivity.nukleus.http2.internal.Http2Configuration.HTTP2_SERVER_HEADER;
+import static org.reaktivity.nukleus.http2.internal.Http2Configuration.HTTP2_STREAMS_CLEANUP_DELAY;
 
 import org.junit.Test;
 
@@ -26,11 +28,15 @@ public class Http2ConfigurationTest
     // needed by test annotations
     public static final String HTTP2_ACCESS_CONTROL_ALLOW_ORIGIN_NAME = "nukleus.http2.server.access.control.allow.origin";
     public static final String HTTP2_SERVER_HEADER_NAME = "nukleus.http2.server.header";
+    public static final String HTTP2_MAX_CONCURRENT_STREAMS_CLEANUP_NAME = "nukleus.http2.max.concurrent.streams.cleanup";
+    public static final String HTTP2_STREAMS_CLEANUP_DELAY_NAME = "nukleus.http2.streams.cleanup.delay";
 
     @Test
     public void shouldVerifyConstants() throws Exception
     {
         assertEquals(HTTP2_ACCESS_CONTROL_ALLOW_ORIGIN.name(), HTTP2_ACCESS_CONTROL_ALLOW_ORIGIN_NAME);
         assertEquals(HTTP2_SERVER_HEADER.name(), HTTP2_SERVER_HEADER_NAME);
+        assertEquals(HTTP2_MAX_CONCURRENT_STREAMS_CLEANUP.name(), HTTP2_MAX_CONCURRENT_STREAMS_CLEANUP_NAME);
+        assertEquals(HTTP2_STREAMS_CLEANUP_DELAY.name(), HTTP2_STREAMS_CLEANUP_DELAY_NAME);
     }
 }
