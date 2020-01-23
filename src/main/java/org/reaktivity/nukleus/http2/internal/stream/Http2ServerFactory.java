@@ -1088,10 +1088,6 @@ public final class Http2ServerFactory implements StreamFactory
                 final WindowFW window = windowRO.wrap(buffer, index, index + length);
                 onNetworkWindow(window);
                 break;
-            case SignalFW.TYPE_ID:
-                final SignalFW signal = signalRO.wrap(buffer, index, index + length);
-                onNetworkSignal(signal);
-                break;
             }
         }
 
@@ -1172,11 +1168,11 @@ public final class Http2ServerFactory implements StreamFactory
         }
 
         private void onNetworkSignal(
-            SignalFW signal)
+            long traceId,
+            long authorization,
+            int signalId)
         {
-            assert signal.signalId() == CLEANUP_SIGNAL;
-            final long traceId = signal.traceId();
-            final long authorization = signal.authorization();
+            assert signalId == CLEANUP_SIGNAL;
             cleanupStreams(traceId, authorization);
         }
 
@@ -1204,8 +1200,9 @@ public final class Http2ServerFactory implements StreamFactory
 
             if (!streams.isEmpty())
             {
-                final long timeMillis = Instant.now().plusMillis(100).toEpochMilli();
-                signaler.signalAt(timeMillis, routeId, replyId, CLEANUP_SIGNAL);
+                final long timeMillis = Instant.now().plusMillis(config.streamsCleanupDelay()).toEpochMilli();
+                signaler.signalAt(timeMillis, CLEANUP_SIGNAL, s -> onNetworkSignal(traceId, authorization, s));
+                router.setThrottle(replyId, this::onNetwork);
             }
             else
             {

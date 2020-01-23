@@ -28,6 +28,7 @@ import org.junit.rules.Timeout;
 import org.kaazing.k3po.junit.annotation.Specification;
 import org.kaazing.k3po.junit.rules.K3poRule;
 import org.reaktivity.reaktor.test.ReaktorRule;
+import org.reaktivity.reaktor.test.annotation.Configure;
 
 public class ConnectionManagementIT
 {
@@ -326,6 +327,19 @@ public class ConnectionManagementIT
         "${spec}/http.push.promise.header.override/client",
         "${nukleus}/http.push.promise.header.override/server" })
     public void pushResourcesWithOverrideHeader() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Configure(name = "nukleus.http2.max.cleanup.streams", value = "1")
+    @Configure(name = "nukleus.http2.streams.cleanup.delay", value = "10")
+    @Specification({
+        "${route}/server/controller",
+        "${spec}/client.sent.read.abort.and.write.reset.on.open.request/client",
+        "${nukleus}/client.sent.read.abort.and.write.reset.on.open.request/server"
+    })
+    public void clientSentReadAbortAndWriteResetOnOpenRequest() throws Exception
     {
         k3po.finish();
     }
