@@ -1195,7 +1195,7 @@ public final class Http2ServerFactory implements StreamFactory
             long traceId,
             long authorization)
         {
-            int remaining = config.maxCleanupStreams();
+            int remaining = config.maxConcurrentStreamsCleanup();
             for (Iterator<Http2Exchange> iterator = streams.values().iterator();
                  iterator.hasNext() && remaining > 0; remaining--)
             {

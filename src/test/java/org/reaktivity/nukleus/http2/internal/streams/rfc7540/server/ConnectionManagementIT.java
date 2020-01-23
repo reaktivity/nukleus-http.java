@@ -18,6 +18,8 @@ package org.reaktivity.nukleus.http2.internal.streams.rfc7540.server;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.rules.RuleChain.outerRule;
 import static org.reaktivity.nukleus.http2.internal.Http2Configuration.HTTP2_SERVER_CONCURRENT_STREAMS;
+import static org.reaktivity.nukleus.http2.internal.Http2ConfigurationTest.HTTP2_MAX_CONCURRENT_STREAMS_CLEANUP_NAME;
+import static org.reaktivity.nukleus.http2.internal.Http2ConfigurationTest.HTTP2_STREAMS_CLEANUP_DELAY_NAME;
 import static org.reaktivity.reaktor.test.ReaktorRule.EXTERNAL_AFFINITY_MASK;
 
 import org.junit.Rule;
@@ -332,14 +334,14 @@ public class ConnectionManagementIT
     }
 
     @Test
-    @Configure(name = "nukleus.http2.max.cleanup.streams", value = "1")
-    @Configure(name = "nukleus.http2.streams.cleanup.delay", value = "10")
+    @Configure(name = HTTP2_MAX_CONCURRENT_STREAMS_CLEANUP_NAME, value = "1")
+    @Configure(name = HTTP2_STREAMS_CLEANUP_DELAY_NAME, value = "10")
     @Specification({
         "${route}/server/controller",
-        "${spec}/client.sent.read.abort.and.write.reset.on.open.request/client",
-        "${nukleus}/client.sent.read.abort.and.write.reset.on.open.request/server"
+        "${spec}/client.sent.write.abort.then.read.abort.on.open.request/client",
+        "${nukleus}/client.sent.write.abort.then.read.abort.on.open.request/server"
     })
-    public void clientSentReadAbortAndWriteResetOnOpenRequest() throws Exception
+    public void clientSentWriteAbortThenReadAbortOnOpenRequest() throws Exception
     {
         k3po.finish();
     }
