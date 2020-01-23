@@ -1202,7 +1202,6 @@ public final class Http2ServerFactory implements StreamFactory
             {
                 final long timeMillis = Instant.now().plusMillis(config.streamsCleanupDelay()).toEpochMilli();
                 signaler.signalAt(timeMillis, CLEANUP_SIGNAL, s -> onNetworkSignal(traceId, authorization, s));
-                router.setThrottle(replyId, this::onNetwork);
             }
             else
             {
