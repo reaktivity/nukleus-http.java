@@ -28,7 +28,8 @@ public class Http2Configuration extends Configuration
             ReaktorConfiguration.DEBUG_BUDGETS || Boolean.getBoolean("nukleus.http2.debug.budgets");
 
     public static final IntPropertyDef HTTP2_SERVER_CONCURRENT_STREAMS;
-    public static final IntPropertyDef HTTP2_MAX_CLEANUP_STREAMS;
+    public static final IntPropertyDef HTTP2_MAX_CONCURRENT_STREAMS_CLEANUP;
+    public static final IntPropertyDef HTTP2_STREAMS_CLEANUP_DELAY;
     public static final IntPropertyDef HTTP2_MAX_CONCURRENT_APPLICATION_HEADERS;
     public static final BooleanPropertyDef HTTP2_ACCESS_CONTROL_ALLOW_ORIGIN;
     public static final PropertyDef<String> HTTP2_SERVER_HEADER;
@@ -41,7 +42,8 @@ public class Http2Configuration extends Configuration
         HTTP2_SERVER_CONCURRENT_STREAMS = config.property("server.concurrent.streams", Integer.MAX_VALUE);
         HTTP2_ACCESS_CONTROL_ALLOW_ORIGIN = config.property("server.access.control.allow.origin", false);
         HTTP2_SERVER_HEADER = config.property("server.header");
-        HTTP2_MAX_CLEANUP_STREAMS = config.property("max.cleanup.streams", 1000);
+        HTTP2_MAX_CONCURRENT_STREAMS_CLEANUP = config.property("max.concurrent.streams.cleanup", 1000);
+        HTTP2_STREAMS_CLEANUP_DELAY = config.property("streams.cleanup.delay", 100);
         HTTP2_MAX_CONCURRENT_APPLICATION_HEADERS = config.property("max.concurrent.application.headers", 10000);
         HTTP2_CONFIG = config;
     }
@@ -61,10 +63,16 @@ public class Http2Configuration extends Configuration
         return HTTP2_SERVER_CONCURRENT_STREAMS.getAsInt(this);
     }
 
-    public int maxCleanupStreams()
+    public int maxConcurrentStreamsCleanup()
     {
-        return HTTP2_MAX_CLEANUP_STREAMS.getAsInt(this);
+        return HTTP2_MAX_CONCURRENT_STREAMS_CLEANUP.getAsInt(this);
     }
+
+    public int streamsCleanupDelay()
+    {
+        return HTTP2_STREAMS_CLEANUP_DELAY.getAsInt(this);
+    }
+
     public int maxConcurrentApplicationHeaders()
     {
         return HTTP2_MAX_CONCURRENT_APPLICATION_HEADERS.getAsInt(this);

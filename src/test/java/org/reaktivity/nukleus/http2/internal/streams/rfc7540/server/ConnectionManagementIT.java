@@ -18,6 +18,8 @@ package org.reaktivity.nukleus.http2.internal.streams.rfc7540.server;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.rules.RuleChain.outerRule;
 import static org.reaktivity.nukleus.http2.internal.Http2Configuration.HTTP2_SERVER_CONCURRENT_STREAMS;
+import static org.reaktivity.nukleus.http2.internal.Http2ConfigurationTest.HTTP2_MAX_CONCURRENT_STREAMS_CLEANUP_NAME;
+import static org.reaktivity.nukleus.http2.internal.Http2ConfigurationTest.HTTP2_STREAMS_CLEANUP_DELAY_NAME;
 import static org.reaktivity.reaktor.test.ReaktorRule.EXTERNAL_AFFINITY_MASK;
 
 import org.junit.Rule;
@@ -28,6 +30,7 @@ import org.junit.rules.Timeout;
 import org.kaazing.k3po.junit.annotation.Specification;
 import org.kaazing.k3po.junit.rules.K3poRule;
 import org.reaktivity.reaktor.test.ReaktorRule;
+import org.reaktivity.reaktor.test.annotation.Configure;
 
 public class ConnectionManagementIT
 {
@@ -326,6 +329,19 @@ public class ConnectionManagementIT
         "${spec}/http.push.promise.header.override/client",
         "${nukleus}/http.push.promise.header.override/server" })
     public void pushResourcesWithOverrideHeader() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Configure(name = HTTP2_MAX_CONCURRENT_STREAMS_CLEANUP_NAME, value = "1")
+    @Configure(name = HTTP2_STREAMS_CLEANUP_DELAY_NAME, value = "10")
+    @Specification({
+        "${route}/server/controller",
+        "${spec}/client.sent.write.abort.then.read.abort.on.open.request/client",
+        "${nukleus}/client.sent.write.abort.then.read.abort.on.open.request/server"
+    })
+    public void clientSentWriteAbortThenReadAbortOnOpenRequest() throws Exception
     {
         k3po.finish();
     }
