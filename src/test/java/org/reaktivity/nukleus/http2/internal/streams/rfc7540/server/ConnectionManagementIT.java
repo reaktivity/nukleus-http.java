@@ -338,10 +338,10 @@ public class ConnectionManagementIT
     @Configure(name = HTTP2_STREAMS_CLEANUP_DELAY_NAME, value = "10")
     @Specification({
         "${route}/server/controller",
-        "${spec}/client.sent.write.abort.then.write.abort.on.open.request/client",
-        "${nukleus}/client.sent.write.abort.then.write.abort.on.open.request/server"
+        "${spec}/client.sent.write.abort.then.read.abort.on.open.request/client",
+        "${nukleus}/client.sent.write.abort.then.read.abort.on.open.request/server"
     })
-    public void clientSentWriteAbortThenWriteAbortOnOpenRequest() throws Exception
+    public void clientSentWriteAbortThenReadAbortOnOpenRequest() throws Exception
     {
         k3po.finish();
     }
