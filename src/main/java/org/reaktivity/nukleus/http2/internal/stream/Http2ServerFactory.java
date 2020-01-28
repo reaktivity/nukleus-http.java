@@ -2964,10 +2964,10 @@ public final class Http2ServerFactory implements StreamFactory
 
                         if (Http2Configuration.DEBUG_HTTP2_BUDGETS)
                         {
-                            System.out.format("[%d] [0x%016x] [0x%016x] remoteBudget %d-%d => %d \n",
+                            System.out.format("[%d] [0x%016x] [0x%016x] remoteBudget %d - %d => %d \n",
                                 System.nanoTime(), traceId, budgetId, remoteBudget, length, remoteBudget - length);
 
-                            System.out.format("[%d] [0x%016x] [0x%016x] remoteSharedBudget %d-%d => %d \n",
+                            System.out.format("[%d] [0x%016x] [0x%016x] remoteSharedBudget %d - %d => %d \n",
                                 System.nanoTime(), traceId, budgetId, remoteSharedBudget, length, remoteSharedBudget - length);
                         }
 
