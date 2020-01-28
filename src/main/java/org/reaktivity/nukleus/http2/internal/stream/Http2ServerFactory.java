@@ -2979,7 +2979,15 @@ public final class Http2ServerFactory implements StreamFactory
                         final int remotePaddableMax = Math.min(remoteBudget, bufferPool.slotCapacity());
                         final int remotePadding = framePadding(remotePaddableMax, remoteSettings.maxFrameSize);
                         final int responsePadding = replyPadding + remotePadding;
-                        if (responseBudget <= responsePadding)
+
+                        if (Http2Configuration.DEBUG_HTTP2_BUDGETS)
+                        {
+                            System.out.format("[%d] [0x%016x] [0x%016x] responsePadding => %d \n",
+                                System.nanoTime(), traceId, budgetId, responsePadding);
+                        }
+
+                        final int minimumClaim = 1024;
+                        if (responseBudget <= responsePadding + minimumClaim)
                         {
                             flushResponseWindow(traceId, authorization);
                         }
