@@ -2918,11 +2918,10 @@ public final class Http2ServerFactory implements StreamFactory
                 DataFW data)
             {
                 final int reserved = data.reserved();
+                final long traceId = data.traceId();
 
                 if (Http2Configuration.DEBUG_HTTP2_BUDGETS)
                 {
-                    final long traceId = data.traceId();
-
                     System.out.format("[%d] [0x%016x] [0x%016x] responseBudget %d - %d => %d\n",
                         System.nanoTime(), traceId, budgetId,
                         responseBudget, reserved, responseBudget - reserved);
@@ -2939,14 +2938,12 @@ public final class Http2ServerFactory implements StreamFactory
 
                 if (responseBudget < 0)
                 {
-                    final long traceId = data.traceId();
                     final long authorization = data.authorization();
                     doResponseReset(traceId, authorization);
                     doNetworkAbort(traceId, authorization);
                 }
                 else
                 {
-                    final long traceId = data.traceId();
                     final long authorization = data.authorization();
                     final OctetsFW payload = data.payload();
                     final OctetsFW extension = data.extension();
@@ -2965,10 +2962,35 @@ public final class Http2ServerFactory implements StreamFactory
                         final long budgetId = data.budgetId();
                         final int length = data.length();
 
+                        if (Http2Configuration.DEBUG_HTTP2_BUDGETS)
+                        {
+                            System.out.format("[%d] [0x%016x] [0x%016x] remoteBudget %d - %d => %d \n",
+                                System.nanoTime(), traceId, budgetId, remoteBudget, length, remoteBudget - length);
+
+                            System.out.format("[%d] [0x%016x] [0x%016x] remoteSharedBudget %d - %d => %d \n",
+                                System.nanoTime(), traceId, budgetId, remoteSharedBudget, length, remoteSharedBudget - length);
+                        }
+
                         remoteBudget -= length;
                         remoteSharedBudget -= length;
 
                         doEncodeData(traceId, authorization, flags, budgetId, reserved, streamId, payload);
+
+                        final int remotePaddableMax = Math.min(remoteBudget, bufferPool.slotCapacity());
+                        final int remotePadding = framePadding(remotePaddableMax, remoteSettings.maxFrameSize);
+                        final int responsePadding = replyPadding + remotePadding;
+
+                        if (Http2Configuration.DEBUG_HTTP2_BUDGETS)
+                        {
+                            System.out.format("[%d] [0x%016x] [0x%016x] responsePadding => %d \n",
+                                System.nanoTime(), traceId, budgetId, responsePadding);
+                        }
+
+                        final int minimumClaim = 1024;
+                        if (responseBudget <= responsePadding + minimumClaim)
+                        {
+                            flushResponseWindow(traceId, authorization);
+                        }
                     }
                 }
             }
