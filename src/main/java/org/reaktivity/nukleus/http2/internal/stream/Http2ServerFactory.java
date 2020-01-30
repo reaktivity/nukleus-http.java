@@ -1667,7 +1667,7 @@ public final class Http2ServerFactory implements StreamFactory
                     final MutableDirectBuffer decodeBuffer = bufferPool.buffer(decodeSlot);
                     decodeBuffer.putBytes(0, buffer, progress, limit - progress);
                     decodeSlotOffset = limit - progress;
-                    decodeSlotReserved = (limit - progress) * (reserved / (limit - offset));
+                    decodeSlotReserved = (int)((long) reserved * (limit - progress) / (limit - offset));
                 }
             }
             else
