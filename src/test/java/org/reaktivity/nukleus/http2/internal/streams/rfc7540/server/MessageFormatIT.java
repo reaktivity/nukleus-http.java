@@ -20,7 +20,6 @@ import static org.junit.rules.RuleChain.outerRule;
 import static org.reaktivity.nukleus.http2.internal.Http2Configuration.HTTP2_SERVER_CONCURRENT_STREAMS;
 import static org.reaktivity.reaktor.test.ReaktorRule.EXTERNAL_AFFINITY_MASK;
 
-import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.DisableOnDebug;
@@ -72,7 +71,6 @@ public class MessageFormatIT
         k3po.finish();
     }
 
-    @Ignore("zero padding")
     @Test
     @Specification({
             "${route}/server/controller",
