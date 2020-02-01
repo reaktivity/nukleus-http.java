@@ -19,7 +19,6 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.rules.RuleChain.outerRule;
 import static org.reaktivity.reaktor.test.ReaktorRule.EXTERNAL_AFFINITY_MASK;
 
-import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.DisableOnDebug;
@@ -127,7 +126,6 @@ public class FlowControlIT
         k3po.finish();
     }
 
-    @Ignore("zero padding")
     @Test
     @Specification({
             "${route}/client/controller",
@@ -138,7 +136,6 @@ public class FlowControlIT
         k3po.finish();
     }
 
-    @Ignore("zero padding")
     @Test
     @Specification({
         "${route}/client/controller",

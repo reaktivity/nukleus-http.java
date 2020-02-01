@@ -827,8 +827,6 @@ final class ClientConnectReplyStream
         acceptReplyBudget += window.credit();
         acceptReplyPadding = window.padding();
 
-        assert acceptReplyPadding == 0;
-
         if (acceptReplyDebitorId != 0L && acceptReplyDebitorIndex == NO_DEBITOR_INDEX)
         {
             acceptReplyDebitor = factory.supplyDebitor.apply(acceptReplyDebitorId);
