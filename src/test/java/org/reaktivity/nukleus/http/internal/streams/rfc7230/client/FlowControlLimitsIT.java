@@ -19,6 +19,7 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.rules.RuleChain.outerRule;
 import static org.reaktivity.reaktor.test.ReaktorRule.EXTERNAL_AFFINITY_MASK;
 
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.DisableOnDebug;
@@ -74,6 +75,7 @@ public class FlowControlLimitsIT
         k3po.finish();
     }
 
+    @Ignore("zero padding")
     @Configure(name = ReaktorRule.REAKTOR_BUFFER_POOL_CAPACITY_NAME, value = "8192")
     @Configure(name = ReaktorRule.REAKTOR_BUFFER_SLOT_CAPACITY_NAME, value = "8192")
     @Test

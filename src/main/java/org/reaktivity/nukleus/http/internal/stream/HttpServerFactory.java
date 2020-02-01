@@ -1865,6 +1865,7 @@ public final class HttpServerFactory implements StreamFactory
                 final long budgetId = window.budgetId();
                 final int credit = window.credit();
                 final int padding = window.padding();
+                assert padding == 0;
 
                 if (requestState == HttpState.PENDING)
                 {

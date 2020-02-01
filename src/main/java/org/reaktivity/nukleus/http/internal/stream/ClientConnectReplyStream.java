@@ -827,6 +827,8 @@ final class ClientConnectReplyStream
         acceptReplyBudget += window.credit();
         acceptReplyPadding = window.padding();
 
+        assert acceptReplyPadding == 0;
+
         if (acceptReplyDebitorId != 0L && acceptReplyDebitorIndex == NO_DEBITOR_INDEX)
         {
             acceptReplyDebitor = factory.supplyDebitor.apply(acceptReplyDebitorId);
@@ -859,9 +861,8 @@ final class ClientConnectReplyStream
         if (connectReplyCredit > 0)
         {
             connectReplyBudget += connectReplyCredit;
-            int connectReplyPadding = acceptReplyPadding;
             factory.writer.doWindow(connectReplyThrottle, connectRouteId, connectReplyId,
-                    traceId, connectReplyCredit, connectReplyPadding);
+                    traceId, connectReplyCredit, 0);
         }
     }
 

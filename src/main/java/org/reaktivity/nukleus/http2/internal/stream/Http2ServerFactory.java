@@ -1262,6 +1262,7 @@ public final class Http2ServerFactory implements StreamFactory
 
             replyBudget += credit;
             replyPadding = padding;
+            assert replyPadding == 0;
 
             flushNetwork(authorization, budgetId);
 
