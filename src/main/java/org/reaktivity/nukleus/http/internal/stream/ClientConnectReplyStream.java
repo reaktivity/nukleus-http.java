@@ -859,9 +859,8 @@ final class ClientConnectReplyStream
         if (connectReplyCredit > 0)
         {
             connectReplyBudget += connectReplyCredit;
-            int connectReplyPadding = acceptReplyPadding;
             factory.writer.doWindow(connectReplyThrottle, connectRouteId, connectReplyId,
-                    traceId, connectReplyCredit, connectReplyPadding);
+                    traceId, connectReplyCredit, 0);
         }
     }
 
