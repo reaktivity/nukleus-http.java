@@ -2602,7 +2602,6 @@ public final class Http2ServerFactory implements StreamFactory
                 this.requestId = supplyInitialId.applyAsLong(routeId);
                 this.application = router.supplyReceiver(requestId);
                 this.responseId = supplyReplyId.applyAsLong(requestId);
-                this.remoteBudget = remoteSettings.initialWindowSize;
             }
 
             private void doRequestBegin(
