@@ -256,7 +256,7 @@ public final class Http2ServerFactory implements StreamFactory
         this.counters = new Http2Counters(supplyCounter);
         this.signaler = signaler;
         this.correlations = new Long2ObjectHashMap<>();
-        this.initialSettings = new Http2Settings();
+        this.initialSettings = new Http2Settings(config.serverConcurrentStreams(), 0);
         this.headersPool = bufferPool.duplicate();
         this.httpTypeId = supplyTypeId.applyAsInt(HttpNukleus.NAME);
         this.frameBuffer = new UnsafeBuffer(new byte[writeBuffer.capacity()]);
@@ -1054,6 +1054,7 @@ public final class Http2ServerFactory implements StreamFactory
             this.encodeContext = new HpackContext(remoteSettings.headerTableSize, true);
             this.encodeHeadersBuffer = new ExpandableArrayBuffer();
             this.encodeReservedBuffer = new ExpandableArrayBuffer();
+            this.remoteSharedBudget = remoteSettings.initialWindowSize;
         }
 
         private void onNetwork(
@@ -1718,7 +1719,6 @@ public final class Http2ServerFactory implements StreamFactory
             else
             {
                 final int remoteInitialBudget = remoteSettings.initialWindowSize;
-                remoteSharedBudget = remoteInitialBudget;
                 http2Settings.forEach(this::onDecodeSetting);
 
                 Http2ErrorCode decodeError = remoteSettings.error();
@@ -2602,6 +2602,7 @@ public final class Http2ServerFactory implements StreamFactory
                 this.requestId = supplyInitialId.applyAsLong(routeId);
                 this.application = router.supplyReceiver(requestId);
                 this.responseId = supplyReplyId.applyAsLong(requestId);
+                this.remoteBudget = remoteSettings.initialWindowSize;
             }
 
             private void doRequestBegin(
@@ -2902,6 +2903,7 @@ public final class Http2ServerFactory implements StreamFactory
             private void onResponseBegin(
                 BeginFW begin)
             {
+                remoteBudget = remoteSettings.initialWindowSize;
                 state = Http2State.openReply(state);
 
                 final HttpBeginExFW beginEx = begin.extension().get(beginExRO::tryWrap);
