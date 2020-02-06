@@ -2903,7 +2903,6 @@ public final class Http2ServerFactory implements StreamFactory
             private void onResponseBegin(
                 BeginFW begin)
             {
-                remoteBudget = remoteSettings.initialWindowSize;
                 state = Http2State.openReply(state);
 
                 final HttpBeginExFW beginEx = begin.extension().get(beginExRO::tryWrap);
