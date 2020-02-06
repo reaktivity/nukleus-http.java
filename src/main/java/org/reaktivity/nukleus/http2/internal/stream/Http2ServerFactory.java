@@ -998,7 +998,7 @@ public final class Http2ServerFactory implements StreamFactory
         private int replyBudgetReserved;
         private int replySharedBudget;
 
-        private int remoteSharedBudget;
+        private int remoteSharedBudget = 65_535;
         private long responseSharedBudgetIndex = NO_CREDITOR_INDEX;
         private int responseSharedBudget;
 
