@@ -256,7 +256,7 @@ public final class Http2ServerFactory implements StreamFactory
         this.counters = new Http2Counters(supplyCounter);
         this.signaler = signaler;
         this.correlations = new Long2ObjectHashMap<>();
-        this.initialSettings = new Http2Settings(config.serverConcurrentStreams(), 0);
+        this.initialSettings = new Http2Settings();
         this.headersPool = bufferPool.duplicate();
         this.httpTypeId = supplyTypeId.applyAsInt(HttpNukleus.NAME);
         this.frameBuffer = new UnsafeBuffer(new byte[writeBuffer.capacity()]);
@@ -998,7 +998,7 @@ public final class Http2ServerFactory implements StreamFactory
         private int replyBudgetReserved;
         private int replySharedBudget;
 
-        private int remoteSharedBudget = 65_535;
+        private int remoteSharedBudget;
         private long responseSharedBudgetIndex = NO_CREDITOR_INDEX;
         private int responseSharedBudget;
 
@@ -1718,6 +1718,7 @@ public final class Http2ServerFactory implements StreamFactory
             else
             {
                 final int remoteInitialBudget = remoteSettings.initialWindowSize;
+                remoteSharedBudget = remoteInitialBudget;
                 http2Settings.forEach(this::onDecodeSetting);
 
                 Http2ErrorCode decodeError = remoteSettings.error();
