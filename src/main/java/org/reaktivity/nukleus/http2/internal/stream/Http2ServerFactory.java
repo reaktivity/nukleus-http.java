@@ -1054,6 +1054,7 @@ public final class Http2ServerFactory implements StreamFactory
             this.encodeContext = new HpackContext(remoteSettings.headerTableSize, true);
             this.encodeHeadersBuffer = new ExpandableArrayBuffer();
             this.encodeReservedBuffer = new ExpandableArrayBuffer();
+            this.remoteSharedBudget = remoteSettings.initialWindowSize;
         }
 
         private void onNetwork(
