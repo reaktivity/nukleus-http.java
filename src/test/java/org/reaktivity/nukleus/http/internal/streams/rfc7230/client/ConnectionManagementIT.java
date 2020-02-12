@@ -62,6 +62,16 @@ public class ConnectionManagementIT
 
     @Test
     @Specification({
+        "${route}/client.exclude/controller",
+        "${client}/request.with.header.exclude/client",
+        "${server}/request.with.header.exclude/server" })
+    public void shouldSendRequestWithHeaderExclude() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
         "${route}/client/controller",
         "${client}/request.with.connection.close/client",
         "${server}/request.with.connection.close/server" })

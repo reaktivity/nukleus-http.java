@@ -85,6 +85,15 @@ public class ControlIT
 
     @Test
     @Specification({
+        "${route}/client.exclude/controller"
+    })
+    public void shouldRouteClientWithRequestHeaderExclude() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
         "${route}/server/controller",
         "${unroute}/server/controller"
     })

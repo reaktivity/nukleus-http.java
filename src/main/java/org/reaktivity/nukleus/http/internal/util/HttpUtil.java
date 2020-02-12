@@ -15,8 +15,6 @@
  */
 package org.reaktivity.nukleus.http.internal.util;
 
-import static java.lang.Character.toUpperCase;
-
 public final class HttpUtil
 {
     public static void appendHeader(
@@ -24,19 +22,15 @@ public final class HttpUtil
         String name,
         String value)
     {
-        int pos = name.indexOf('-');
-        if (pos > -1 && pos + 1 < name.length())
+        String[] newHeaderName = name.split("-");
+
+        for (String oldName : newHeaderName)
         {
-            payload.append(toUpperCase(name.charAt(0))).append(name.substring(1, pos + 1))
-            .append(toUpperCase(name.charAt(pos + 1)))
-            .append(name.substring(pos + 2))
-            .append(": ").append(value).append("\r\n");
+            payload.append(oldName.substring(0, 1).toUpperCase()).append(oldName.substring(1).toLowerCase()).append("-");
         }
-        else
-        {
-            payload.append(toUpperCase(name.charAt(0))).append(name.substring(1))
-            .append(": ").append(value).append("\r\n");
-        }
+
+        payload.deleteCharAt(payload.length() - 1);
+        payload.append(": ").append(value).append("\r\n");
     }
 
     private HttpUtil()

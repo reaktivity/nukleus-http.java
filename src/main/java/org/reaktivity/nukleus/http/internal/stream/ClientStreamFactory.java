@@ -57,6 +57,7 @@ import org.reaktivity.nukleus.stream.StreamFactory;
 
 public final class ClientStreamFactory implements StreamFactory
 {
+    static final String ACCESS_CONTROL_REQUEST_HEADERS = "access-control-request-headers";
     static final Map<String, String> EMPTY_HEADERS = Collections.emptyMap();
     static final byte[] CRLFCRLF_BYTES = "\r\n\r\n".getBytes(StandardCharsets.US_ASCII);
     static final byte[] CRLF_BYTES = "\r\n".getBytes(StandardCharsets.US_ASCII);
@@ -211,6 +212,38 @@ public final class ClientStreamFactory implements StreamFactory
                 {
                     Map<String, String> headers0 = headers == EMPTY_HEADERS ? new LinkedHashMap<>() : headers;
                     overrides.forEach(h -> headers0.put(h.name().asString(), h.value().asString()));
+                    headers = headers0;
+                }
+
+                final ArrayFW<HttpHeaderFW> excludes = routeEx.excludes();
+                if (!excludes.isEmpty())
+                {
+                    Map<String, String> headers0 = new LinkedHashMap<>();
+
+                    for (Map.Entry<String, String> entry : headers.entrySet())
+                    {
+                        String n = entry.getKey();
+                        String v = entry.getValue();
+                        if (!excludes.anyMatch(h -> h.name().asString().equals(n)) && !n.equals(ACCESS_CONTROL_REQUEST_HEADERS))
+                        {
+                            headers0.put(n, v);
+                        }
+                        else if (n.equals(ACCESS_CONTROL_REQUEST_HEADERS))
+                        {
+                            final String[] requestHeaders = v.split(",");
+                            StringBuilder newValue = new StringBuilder();
+
+                            for (String requestHeader : requestHeaders)
+                            {
+                                final String header = requestHeader.trim();
+                                if (!excludes.anyMatch(h -> header.equals(h.name().asString())))
+                                {
+                                    newValue.append(header).append(", ");
+                                }
+                            }
+                            headers0.put(n, newValue.delete(newValue.length() - 2, newValue.length()).toString());
+                        }
+                    }
                     headers = headers0;
                 }
             }
