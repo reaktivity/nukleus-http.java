@@ -27,7 +27,7 @@ public final class HttpUtil
         do
         {
             nameBuilder.setCharAt(fromIndex, Character.toUpperCase(name.charAt(fromIndex)));
-            fromIndex =  nameBuilder.indexOf("-", fromIndex) + 1;
+            fromIndex =  name.indexOf("-", fromIndex) + 1;
         } while (fromIndex > 0 && fromIndex < nameBuilder.length());
 
         payload.append(nameBuilder).append(": ").append(value).append("\r\n");
