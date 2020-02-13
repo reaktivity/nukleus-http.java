@@ -19,7 +19,6 @@ import static java.nio.ByteBuffer.allocateDirect;
 import static java.nio.ByteOrder.nativeOrder;
 import static java.util.Collections.singletonMap;
 
-import java.nio.charset.Charset;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 

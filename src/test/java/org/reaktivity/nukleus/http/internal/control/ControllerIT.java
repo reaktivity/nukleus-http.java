@@ -117,16 +117,16 @@ public class ControllerIT
 
     @Test
     @Specification({
-        "${route}/client.exclude/nukleus"
+        "${route}/client.override/nukleus"
     })
-    public void shouldRouteClientWithRequestHeaderExclude() throws Exception
+    public void shouldRouteClientWithRequestHeaderOverride() throws Exception
     {
         k3po.start();
 
         final JsonObject extension = new JsonObject();
-        final JsonObject excludes = new JsonObject();
-        excludes.addProperty("x-custom-header", "");
-        extension.add("excludes", excludes);
+        final JsonObject overrides = new JsonObject();
+        overrides.addProperty(":authority", "localhost:8080");
+        extension.add("overrides", overrides);
 
         reaktor.controller(HttpController.class)
                .route(CLIENT, "http#0", "target#0", gson.toJson(extension))
