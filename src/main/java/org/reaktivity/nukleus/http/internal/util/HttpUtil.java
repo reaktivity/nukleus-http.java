@@ -27,7 +27,7 @@ public final class HttpUtil
         do
         {
             initCapsName.setCharAt(fromIndex, Character.toUpperCase(initCapsName.charAt(fromIndex)));
-            fromIndex =  initCapsName.indexOf("-", fromIndex) + 1;
+            fromIndex = initCapsName.indexOf("-", fromIndex) + 1;
         } while (fromIndex > 0 && fromIndex < initCapsName.length());
 
         payload.append(initCapsName).append(": ").append(value).append("\r\n");
