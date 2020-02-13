@@ -24,19 +24,15 @@ public final class HttpUtil
         String name,
         String value)
     {
-        int pos = name.indexOf('-');
-        if (pos > -1 && pos + 1 < name.length())
+        StringBuilder initCapsName = new StringBuilder(name);
+        int fromIndex = 0;
+        do
         {
-            payload.append(toUpperCase(name.charAt(0))).append(name.substring(1, pos + 1))
-            .append(toUpperCase(name.charAt(pos + 1)))
-            .append(name.substring(pos + 2))
-            .append(": ").append(value).append("\r\n");
-        }
-        else
-        {
-            payload.append(toUpperCase(name.charAt(0))).append(name.substring(1))
-            .append(": ").append(value).append("\r\n");
-        }
+            initCapsName.setCharAt(fromIndex, toUpperCase(initCapsName.charAt(fromIndex)));
+            fromIndex = initCapsName.indexOf("-", fromIndex) + 1;
+        } while (fromIndex > 0 && fromIndex < initCapsName.length());
+
+        payload.append(initCapsName).append(": ").append(value).append("\r\n");
     }
 
     private HttpUtil()
