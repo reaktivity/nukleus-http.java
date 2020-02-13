@@ -19,6 +19,7 @@ import static java.nio.ByteBuffer.allocateDirect;
 import static java.nio.ByteOrder.nativeOrder;
 import static java.util.Collections.singletonMap;
 
+import java.nio.charset.Charset;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -135,7 +136,6 @@ public final class HttpController implements Controller
                 final JsonObject object = (JsonObject) element;
                 final JsonObject headers = object.getAsJsonObject("headers");
                 final JsonObject overrides = object.getAsJsonObject("overrides");
-                final JsonObject excludes = object.getAsJsonObject("excludes");
 
                 routeEx = routeExRW.wrap(extensionBuffer, 0, extensionBuffer.capacity())
                         .headers(hs ->
@@ -159,18 +159,6 @@ public final class HttpController implements Controller
                                     String name = e.getKey();
                                     String value = e.getValue().getAsString();
                                     os.item(h -> h.name(name).value(value));
-                                });
-                            }
-                        })
-                        .excludes(es ->
-                        {
-                            if (excludes != null)
-                            {
-                                excludes.entrySet().forEach(e ->
-                                {
-                                    String name = e.getKey();
-                                    String value = e.getValue().getAsString();
-                                    es.item(h -> h.name(name).value(value));
                                 });
                             }
                         })

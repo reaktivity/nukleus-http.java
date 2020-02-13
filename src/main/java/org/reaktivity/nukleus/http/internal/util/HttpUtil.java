@@ -22,15 +22,15 @@ public final class HttpUtil
         String name,
         String value)
     {
-        String[] newHeaderName = name.split("-");
-
-        for (String oldName : newHeaderName)
+        StringBuilder nameBuilder = new StringBuilder(name);
+        int i = 0;
+        do
         {
-            payload.append(oldName.substring(0, 1).toUpperCase()).append(oldName.substring(1).toLowerCase()).append("-");
-        }
+            nameBuilder.replace(i, i + 1, nameBuilder.substring(i, i + 1).toUpperCase());
+            i =  nameBuilder.indexOf("-", i) + 1;
+        } while (i > 0 && i < nameBuilder.length());
 
-        payload.deleteCharAt(payload.length() - 1);
-        payload.append(": ").append(value).append("\r\n");
+        payload.append(nameBuilder).append(": ").append(value).append("\r\n");
     }
 
     private HttpUtil()
