@@ -352,6 +352,19 @@ final class ClientConnectReplyStream
         {
             releaseSlotIfNecessary();
         }
+        flushCredit();
+    }
+
+    private void flushCredit()
+    {
+        final int connectReplyCredit = Math.min(acceptReplyBudget, factory.bufferPool.slotCapacity())
+                                       - connectReplyBudget - slotOffset;
+        if (connectReplyCredit > 0)
+        {
+            connectReplyBudget += connectReplyCredit;
+            factory.writer.doWindow(connectReplyThrottle, connectRouteId, connectReplyId,
+                factory.supplyTrace.getAsLong(), connectReplyCredit, 0);
+        }
     }
 
     private void doCleanup(CloseAction action)
@@ -550,8 +563,8 @@ final class ClientConnectReplyStream
                 claimed = acceptReplyDebitor.claim(acceptReplyDebitorIndex, acceptReplyId, minimum, maximum);
             }
 
-            final int required = claimed;
-            final int writableMax = required - acceptReplyPadding;
+            final int reserved = claimed;
+            final int writableMax = reserved - acceptReplyPadding;
             if (writableMax > 0)
             {
                 factory.writer.doHttpData(acceptReply, acceptRouteId, acceptReplyId, acceptReplyTraceId, acceptReplyPadding,
@@ -854,14 +867,7 @@ final class ClientConnectReplyStream
             }
         }
 
-        final int connectReplyCredit = Math.min(acceptReplyBudget, factory.bufferPool.slotCapacity())
-                                       - connectReplyBudget - slotOffset;
-        if (connectReplyCredit > 0)
-        {
-            connectReplyBudget += connectReplyCredit;
-            factory.writer.doWindow(connectReplyThrottle, connectRouteId, connectReplyId,
-                    traceId, connectReplyCredit, 0);
-        }
+        flushCredit();
     }
 
     private void handleReset(
