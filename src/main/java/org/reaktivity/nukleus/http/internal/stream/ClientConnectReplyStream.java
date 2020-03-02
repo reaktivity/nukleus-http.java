@@ -870,7 +870,6 @@ final class ClientConnectReplyStream
         {
             flushCredit();
         }
-
     }
 
     private void handleReset(
