@@ -357,13 +357,13 @@ final class ClientConnectReplyStream
 
     private void flushCredit()
     {
-        final int connectReplyCredit = Math.min(acceptReplyBudget, factory.bufferPool.slotCapacity())
-                                       - connectReplyBudget - slotOffset;
+        final int connectReplyCredit = factory.bufferPool.slotCapacity() - connectReplyBudget - slotOffset;
+        final long traceId = factory.supplyTrace.getAsLong();
         if (connectReplyCredit > 0)
         {
             connectReplyBudget += connectReplyCredit;
             factory.writer.doWindow(connectReplyThrottle, connectRouteId, connectReplyId,
-                factory.supplyTrace.getAsLong(), connectReplyCredit, 0);
+                traceId, connectReplyCredit, 0);
         }
     }
 
@@ -866,8 +866,11 @@ final class ClientConnectReplyStream
                 doCleanup(CloseAction.END);
             }
         }
+        else
+        {
+            flushCredit();
+        }
 
-        flushCredit();
     }
 
     private void handleReset(
