@@ -352,11 +352,7 @@ final class ClientConnectReplyStream
         {
             releaseSlotIfNecessary();
         }
-        flushCredit();
-    }
 
-    private void flushCredit()
-    {
         final int connectReplyCredit = factory.bufferPool.slotCapacity() - connectReplyBudget - slotOffset;
         final long traceId = factory.supplyTrace.getAsLong();
         if (connectReplyCredit > 0)
