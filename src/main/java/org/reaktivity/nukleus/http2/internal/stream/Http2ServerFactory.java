@@ -60,12 +60,12 @@ import org.reaktivity.nukleus.function.MessageConsumer;
 import org.reaktivity.nukleus.function.MessageFunction;
 import org.reaktivity.nukleus.function.MessagePredicate;
 import org.reaktivity.nukleus.http.internal.HttpNukleus;
-import org.reaktivity.nukleus.http.internal.types.ArrayFW;
+import org.reaktivity.nukleus.http.internal.types.Array32FW;
 import org.reaktivity.nukleus.http.internal.types.Flyweight;
 import org.reaktivity.nukleus.http.internal.types.HttpHeaderFW;
 import org.reaktivity.nukleus.http.internal.types.OctetsFW;
 import org.reaktivity.nukleus.http.internal.types.String16FW;
-import org.reaktivity.nukleus.http.internal.types.StringFW;
+import org.reaktivity.nukleus.http.internal.types.String8FW;
 import org.reaktivity.nukleus.http.internal.types.control.HttpRouteExFW;
 import org.reaktivity.nukleus.http.internal.types.control.RouteFW;
 import org.reaktivity.nukleus.http.internal.types.stream.AbortFW;
@@ -114,20 +114,20 @@ public final class Http2ServerFactory implements StreamFactory
     private static final DirectBuffer EMPTY_BUFFER = new UnsafeBuffer(new byte[0]);
     private static final OctetsFW EMPTY_OCTETS = new OctetsFW().wrap(EMPTY_BUFFER, 0, 0);
 
-    private static final ArrayFW<HttpHeaderFW> HEADERS_200_OK =
-            new ArrayFW.Builder<>(new HttpHeaderFW.Builder(), new HttpHeaderFW())
+    private static final Array32FW<HttpHeaderFW> HEADERS_200_OK =
+            new Array32FW.Builder<>(new HttpHeaderFW.Builder(), new HttpHeaderFW())
                 .wrap(new UnsafeBuffer(new byte[64]), 0, 64)
                 .item(h -> h.name(":status").value("200"))
                 .build();
 
-    private static final ArrayFW<HttpHeaderFW> HEADERS_404_NOT_FOUND =
-            new ArrayFW.Builder<>(new HttpHeaderFW.Builder(), new HttpHeaderFW())
+    private static final Array32FW<HttpHeaderFW> HEADERS_404_NOT_FOUND =
+            new Array32FW.Builder<>(new HttpHeaderFW.Builder(), new HttpHeaderFW())
                 .wrap(new UnsafeBuffer(new byte[64]), 0, 64)
                 .item(h -> h.name(":status").value("404"))
                 .build();
 
-    private static final ArrayFW<HttpHeaderFW> TRAILERS_EMPTY =
-            new ArrayFW.Builder<>(new HttpHeaderFW.Builder(), new HttpHeaderFW())
+    private static final Array32FW<HttpHeaderFW> TRAILERS_EMPTY =
+            new Array32FW.Builder<>(new HttpHeaderFW.Builder(), new HttpHeaderFW())
                 .wrap(new UnsafeBuffer(new byte[64]), 0, 64)
                 .build();
 
@@ -2238,7 +2238,7 @@ public final class Http2ServerFactory implements StreamFactory
             long traceId,
             long authorization,
             int streamId,
-            ArrayFW<HttpHeaderFW> promise)
+            Array32FW<HttpHeaderFW> promise)
         {
             final Map<String, String> headers = headersDecoder.headers;
             headers.clear();
@@ -2370,7 +2370,7 @@ public final class Http2ServerFactory implements StreamFactory
             long traceId,
             long authorization,
             int streamId,
-            ArrayFW<HttpHeaderFW> headers,
+            Array32FW<HttpHeaderFW> headers,
             boolean endResponse)
         {
             final Http2HeadersFW http2Headers = http2HeadersRW.wrap(frameBuffer, 0, frameBuffer.capacity())
@@ -2422,7 +2422,7 @@ public final class Http2ServerFactory implements StreamFactory
             long traceId,
             long authorization,
             int streamId,
-            ArrayFW<HttpHeaderFW> trailers)
+            Array32FW<HttpHeaderFW> trailers)
         {
             if (trailers.isEmpty())
             {
@@ -2453,7 +2453,7 @@ public final class Http2ServerFactory implements StreamFactory
             long authorization,
             int streamId,
             int promiseId,
-            ArrayFW<HttpHeaderFW> promise)
+            Array32FW<HttpHeaderFW> promise)
         {
             final Http2PushPromiseFW http2PushPromise = http2PushPromiseRW.wrap(frameBuffer, 0, frameBuffer.capacity())
                     .streamId(streamId)
@@ -2905,7 +2905,7 @@ public final class Http2ServerFactory implements StreamFactory
                 state = Http2State.openReply(state);
 
                 final HttpBeginExFW beginEx = begin.extension().get(beginExRO::tryWrap);
-                final ArrayFW<HttpHeaderFW> headers = beginEx != null ? beginEx.headers() : HEADERS_200_OK;
+                final Array32FW<HttpHeaderFW> headers = beginEx != null ? beginEx.headers() : HEADERS_200_OK;
 
                 final long traceId = begin.traceId();
                 final long authorization = begin.authorization();
@@ -2952,7 +2952,7 @@ public final class Http2ServerFactory implements StreamFactory
 
                     if (dataEx != null)
                     {
-                        final ArrayFW<HttpHeaderFW> promise = dataEx.promise();
+                        final Array32FW<HttpHeaderFW> promise = dataEx.promise();
 
                         onEncodePromise(traceId, authorization, streamId, promise);
                     }
@@ -3002,7 +3002,7 @@ public final class Http2ServerFactory implements StreamFactory
                 setResponseClosed();
 
                 final HttpEndExFW endEx = end.extension().get(endExRO::tryWrap);
-                final ArrayFW<HttpHeaderFW> trailers = endEx != null ? endEx.trailers() : TRAILERS_EMPTY;
+                final Array32FW<HttpHeaderFW> trailers = endEx != null ? endEx.trailers() : TRAILERS_EMPTY;
 
                 final long traceId = end.traceId();
                 final long authorization = end.authorization();
@@ -3598,7 +3598,7 @@ public final class Http2ServerFactory implements StreamFactory
 
         void encodePromise(
             HpackContext encodeContext,
-            ArrayFW<HttpHeaderFW> headers,
+            Array32FW<HttpHeaderFW> headers,
             HpackHeaderBlockFW.Builder headerBlock)
         {
             reset(encodeContext);
@@ -3607,7 +3607,7 @@ public final class Http2ServerFactory implements StreamFactory
 
         void encodeHeaders(
             HpackContext encodeContext,
-            ArrayFW<HttpHeaderFW> headers,
+            Array32FW<HttpHeaderFW> headers,
             HpackHeaderBlockFW.Builder headerBlock)
         {
             reset(encodeContext);
@@ -3644,7 +3644,7 @@ public final class Http2ServerFactory implements StreamFactory
 
         void encodeTrailers(
             HpackContext encodeContext,
-            ArrayFW<HttpHeaderFW> headers,
+            Array32FW<HttpHeaderFW> headers,
             HpackHeaderBlockFW.Builder headerBlock)
         {
             reset(encodeContext);
@@ -3682,7 +3682,7 @@ public final class Http2ServerFactory implements StreamFactory
         private void connectionHeaders(
             HttpHeaderFW header)
         {
-            final StringFW name = header.name();
+            final String8FW name = header.name();
 
             if (name.value().equals(CONNECTION))
             {
@@ -3698,7 +3698,7 @@ public final class Http2ServerFactory implements StreamFactory
         private boolean includeHeader(
             HttpHeaderFW header)
         {
-            final StringFW name = header.name();
+            final String8FW name = header.name();
             final DirectBuffer nameBuffer = name.value();
 
             // Excluding 8.1.2.1 pseudo-header fields
@@ -3733,7 +3733,7 @@ public final class Http2ServerFactory implements StreamFactory
             HttpHeaderFW header,
             HpackHeaderFieldFW.Builder builder)
         {
-            final StringFW name = header.name();
+            final String8FW name = header.name();
             final String16FW value = header.value();
 
             final int index = context.index(name.value(), value.value());
