@@ -866,10 +866,6 @@ final class ClientConnectReplyStream
                 doCleanup(CloseAction.END);
             }
         }
-        else
-        {
-            flushCredit();
-        }
     }
 
     private void handleReset(
