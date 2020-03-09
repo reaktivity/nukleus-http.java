@@ -138,7 +138,9 @@ public final class HttpServerFactory implements StreamFactory
                     .item(i -> i.name(HEADER_CONNECTION).value(CONNECTION_CLOSE))
                     .build();
     private static final Array32FW<HttpHeaderFW> DEFAULT_TRAILERS =
-            new Array32FW<>(new HttpHeaderFW()).wrap(new UnsafeBuffer(new byte[4]), 0, 4);
+            new Array32FW.Builder<>(new HttpHeaderFW.Builder(), new HttpHeaderFW())
+                         .wrap(new UnsafeBuffer(new byte[8]), 0, 8)
+                         .build();
 
     private static final Map<String16FW, String> SCHEME_PORTS;
 
