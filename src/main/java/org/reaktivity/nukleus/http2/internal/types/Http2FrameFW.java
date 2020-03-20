@@ -128,6 +128,10 @@ public class Http2FrameFW extends Flyweight
         {
             payloadRO.wrap(buffer, offset() + PAYLOAD_OFFSET, payloadLength);
         }
+        else
+        {
+            payloadRO.wrap(0, 0);
+        }
 
         checkLimit(limit(), maxLimit);
 
