@@ -2129,9 +2129,13 @@ public final class Http2ServerFactory implements StreamFactory
                 }
                 else
                 {
-                    final DirectBuffer payload = http2Data.payload();
 
-                    exchange.doRequestData(traceId, authorization, payload, 0, payload.capacity());
+                    if (http2Data.dataLength() > 0)
+                    {
+                        final DirectBuffer payload = http2Data.payload();
+                        exchange.doRequestData(traceId, authorization, payload, 0, payload.capacity());
+                    }
+
 
                     if (endRequest)
                     {
