@@ -51,12 +51,12 @@ import org.reaktivity.nukleus.function.MessageFunction;
 import org.reaktivity.nukleus.function.MessagePredicate;
 import org.reaktivity.nukleus.http.internal.HttpConfiguration;
 import org.reaktivity.nukleus.http.internal.HttpNukleus;
-import org.reaktivity.nukleus.http.internal.types.ArrayFW;
+import org.reaktivity.nukleus.http.internal.types.Array32FW;
 import org.reaktivity.nukleus.http.internal.types.Flyweight;
 import org.reaktivity.nukleus.http.internal.types.HttpHeaderFW;
 import org.reaktivity.nukleus.http.internal.types.OctetsFW;
 import org.reaktivity.nukleus.http.internal.types.String16FW;
-import org.reaktivity.nukleus.http.internal.types.StringFW;
+import org.reaktivity.nukleus.http.internal.types.String8FW;
 import org.reaktivity.nukleus.http.internal.types.control.HttpRouteExFW;
 import org.reaktivity.nukleus.http.internal.types.control.RouteFW;
 import org.reaktivity.nukleus.http.internal.types.stream.AbortFW;
@@ -113,15 +113,15 @@ public final class HttpServerFactory implements StreamFactory
     private static final DirectBuffer ERROR_507_INSUFFICIENT_STORAGE =
             initResponse(507, "Insufficient Storage");
 
-    private static final StringFW HEADER_AUTHORITY = new StringFW(":authority");
-    private static final StringFW HEADER_CONNECTION = new StringFW("connection");
-    private static final StringFW HEADER_CONTENT_LENGTH = new StringFW("content-length");
-    private static final StringFW HEADER_METHOD = new StringFW(":method");
-    private static final StringFW HEADER_PATH = new StringFW(":path");
-    private static final StringFW HEADER_SCHEME = new StringFW(":scheme");
-    private static final StringFW HEADER_STATUS = new StringFW(":status");
-    private static final StringFW HEADER_TRANSFER_ENCODING = new StringFW("transfer-encoding");
-    private static final StringFW HEADER_UPGRADE = new StringFW("upgrade");
+    private static final String8FW HEADER_AUTHORITY = new String8FW(":authority");
+    private static final String8FW HEADER_CONNECTION = new String8FW("connection");
+    private static final String8FW HEADER_CONTENT_LENGTH = new String8FW("content-length");
+    private static final String8FW HEADER_METHOD = new String8FW(":method");
+    private static final String8FW HEADER_PATH = new String8FW(":path");
+    private static final String8FW HEADER_SCHEME = new String8FW(":scheme");
+    private static final String8FW HEADER_STATUS = new String8FW(":status");
+    private static final String8FW HEADER_TRANSFER_ENCODING = new String8FW("transfer-encoding");
+    private static final String8FW HEADER_UPGRADE = new String8FW("upgrade");
 
     private static final String16FW CONNECTION_CLOSE = new String16FW("close");
     private static final String16FW SCHEME_HTTP = new String16FW("http");
@@ -131,14 +131,16 @@ public final class HttpServerFactory implements StreamFactory
     private static final String16FW TRANSFER_ENCODING_CHUNKED = new String16FW("chunked");
 
     private static final OctetsFW EMPTY_OCTETS = new OctetsFW().wrap(new UnsafeBuffer(new byte[0]), 0, 0);
-    private static final ArrayFW<HttpHeaderFW> DEFAULT_HEADERS =
-            new ArrayFW.Builder<>(new HttpHeaderFW.Builder(), new HttpHeaderFW())
+    private static final Array32FW<HttpHeaderFW> DEFAULT_HEADERS =
+            new Array32FW.Builder<>(new HttpHeaderFW.Builder(), new HttpHeaderFW())
                     .wrap(new UnsafeBuffer(new byte[64]), 0, 64)
                     .item(i -> i.name(HEADER_STATUS).value(STATUS_200))
                     .item(i -> i.name(HEADER_CONNECTION).value(CONNECTION_CLOSE))
                     .build();
-    private static final ArrayFW<HttpHeaderFW> DEFAULT_TRAILERS =
-            new ArrayFW<>(new HttpHeaderFW()).wrap(new UnsafeBuffer(new byte[4]), 0, 4);
+    private static final Array32FW<HttpHeaderFW> DEFAULT_TRAILERS =
+            new Array32FW.Builder<>(new HttpHeaderFW.Builder(), new HttpHeaderFW())
+                         .wrap(new UnsafeBuffer(new byte[8]), 0, 8)
+                         .build();
 
     private static final Map<String16FW, String> SCHEME_PORTS;
 
@@ -536,8 +538,8 @@ public final class HttpServerFactory implements StreamFactory
     }
 
     private boolean matchHeaders(
-        ArrayFW<HttpHeaderFW> routeHeaders,
-        ArrayFW<HttpHeaderFW> beginHeaders)
+        Array32FW<HttpHeaderFW> routeHeaders,
+        Array32FW<HttpHeaderFW> beginHeaders)
     {
         final HttpHeaderFW schemeHeader = routeHeaders.matchFirst(h -> HEADER_SCHEME.equals(h.name()));
         final String16FW scheme = schemeHeader != null ? schemeHeader.value() : null;
@@ -1476,7 +1478,7 @@ public final class HttpServerFactory implements StreamFactory
             long traceId,
             long authorization,
             long budgetId,
-            ArrayFW<HttpHeaderFW> headers)
+            Array32FW<HttpHeaderFW> headers)
         {
             // TODO: queue if pipelined responses arrive out of order
             assert exchange == this.exchange;
@@ -1630,7 +1632,7 @@ public final class HttpServerFactory implements StreamFactory
             long traceId,
             long authorization,
             long budgetId,
-            ArrayFW<HttpHeaderFW> trailers)
+            Array32FW<HttpHeaderFW> trailers)
         {
             assert exchange == this.exchange;
 
@@ -1922,7 +1924,7 @@ public final class HttpServerFactory implements StreamFactory
                 BeginFW begin)
             {
                 final HttpBeginExFW beginEx = begin.extension().get(beginExRO::tryWrap);
-                final ArrayFW<HttpHeaderFW> headers = beginEx != null ? beginEx.headers() : DEFAULT_HEADERS;
+                final Array32FW<HttpHeaderFW> headers = beginEx != null ? beginEx.headers() : DEFAULT_HEADERS;
 
                 final long traceId = begin.traceId();
                 final long authorization = begin.authorization();
@@ -1960,7 +1962,7 @@ public final class HttpServerFactory implements StreamFactory
                 EndFW end)
             {
                 final HttpEndExFW endEx = end.extension().get(endExRO::tryWrap);
-                final ArrayFW<HttpHeaderFW> trailers = endEx != null ? endEx.trailers() : DEFAULT_TRAILERS;
+                final Array32FW<HttpHeaderFW> trailers = endEx != null ? endEx.trailers() : DEFAULT_TRAILERS;
 
                 final long traceId = end.traceId();
                 final long authorization = end.authorization();
