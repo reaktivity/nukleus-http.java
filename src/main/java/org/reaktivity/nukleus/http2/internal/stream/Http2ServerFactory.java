@@ -1616,7 +1616,7 @@ public final class Http2ServerFactory implements StreamFactory
             }
         }
 
-        private void resumeNetworkDecoding(
+        private void decodeNetworkIfNecessary(
             long traceId,
             long authorization)
         {
@@ -2733,7 +2733,7 @@ public final class Http2ServerFactory implements StreamFactory
                     doEncodeHeaders(traceId, authorization, streamId, HEADERS_404_NOT_FOUND, true);
                 }
 
-                resumeNetworkDecoding(traceId, authorization);
+                decodeNetworkIfNecessary(traceId, authorization);
                 cleanup(traceId, authorization);
             }
 
@@ -2776,7 +2776,7 @@ public final class Http2ServerFactory implements StreamFactory
                 }
 
                 applicationHeadersProcessed.remove(streamId);
-                resumeNetworkDecoding(traceId, authorization);
+                decodeNetworkIfNecessary(traceId, authorization);
             }
 
             private void flushRequestData(
