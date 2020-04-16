@@ -26,9 +26,7 @@ import static org.reaktivity.nukleus.buffer.BufferPool.NO_SLOT;
 import static org.reaktivity.nukleus.http.internal.util.BufferUtil.indexOfByte;
 import static org.reaktivity.nukleus.http.internal.util.BufferUtil.limitOfBytes;
 
-import java.net.MalformedURLException;
 import java.net.URI;
-import java.net.URISyntaxException;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -653,9 +651,9 @@ public final class HttpServerFactory implements StreamFactory
             URI targetURI = null;
             try
             {
-                targetURI = new URI(target);
+                targetURI = URI.create(target);
             }
-            catch (IllegalArgumentException | URISyntaxException e)
+            catch (IllegalArgumentException e)
             {
                 //NOOP
             }
