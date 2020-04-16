@@ -16,6 +16,8 @@
 package org.reaktivity.nukleus.http.internal.util;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
 
@@ -75,6 +77,20 @@ public class HttpUtilTest
         StringBuilder message = new StringBuilder();
         HttpUtil.appendHeader(message, "---", "value");
         assertEquals("---: value\r\n", message.toString());
+    }
+
+    @Test
+    public void shouldCheckValidPath()
+    {
+       String path = "/api/valid?limit=10000&offset=0&geometry=[[[-1,0],[-3,4]]";
+       assertTrue(HttpUtil.isValidPath(path));
+    }
+
+    @Test
+    public void shouldCheckInValidPath()
+    {
+        String path = "/api/invalid?limit=10000&offset=0&geometry={[[[-1,0],[-3,4]]}";
+        assertFalse(HttpUtil.isValidPath(path));
     }
 
 }

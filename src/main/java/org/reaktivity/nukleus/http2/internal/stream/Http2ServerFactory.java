@@ -18,6 +18,7 @@ package org.reaktivity.nukleus.http2.internal.stream;
 import static java.util.Objects.requireNonNull;
 import static org.reaktivity.nukleus.budget.BudgetCreditor.NO_CREDITOR_INDEX;
 import static org.reaktivity.nukleus.buffer.BufferPool.NO_SLOT;
+import static org.reaktivity.nukleus.http.internal.util.HttpHeader.PATH;
 import static org.reaktivity.nukleus.http2.internal.hpack.HpackContext.CONNECTION;
 import static org.reaktivity.nukleus.http2.internal.hpack.HpackContext.DEFAULT_ACCESS_CONTROL_ALLOW_ORIGIN;
 import static org.reaktivity.nukleus.http2.internal.hpack.HpackContext.KEEP_ALIVE;
@@ -78,6 +79,7 @@ import org.reaktivity.nukleus.http.internal.types.stream.HttpEndExFW;
 import org.reaktivity.nukleus.http.internal.types.stream.ResetFW;
 import org.reaktivity.nukleus.http.internal.types.stream.SignalFW;
 import org.reaktivity.nukleus.http.internal.types.stream.WindowFW;
+import org.reaktivity.nukleus.http.internal.util.HttpUtil;
 import org.reaktivity.nukleus.http2.internal.Http2Configuration;
 import org.reaktivity.nukleus.http2.internal.Http2Counters;
 import org.reaktivity.nukleus.http2.internal.hpack.HpackContext;
@@ -125,6 +127,12 @@ public final class Http2ServerFactory implements StreamFactory
                 .wrap(new UnsafeBuffer(new byte[64]), 0, 64)
                 .item(h -> h.name(":status").value("404"))
                 .build();
+
+    private static final Array32FW<HttpHeaderFW> HEADERS_400_BAD_REQUEST =
+        new Array32FW.Builder<>(new HttpHeaderFW.Builder(), new HttpHeaderFW())
+            .wrap(new UnsafeBuffer(new byte[64]), 0, 64)
+            .item(h -> h.name(":status").value("400"))
+            .build();
 
     private static final Array32FW<HttpHeaderFW> TRAILERS_EMPTY =
             new Array32FW.Builder<>(new HttpHeaderFW.Builder(), new HttpHeaderFW())
@@ -1959,6 +1967,14 @@ public final class Http2ServerFactory implements StreamFactory
             else
             {
                 final Map<String, String> headers = headersDecoder.headers;
+
+                final String path = headers.get(PATH);
+                if (!HttpUtil.isValidPath(path))
+                {
+                    doEncodeHeaders(traceId, authorization, streamId, HEADERS_400_BAD_REQUEST, true);
+                    return;
+                }
+
                 final String authority = headers.get(":authority");
                 if (authority.indexOf(':') == -1)
                 {

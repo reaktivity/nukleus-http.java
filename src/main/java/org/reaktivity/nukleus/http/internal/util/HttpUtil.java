@@ -17,8 +17,13 @@ package org.reaktivity.nukleus.http.internal.util;
 
 import static java.lang.Character.toUpperCase;
 
+import java.util.regex.Pattern;
+
 public final class HttpUtil
 {
+    private final static String HTTP_PATH_REGEX = "^[\\w\\-._~:/?#\\[\\]@!$&'()*+,;=]+$";
+    private static final Pattern HTTP_PATH_VALIDITY = Pattern.compile(HTTP_PATH_REGEX);
+
     public static void appendHeader(
         StringBuilder payload,
         String name,
@@ -33,6 +38,12 @@ public final class HttpUtil
         } while (fromIndex > 0 && fromIndex < initCapsName.length());
 
         payload.append(initCapsName).append(": ").append(value).append("\r\n");
+    }
+
+    public static boolean isValidPath(
+        String path)
+    {
+        return HTTP_PATH_VALIDITY.matcher(path).find();
     }
 
     private HttpUtil()
