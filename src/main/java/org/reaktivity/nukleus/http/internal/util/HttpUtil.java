@@ -21,7 +21,7 @@ import java.util.regex.Pattern;
 
 public final class HttpUtil
 {
-    private final static String HTTP_PATH_REGEX = "^[\\w\\-._~:/?#\\[\\]@!$&'()*+,;=]+$";
+    private static final String HTTP_PATH_REGEX = "^[\\w\\-._~:/?#\\[\\]@!$&'()*+,;=]+$";
     private static final Pattern HTTP_PATH_VALIDITY = Pattern.compile(HTTP_PATH_REGEX);
 
     public static void appendHeader(

@@ -82,8 +82,8 @@ public class HttpUtilTest
     @Test
     public void shouldCheckValidPath()
     {
-       String path = "/api/valid?limit=10000&offset=0&geometry=[[[-1,0],[-3,4]]";
-       assertTrue(HttpUtil.isValidPath(path));
+        String path = "/api/valid?limit=10000&offset=0&geometry=[[[-1,0],[-3,4]]";
+        assertTrue(HttpUtil.isValidPath(path));
     }
 
     @Test
