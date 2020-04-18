@@ -17,24 +17,22 @@ package org.reaktivity.nukleus.http.internal.util;
 
 import static java.lang.Character.toUpperCase;
 
-import java.util.regex.Pattern;
-
 import org.agrona.DirectBuffer;
 
 public final class HttpUtil
 {
-    private final static byte ASCII_32 = 0x20;
-    private final static byte ASCII_34 = 0x22;
-    private final static byte ASCII_37 = 0x25;
-    private final static byte ASCII_60 = 0x3C;
-    private final static byte ASCII_62 = 0x3E;
-    private final static byte ASCII_92 = 0x5C;
-    private final static byte ASCII_94 = 0x5E;
-    private final static byte ASCII_96 = 0x60;
-    private final static byte ASCII_123 = 0x7B;
-    private final static byte ASCII_124 = 0x7C;
-    private final static byte ASCII_125 = 0x7D;
-    private final static byte ASCII_127 = 0x7F;
+    private static final byte ASCII_32 = 0x20;
+    private static final byte ASCII_34 = 0x22;
+    private static final byte ASCII_37 = 0x25;
+    private static final byte ASCII_60 = 0x3C;
+    private static final byte ASCII_62 = 0x3E;
+    private static final byte ASCII_92 = 0x5C;
+    private static final byte ASCII_94 = 0x5E;
+    private static final byte ASCII_96 = 0x60;
+    private static final byte ASCII_123 = 0x7B;
+    private static final byte ASCII_124 = 0x7C;
+    private static final byte ASCII_125 = 0x7D;
+    private static final byte ASCII_127 = 0x7F;
 
 
     public static void appendHeader(
@@ -57,7 +55,7 @@ public final class HttpUtil
         DirectBuffer path)
     {
         boolean isPathValid = true;
-        for (int i = 0; i < path.capacity(); i ++)
+        for (int i = 0; i < path.capacity(); i++)
         {
             byte charByte = path.getByte(i);
 
