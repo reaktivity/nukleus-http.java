@@ -1953,7 +1953,7 @@ public final class Http2ServerFactory implements StreamFactory
 
             if (headersDecoder.httpError())
             {
-                doEncodeHeaders(traceId, authorization, streamId, headersDecoder.httpError, true);
+                doEncodeHeaders(traceId, authorization, streamId, headersDecoder.httpErrorHeader, true);
             }
             else if (headersDecoder.error())
             {
@@ -1970,7 +1970,6 @@ public final class Http2ServerFactory implements StreamFactory
             else
             {
                 final Map<String, String> headers = headersDecoder.headers;
-
                 final String authority = headers.get(":authority");
                 if (authority.indexOf(':') == -1)
                 {
@@ -3249,7 +3248,7 @@ public final class Http2ServerFactory implements StreamFactory
 
         Http2ErrorCode connectionError;
         Http2ErrorCode streamError;
-        Array32FW<HttpHeaderFW> httpError;
+        Array32FW<HttpHeaderFW> httpErrorHeader;
 
         final Map<String, String> headers = new LinkedHashMap<>();
         long contentLength = -1;
@@ -3306,7 +3305,7 @@ public final class Http2ServerFactory implements StreamFactory
 
         boolean httpError()
         {
-            return httpError != null;
+            return httpErrorHeader != null;
         }
 
         private void reset(
@@ -3397,7 +3396,7 @@ public final class Http2ServerFactory implements StreamFactory
                             path++;
                             if (!HttpUtil.isValidPath(value))
                             {
-                                httpError = HEADERS_400_BAD_REQUEST;
+                                httpErrorHeader = HEADERS_400_BAD_REQUEST;
                             }
                         }
 
