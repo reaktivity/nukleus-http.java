@@ -3402,7 +3402,6 @@ public final class Http2ServerFactory implements StreamFactory
                                 httpErrorHeader = HEADERS_400_BAD_REQUEST;
                             }
                         }
-
                         break;
                     case 6:             // :scheme
                         scheme++;
