@@ -61,7 +61,7 @@ public final class HttpUtil
         {
             byte charByte = path.getByte(i);
 
-            if (((charByte & ASCII_32) == 0) ||
+            if (((charByte & 0x20) == 0) ||
                 ((charByte & 0x80) == 0x80) ||
                 (charByte == ASCII_32) ||
                 (charByte == ASCII_34) ||
