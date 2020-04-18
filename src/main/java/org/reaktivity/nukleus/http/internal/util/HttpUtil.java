@@ -19,10 +19,23 @@ import static java.lang.Character.toUpperCase;
 
 import java.util.regex.Pattern;
 
+import org.agrona.DirectBuffer;
+
 public final class HttpUtil
 {
-    private static final String HTTP_PATH_REGEX = "^[\\w\\-._~:/?#\\[\\]@!$&'()*+,;=]+$";
-    private static final Pattern HTTP_PATH_VALIDITY = Pattern.compile(HTTP_PATH_REGEX);
+    private final static byte ASCII_32 = 0x20;
+    private final static byte ASCII_34 = 0x22;
+    private final static byte ASCII_37 = 0x25;
+    private final static byte ASCII_60 = 0x3C;
+    private final static byte ASCII_62 = 0x3E;
+    private final static byte ASCII_92 = 0x5C;
+    private final static byte ASCII_94 = 0x5E;
+    private final static byte ASCII_96 = 0x60;
+    private final static byte ASCII_123 = 0x7B;
+    private final static byte ASCII_124 = 0x7C;
+    private final static byte ASCII_125 = 0x7D;
+    private final static byte ASCII_127 = 0x7F;
+
 
     public static void appendHeader(
         StringBuilder payload,
@@ -41,10 +54,35 @@ public final class HttpUtil
     }
 
     public static boolean isValidPath(
-        String path)
+        DirectBuffer path)
     {
-        return HTTP_PATH_VALIDITY.matcher(path).find();
+        boolean isPathValid = true;
+        for (int i = 0; i < path.capacity(); i ++)
+        {
+            byte charByte = path.getByte(i);
+
+            if (((charByte & ASCII_32) == 0) ||
+                ((charByte & 0x80) == 0x80) ||
+                (charByte == ASCII_32) ||
+                (charByte == ASCII_34) ||
+                (charByte == ASCII_37) ||
+                (charByte == ASCII_60) ||
+                (charByte == ASCII_62) ||
+                (charByte == ASCII_92) ||
+                (charByte == ASCII_94) ||
+                (charByte == ASCII_96) ||
+                (charByte == ASCII_123) ||
+                (charByte == ASCII_124) ||
+                (charByte == ASCII_125) ||
+                (charByte == ASCII_127))
+            {
+                isPathValid = false;
+                break;
+            }
+        }
+        return isPathValid;
     }
+
 
     private HttpUtil()
     {

@@ -19,6 +19,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import org.agrona.concurrent.UnsafeBuffer;
 import org.junit.Test;
 
 public class HttpUtilTest
@@ -82,15 +83,15 @@ public class HttpUtilTest
     @Test
     public void shouldCheckValidPath()
     {
-        String path = "/api/valid?limit=10000&offset=0&geometry=[[[-1,0],[-3,4]]";
-        assertTrue(HttpUtil.isValidPath(path));
+        String path = "/api/invalid?limit=10000&offset=0&geometry=";
+        assertTrue(HttpUtil.isValidPath(new UnsafeBuffer(path.getBytes())));
     }
 
     @Test
     public void shouldCheckInValidPath()
     {
         String path = "/api/invalid?limit=10000&offset=0&geometry={[[[-1,0],[-3,4]]}";
-        assertFalse(HttpUtil.isValidPath(path));
+        assertFalse(HttpUtil.isValidPath(new UnsafeBuffer(path.getBytes())));
     }
 
 }

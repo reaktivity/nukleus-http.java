@@ -18,7 +18,6 @@ package org.reaktivity.nukleus.http2.internal.stream;
 import static java.util.Objects.requireNonNull;
 import static org.reaktivity.nukleus.budget.BudgetCreditor.NO_CREDITOR_INDEX;
 import static org.reaktivity.nukleus.buffer.BufferPool.NO_SLOT;
-import static org.reaktivity.nukleus.http.internal.util.HttpHeader.PATH;
 import static org.reaktivity.nukleus.http2.internal.hpack.HpackContext.CONNECTION;
 import static org.reaktivity.nukleus.http2.internal.hpack.HpackContext.DEFAULT_ACCESS_CONTROL_ALLOW_ORIGIN;
 import static org.reaktivity.nukleus.http2.internal.hpack.HpackContext.KEEP_ALIVE;
@@ -1952,7 +1951,11 @@ public final class Http2ServerFactory implements StreamFactory
             final HpackHeaderBlockFW headerBlock = headerBlockRO.wrap(buffer, offset, limit);
             headersDecoder.decodeHeaders(decodeContext, localSettings.headerTableSize, expectDynamicTableSizeUpdate, headerBlock);
 
-            if (headersDecoder.error())
+            if (headersDecoder.httpError())
+            {
+                doEncodeHeaders(traceId, authorization, streamId, headersDecoder.httpError, true);
+            }
+            else if (headersDecoder.error())
             {
                 if (headersDecoder.streamError != null)
                 {
@@ -1967,13 +1970,6 @@ public final class Http2ServerFactory implements StreamFactory
             else
             {
                 final Map<String, String> headers = headersDecoder.headers;
-
-                final String path = headers.get(PATH);
-                if (!HttpUtil.isValidPath(path))
-                {
-                    doEncodeHeaders(traceId, authorization, streamId, HEADERS_400_BAD_REQUEST, true);
-                    return;
-                }
 
                 final String authority = headers.get(":authority");
                 if (authority.indexOf(':') == -1)
@@ -3253,6 +3249,7 @@ public final class Http2ServerFactory implements StreamFactory
 
         Http2ErrorCode connectionError;
         Http2ErrorCode streamError;
+        Array32FW<HttpHeaderFW> httpError;
 
         final Map<String, String> headers = new LinkedHashMap<>();
         long contentLength = -1;
@@ -3305,6 +3302,11 @@ public final class Http2ServerFactory implements StreamFactory
         boolean error()
         {
             return streamError != null || connectionError != null;
+        }
+
+        boolean httpError()
+        {
+            return httpError != null;
         }
 
         private void reset(
@@ -3393,7 +3395,12 @@ public final class Http2ServerFactory implements StreamFactory
                         if (value.capacity() > 0)       // :path MUST not be empty
                         {
                             path++;
+                            if (!HttpUtil.isValidPath(value))
+                            {
+                                httpError = HEADERS_400_BAD_REQUEST;
+                            }
                         }
+
                         break;
                     case 6:             // :scheme
                         scheme++;
