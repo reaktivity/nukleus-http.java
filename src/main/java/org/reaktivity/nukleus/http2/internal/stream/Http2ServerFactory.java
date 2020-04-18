@@ -1145,8 +1145,8 @@ public final class Http2ServerFactory implements StreamFactory
                 }
 
                 decodeNetwork(traceId, authorization, budgetId, reserved, buffer, offset, limit);
-                final int initialCredit = reserved - decodeSlotReserved;
 
+                final int initialCredit = reserved - decodeSlotReserved;
                 if (initialCredit > 0)
                 {
                     doNetworkWindow(traceId, authorization, initialCredit, 0, 0);
@@ -1623,16 +1623,18 @@ public final class Http2ServerFactory implements StreamFactory
             }
         }
 
-        private void resumeNetworkDecoding(
+        private void decodeNetworkIfNecessary(
             long traceId,
             long authorization)
         {
             if (decodeSlot != NO_SLOT)
             {
                 final MutableDirectBuffer decodeBuffer = bufferPool.buffer(decodeSlot);
+                final int offset = 0;
+                final int limit = decodeSlotOffset;
                 final int reserved = decodeSlotReserved;
-                decodeNetwork(traceId, authorization, budgetId, decodeSlotReserved, decodeBuffer,
-                    0, decodeSlotOffset);
+
+                decodeNetwork(traceId, authorization, budgetId, reserved, decodeBuffer, offset, limit);
 
                 final int initialCredit = reserved - decodeSlotReserved;
                 if (initialCredit > 0)
@@ -2744,7 +2746,7 @@ public final class Http2ServerFactory implements StreamFactory
                     doEncodeHeaders(traceId, authorization, streamId, HEADERS_404_NOT_FOUND, true);
                 }
 
-                resumeNetworkDecoding(traceId, authorization);
+                decodeNetworkIfNecessary(traceId, authorization);
                 cleanup(traceId, authorization);
             }
 
@@ -2787,7 +2789,7 @@ public final class Http2ServerFactory implements StreamFactory
                 }
 
                 applicationHeadersProcessed.remove(streamId);
-                resumeNetworkDecoding(traceId, authorization);
+                decodeNetworkIfNecessary(traceId, authorization);
             }
 
             private void flushRequestData(
