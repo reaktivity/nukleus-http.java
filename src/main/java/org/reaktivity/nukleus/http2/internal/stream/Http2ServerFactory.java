@@ -1953,11 +1953,8 @@ public final class Http2ServerFactory implements StreamFactory
             final HpackHeaderBlockFW headerBlock = headerBlockRO.wrap(buffer, offset, limit);
             headersDecoder.decodeHeaders(decodeContext, localSettings.headerTableSize, expectDynamicTableSizeUpdate, headerBlock);
 
-            if (headersDecoder.httpError())
-            {
-                doEncodeHeaders(traceId, authorization, streamId, headersDecoder.httpErrorHeader, true);
-            }
-            else if (headersDecoder.error())
+
+            if (headersDecoder.error())
             {
                 if (headersDecoder.streamError != null)
                 {
@@ -1968,6 +1965,10 @@ public final class Http2ServerFactory implements StreamFactory
                     onDecodeError(traceId, authorization, headersDecoder.connectionError);
                     decoder = decodeIgnoreAll;
                 }
+            }
+            else if (headersDecoder.httpError())
+            {
+                doEncodeHeaders(traceId, authorization, streamId, headersDecoder.httpErrorHeader, true);
             }
             else
             {
