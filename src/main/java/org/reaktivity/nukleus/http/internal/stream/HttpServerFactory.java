@@ -27,7 +27,6 @@ import static org.reaktivity.nukleus.http.internal.util.BufferUtil.indexOfByte;
 import static org.reaktivity.nukleus.http.internal.util.BufferUtil.limitOfBytes;
 
 import java.net.URI;
-import java.nio.file.DirectoryStream;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
