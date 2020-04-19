@@ -22,7 +22,7 @@ import org.agrona.DirectBuffer;
 public final class HttpUtil
 {
     private static final long ASCII_LOW_RANGE_LONG_MASK = 0x2020_2020_2020_2020L;
-    private static final long ASCII_HIGH_RANGE_LONG_MASK = -0x8080_8080_8080_8080L;
+    private static final long ASCII_HIGH_RANGE_LONG_MASK = 0x8080_8080_8080_8080L;
     private static final byte ASCII_LOW_RANGE_MASK = 0x20;
     private static final byte ASCII_HIGH_RANGE_MASK = -0x80;
 
@@ -76,23 +76,23 @@ public final class HttpUtil
             {
                 switch ((int)(candidate & 0x0000_0000_0000_00FFL))
                 {
-                    case ASCII_SPACE:
-                    case ASCII_DOUBLE_QUOTES:
-                    case ASCII_PERCENT_SIGN:
-                    case ASCII_LESS_THAN:
-                    case ASCII_GREATER_THAN:
-                    case ASCII_BACKSLASH:
-                    case ASCII_CARET:
-                    case ASCII_GRAVE:
-                    case ASCII_OPEN_BRACE:
-                    case ASCII_VERTICAL_BAR:
-                    case ASCII_CLOSE_BRACE:
-                    case ASCII_DELETE:
-                        valid = false;
-                        break long_loop;
-                    default:
-                        candidate >>= 1;
-                        break;
+                case ASCII_SPACE:
+                case ASCII_DOUBLE_QUOTES:
+                case ASCII_PERCENT_SIGN:
+                case ASCII_LESS_THAN:
+                case ASCII_GREATER_THAN:
+                case ASCII_BACKSLASH:
+                case ASCII_CARET:
+                case ASCII_GRAVE:
+                case ASCII_OPEN_BRACE:
+                case ASCII_VERTICAL_BAR:
+                case ASCII_CLOSE_BRACE:
+                case ASCII_DELETE:
+                    valid = false;
+                    break long_loop;
+                default:
+                    candidate >>= 8;
+                    break;
                 }
             }
         }
