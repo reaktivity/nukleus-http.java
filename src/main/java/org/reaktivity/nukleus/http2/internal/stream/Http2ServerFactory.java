@@ -1953,7 +1953,6 @@ public final class Http2ServerFactory implements StreamFactory
             final HpackHeaderBlockFW headerBlock = headerBlockRO.wrap(buffer, offset, limit);
             headersDecoder.decodeHeaders(decodeContext, localSettings.headerTableSize, expectDynamicTableSizeUpdate, headerBlock);
 
-
             if (headersDecoder.error())
             {
                 if (headersDecoder.streamError != null)

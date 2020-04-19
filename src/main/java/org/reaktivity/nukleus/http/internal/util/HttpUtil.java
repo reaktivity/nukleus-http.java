@@ -21,19 +21,23 @@ import org.agrona.DirectBuffer;
 
 public final class HttpUtil
 {
-    private static final byte ASCII_32 = 0x20;
-    private static final byte ASCII_34 = 0x22;
-    private static final byte ASCII_37 = 0x25;
-    private static final byte ASCII_60 = 0x3C;
-    private static final byte ASCII_62 = 0x3E;
-    private static final byte ASCII_92 = 0x5C;
-    private static final byte ASCII_94 = 0x5E;
-    private static final byte ASCII_96 = 0x60;
-    private static final byte ASCII_123 = 0x7B;
-    private static final byte ASCII_124 = 0x7C;
-    private static final byte ASCII_125 = 0x7D;
-    private static final byte ASCII_127 = 0x7F;
+    private static final long ASCII_LOW_RANGE_LONG_MASK = 0x2020_2020_2020_2020L;
+    private static final long ASCII_HIGH_RANGE_LONG_MASK = -0x8080_8080_8080_8080L;
+    private static final byte ASCII_LOW_RANGE_MASK = 0x20;
+    private static final byte ASCII_HIGH_RANGE_MASK = -0x80;
 
+    private static final byte ASCII_SPACE = 0x20;
+    private static final byte ASCII_DOUBLE_QUOTES = 0x22;
+    private static final byte ASCII_PERCENT_SIGN = 0x25;
+    private static final byte ASCII_LESS_THAN = 0x3C;
+    private static final byte ASCII_GREATER_THAN = 0x3E;
+    private static final byte ASCII_BACKSLASH = 0x5C;
+    private static final byte ASCII_CARET = 0x5E;
+    private static final byte ASCII_GRAVE = 0x60;
+    private static final byte ASCII_OPEN_BRACE = 0x7B;
+    private static final byte ASCII_VERTICAL_BAR = 0x7C;
+    private static final byte ASCII_CLOSE_BRACE = 0x7D;
+    private static final byte ASCII_DELETE = 0x7F;
 
     public static void appendHeader(
         StringBuilder payload,
@@ -54,33 +58,82 @@ public final class HttpUtil
     public static boolean isValidPath(
         DirectBuffer path)
     {
-        boolean isPathValid = true;
-        for (int i = 0; i < path.capacity(); i++)
-        {
-            byte charByte = path.getByte(i);
+        boolean valid = true;
+        int capacity = path.capacity();
 
-            if (((charByte & 0x20) == 0) ||
-                ((charByte & 0x80) == 0x80) ||
-                (charByte == ASCII_32) ||
-                (charByte == ASCII_34) ||
-                (charByte == ASCII_37) ||
-                (charByte == ASCII_60) ||
-                (charByte == ASCII_62) ||
-                (charByte == ASCII_92) ||
-                (charByte == ASCII_94) ||
-                (charByte == ASCII_96) ||
-                (charByte == ASCII_123) ||
-                (charByte == ASCII_124) ||
-                (charByte == ASCII_125) ||
-                (charByte == ASCII_127))
+        long_loop:
+        for (int index = 0; capacity > Long.BYTES; index += Long.BYTES, capacity -= Long.BYTES)
+        {
+            long candidate = path.getLong(index);
+
+            if ((candidate & ASCII_LOW_RANGE_LONG_MASK) == 0L || (candidate & ASCII_HIGH_RANGE_LONG_MASK) != 0L)
             {
-                isPathValid = false;
-                break;
+                valid = false;
+                break long_loop;
+            }
+
+            while (candidate != 0L)
+            {
+                switch ((int)(candidate & 0x0000_0000_0000_00FFL))
+                {
+                    case ASCII_SPACE:
+                    case ASCII_DOUBLE_QUOTES:
+                    case ASCII_PERCENT_SIGN:
+                    case ASCII_LESS_THAN:
+                    case ASCII_GREATER_THAN:
+                    case ASCII_BACKSLASH:
+                    case ASCII_CARET:
+                    case ASCII_GRAVE:
+                    case ASCII_OPEN_BRACE:
+                    case ASCII_VERTICAL_BAR:
+                    case ASCII_CLOSE_BRACE:
+                    case ASCII_DELETE:
+                        valid = false;
+                        break long_loop;
+                    default:
+                        candidate >>= 1;
+                        break;
+                }
             }
         }
-        return isPathValid;
-    }
 
+        if (valid)
+        {
+            byte_loop:
+            for (int index = capacity; capacity > 0; index++, capacity--)
+            {
+                byte candidate = path.getByte(index);
+
+                if ((candidate & ASCII_LOW_RANGE_MASK) == 0 || (candidate & ASCII_HIGH_RANGE_MASK) != 0)
+                {
+                    valid = false;
+                    break byte_loop;
+                }
+
+                switch (candidate)
+                {
+                case ASCII_SPACE:
+                case ASCII_DOUBLE_QUOTES:
+                case ASCII_PERCENT_SIGN:
+                case ASCII_LESS_THAN:
+                case ASCII_GREATER_THAN:
+                case ASCII_BACKSLASH:
+                case ASCII_CARET:
+                case ASCII_GRAVE:
+                case ASCII_OPEN_BRACE:
+                case ASCII_VERTICAL_BAR:
+                case ASCII_CLOSE_BRACE:
+                case ASCII_DELETE:
+                    valid = false;
+                    break byte_loop;
+                default:
+                    break;
+                }
+            }
+        }
+
+        return valid;
+    }
 
     private HttpUtil()
     {

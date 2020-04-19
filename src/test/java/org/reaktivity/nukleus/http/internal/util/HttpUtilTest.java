@@ -81,14 +81,14 @@ public class HttpUtilTest
     }
 
     @Test
-    public void shouldCheckValidPath()
+    public void shouldAcceptValidPath()
     {
         String path = "/api/invalid?limit=10000&offset=0&geometry=";
         assertTrue(HttpUtil.isValidPath(new UnsafeBuffer(path.getBytes())));
     }
 
     @Test
-    public void shouldCheckInValidPath()
+    public void shouldRejectValidPath()
     {
         String path = "/api/invalid?limit=10000&offset=0&geometry={[[[-1,0],[-3,4]]}";
         assertFalse(HttpUtil.isValidPath(new UnsafeBuffer(path.getBytes())));
