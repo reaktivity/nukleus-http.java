@@ -27,6 +27,7 @@ import static org.reaktivity.nukleus.http.internal.util.BufferUtil.indexOfByte;
 import static org.reaktivity.nukleus.http.internal.util.BufferUtil.limitOfBytes;
 
 import java.net.URI;
+import java.nio.file.DirectoryStream;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -648,15 +649,7 @@ public final class HttpServerFactory implements StreamFactory
             final String target = requestLine.group("target");
             final String version = requestLine.group("version");
 
-            URI targetURI = null;
-            try
-            {
-                targetURI = URI.create(target);
-            }
-            catch (IllegalArgumentException e)
-            {
-                //NOOP
-            }
+            URI targetURI = createTargetURI(target);
 
             if (targetURI == null)
             {
@@ -2027,5 +2020,21 @@ public final class HttpServerFactory implements StreamFactory
                                               "Connection: close\r\n" +
                                               "\r\n",
                                               status, reason).getBytes(UTF_8));
+    }
+
+    private URI createTargetURI(
+        String target)
+    {
+        URI targetURI = null;
+        try
+        {
+            targetURI = URI.create(target);
+        }
+        catch (IllegalArgumentException e)
+        {
+            //NOOP
+        }
+
+        return targetURI;
     }
 }
