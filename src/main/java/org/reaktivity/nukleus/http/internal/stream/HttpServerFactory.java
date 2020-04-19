@@ -648,7 +648,7 @@ public final class HttpServerFactory implements StreamFactory
             final String target = requestLine.group("target");
             final String version = requestLine.group("version");
 
-            URI targetURI = createTargetURI(target);
+            final URI targetURI = createTargetURI(target);
 
             if (targetURI == null)
             {
@@ -2031,7 +2031,7 @@ public final class HttpServerFactory implements StreamFactory
         }
         catch (IllegalArgumentException e)
         {
-            //NOOP
+            //Detect invalid chars
         }
 
         return targetURI;
