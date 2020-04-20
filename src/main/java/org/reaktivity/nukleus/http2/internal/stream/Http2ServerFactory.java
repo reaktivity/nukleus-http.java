@@ -3396,7 +3396,7 @@ public final class Http2ServerFactory implements StreamFactory
                         if (value.capacity() > 0)       // :path MUST not be empty
                         {
                             path++;
-                            if (!HttpUtil.isValidPath(value))
+                            if (!HttpUtil.isPathValid(value))
                             {
                                 httpErrorHeader = HEADERS_400_BAD_REQUEST;
                             }

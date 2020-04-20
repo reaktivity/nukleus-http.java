@@ -55,7 +55,7 @@ public final class HttpUtil
         payload.append(initCapsName).append(": ").append(value).append("\r\n");
     }
 
-    public static boolean isValidPath(
+    public static boolean isPathValid(
         DirectBuffer path)
     {
         boolean valid = true;
