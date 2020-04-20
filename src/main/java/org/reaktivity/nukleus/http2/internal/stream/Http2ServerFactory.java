@@ -78,6 +78,7 @@ import org.reaktivity.nukleus.http.internal.types.stream.HttpEndExFW;
 import org.reaktivity.nukleus.http.internal.types.stream.ResetFW;
 import org.reaktivity.nukleus.http.internal.types.stream.SignalFW;
 import org.reaktivity.nukleus.http.internal.types.stream.WindowFW;
+import org.reaktivity.nukleus.http.internal.util.HttpUtil;
 import org.reaktivity.nukleus.http2.internal.Http2Configuration;
 import org.reaktivity.nukleus.http2.internal.Http2Counters;
 import org.reaktivity.nukleus.http2.internal.hpack.HpackContext;
@@ -125,6 +126,12 @@ public final class Http2ServerFactory implements StreamFactory
                 .wrap(new UnsafeBuffer(new byte[64]), 0, 64)
                 .item(h -> h.name(":status").value("404"))
                 .build();
+
+    private static final Array32FW<HttpHeaderFW> HEADERS_400_BAD_REQUEST =
+        new Array32FW.Builder<>(new HttpHeaderFW.Builder(), new HttpHeaderFW())
+            .wrap(new UnsafeBuffer(new byte[64]), 0, 64)
+            .item(h -> h.name(":status").value("400"))
+            .build();
 
     private static final Array32FW<HttpHeaderFW> TRAILERS_EMPTY =
             new Array32FW.Builder<>(new HttpHeaderFW.Builder(), new HttpHeaderFW())
@@ -1138,8 +1145,8 @@ public final class Http2ServerFactory implements StreamFactory
                 }
 
                 decodeNetwork(traceId, authorization, budgetId, reserved, buffer, offset, limit);
-                final int initialCredit = reserved - decodeSlotReserved;
 
+                final int initialCredit = reserved - decodeSlotReserved;
                 if (initialCredit > 0)
                 {
                     doNetworkWindow(traceId, authorization, initialCredit, 0, 0);
@@ -1616,16 +1623,18 @@ public final class Http2ServerFactory implements StreamFactory
             }
         }
 
-        private void resumeNetworkDecoding(
+        private void decodeNetworkIfNecessary(
             long traceId,
             long authorization)
         {
             if (decodeSlot != NO_SLOT)
             {
                 final MutableDirectBuffer decodeBuffer = bufferPool.buffer(decodeSlot);
+                final int offset = 0;
+                final int limit = decodeSlotOffset;
                 final int reserved = decodeSlotReserved;
-                decodeNetwork(traceId, authorization, budgetId, decodeSlotReserved, decodeBuffer,
-                    0, decodeSlotOffset);
+
+                decodeNetwork(traceId, authorization, budgetId, reserved, decodeBuffer, offset, limit);
 
                 final int initialCredit = reserved - decodeSlotReserved;
                 if (initialCredit > 0)
@@ -1955,6 +1964,10 @@ public final class Http2ServerFactory implements StreamFactory
                     onDecodeError(traceId, authorization, headersDecoder.connectionError);
                     decoder = decodeIgnoreAll;
                 }
+            }
+            else if (headersDecoder.httpError())
+            {
+                doEncodeHeaders(traceId, authorization, streamId, headersDecoder.httpErrorHeader, true);
             }
             else
             {
@@ -2733,7 +2746,7 @@ public final class Http2ServerFactory implements StreamFactory
                     doEncodeHeaders(traceId, authorization, streamId, HEADERS_404_NOT_FOUND, true);
                 }
 
-                resumeNetworkDecoding(traceId, authorization);
+                decodeNetworkIfNecessary(traceId, authorization);
                 cleanup(traceId, authorization);
             }
 
@@ -2776,7 +2789,7 @@ public final class Http2ServerFactory implements StreamFactory
                 }
 
                 applicationHeadersProcessed.remove(streamId);
-                resumeNetworkDecoding(traceId, authorization);
+                decodeNetworkIfNecessary(traceId, authorization);
             }
 
             private void flushRequestData(
@@ -3237,6 +3250,7 @@ public final class Http2ServerFactory implements StreamFactory
 
         Http2ErrorCode connectionError;
         Http2ErrorCode streamError;
+        Array32FW<HttpHeaderFW> httpErrorHeader;
 
         final Map<String, String> headers = new LinkedHashMap<>();
         long contentLength = -1;
@@ -3289,6 +3303,11 @@ public final class Http2ServerFactory implements StreamFactory
         boolean error()
         {
             return streamError != null || connectionError != null;
+        }
+
+        boolean httpError()
+        {
+            return httpErrorHeader != null;
         }
 
         private void reset(
@@ -3377,6 +3396,10 @@ public final class Http2ServerFactory implements StreamFactory
                         if (value.capacity() > 0)       // :path MUST not be empty
                         {
                             path++;
+                            if (!HttpUtil.isPathValid(value))
+                            {
+                                httpErrorHeader = HEADERS_400_BAD_REQUEST;
+                            }
                         }
                         break;
                     case 6:             // :scheme

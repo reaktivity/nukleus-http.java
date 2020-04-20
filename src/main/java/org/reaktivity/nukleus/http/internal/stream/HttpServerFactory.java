@@ -648,9 +648,13 @@ public final class HttpServerFactory implements StreamFactory
             final String target = requestLine.group("target");
             final String version = requestLine.group("version");
 
-            final URI targetURI = URI.create(target);
+            final URI targetURI = createTargetURI(target);
 
-            if (!versionPart.reset(version).matches())
+            if (targetURI == null)
+            {
+                error = ERROR_400_BAD_REQUEST;
+            }
+            else if (!versionPart.reset(version).matches())
             {
                 error = ERROR_505_VERSION_NOT_SUPPORTED;
             }
@@ -2015,5 +2019,21 @@ public final class HttpServerFactory implements StreamFactory
                                               "Connection: close\r\n" +
                                               "\r\n",
                                               status, reason).getBytes(UTF_8));
+    }
+
+    private URI createTargetURI(
+        String target)
+    {
+        URI targetURI = null;
+        try
+        {
+            targetURI = URI.create(target);
+        }
+        catch (IllegalArgumentException e)
+        {
+            //Detect invalid chars
+        }
+
+        return targetURI;
     }
 }
