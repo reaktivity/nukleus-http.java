@@ -63,7 +63,7 @@ public final class HttpUtil
         final int originalCapacity = capacity;
 
         long_loop:
-        for (int index = 0; capacity > Long.BYTES; index += Long.BYTES, capacity -= Long.BYTES)
+        for (int index = 0; capacity >= Long.BYTES; index += Long.BYTES, capacity -= Long.BYTES)
         {
             long candidate = path.getLong(index);
 
