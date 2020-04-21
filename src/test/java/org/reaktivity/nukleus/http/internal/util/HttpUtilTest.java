@@ -83,14 +83,21 @@ public class HttpUtilTest
     @Test
     public void shouldAcceptValidPath()
     {
-        String path1 = "/api/invalid?limit=10000&offset=0&geometry=";
+        String path0 = "";
+        String path1 = "/path";
         String path2 = "/pathof8";
-        String path3 = "/pathof09";
-        String path4 = "/pathof0000000017";
+        String path3 = "/pathof010";
+        String path4 = "/pathof000000016";
+        String path5 = "/pathof0000000017";
+        String path6 = "/api/invalid?limit=10000&offset=0&geometry=";
+
+        assertTrue(HttpUtil.isPathValid(new UnsafeBuffer(path0.getBytes())));
         assertTrue(HttpUtil.isPathValid(new UnsafeBuffer(path1.getBytes())));
         assertTrue(HttpUtil.isPathValid(new UnsafeBuffer(path2.getBytes())));
         assertTrue(HttpUtil.isPathValid(new UnsafeBuffer(path3.getBytes())));
         assertTrue(HttpUtil.isPathValid(new UnsafeBuffer(path4.getBytes())));
+        assertTrue(HttpUtil.isPathValid(new UnsafeBuffer(path5.getBytes())));
+        assertTrue(HttpUtil.isPathValid(new UnsafeBuffer(path6.getBytes())));
     }
 
     @Test
