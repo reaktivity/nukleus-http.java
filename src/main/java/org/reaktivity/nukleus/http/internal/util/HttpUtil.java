@@ -101,7 +101,7 @@ public final class HttpUtil
         if (valid)
         {
             byte_loop:
-            for (int index = (originalCapacity < 8) ? 0 : capacity; capacity > 0; index++, capacity--)
+            for (int index = (originalCapacity <= 8) ? 0 : capacity; capacity > 0; index++, capacity--)
             {
                 byte candidate = path.getByte(index);
 
