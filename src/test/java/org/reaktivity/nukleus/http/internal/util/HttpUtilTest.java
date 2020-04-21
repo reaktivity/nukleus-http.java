@@ -89,7 +89,7 @@ public class HttpUtilTest
         String path3 = "/pathof010";
         String path4 = "/pathof000000016";
         String path5 = "/pathof0000000017";
-        String path6 = "/api/invalid?limit=10000&offset=0&geometry=";
+        String path6 = "/api/valid?limit=10000&offset=0&geometry=";
 
         assertTrue(HttpUtil.isPathValid(new UnsafeBuffer(path0.getBytes())));
         assertTrue(HttpUtil.isPathValid(new UnsafeBuffer(path1.getBytes())));
