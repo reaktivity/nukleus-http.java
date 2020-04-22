@@ -3321,6 +3321,7 @@ public final class Http2ServerFactory implements StreamFactory
             this.headers.clear();
             this.connectionError = null;
             this.streamError = null;
+            this.httpErrorHeader = null;
             this.pseudoHeaders = true;
             this.method = 0;
             this.scheme = 0;
