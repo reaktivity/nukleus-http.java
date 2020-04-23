@@ -59,10 +59,10 @@ public final class HttpUtil
     {
         boolean valid = true;
         int capacity = path.capacity();
-        final int originalCapacity = capacity;
+        int index = 0;
 
         long_loop:
-        for (int index = 0; capacity >= Long.BYTES; index += Long.BYTES, capacity -= Long.BYTES)
+        for (; capacity >= Long.BYTES; index += Long.BYTES, capacity -= Long.BYTES)
         {
             long candidate = path.getLong(index);
 
@@ -99,7 +99,7 @@ public final class HttpUtil
         if (valid)
         {
             byte_loop:
-            for (int index = (originalCapacity < 8) ? 0 : originalCapacity - capacity; index < originalCapacity; index++)
+            for (; capacity > 0; capacity--, index++)
             {
                 byte candidate = path.getByte(index);
 
