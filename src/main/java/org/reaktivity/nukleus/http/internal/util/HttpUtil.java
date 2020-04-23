@@ -21,14 +21,13 @@ import org.agrona.DirectBuffer;
 
 public final class HttpUtil
 {
-    private static final long ASCII_LOW_RANGE_LONG_MASK = 0x2020_2020_2020_2020L;
+    private static final long ASCII_LOW_RANGE_LONG_MASK = 0xE0E0_E0E0_E0E0_E0E0L;
     private static final long ASCII_HIGH_RANGE_LONG_MASK = 0x8080_8080_8080_8080L;
-    private static final byte ASCII_LOW_RANGE_MASK = 0x20;
+    private static final byte ASCII_LOW_RANGE_MASK = (byte) 0xE0;
     private static final byte ASCII_HIGH_RANGE_MASK = -0x80;
 
     private static final byte ASCII_SPACE = 0x20;
     private static final byte ASCII_DOUBLE_QUOTES = 0x22;
-    private static final byte ASCII_PERCENT_SIGN = 0x25;
     private static final byte ASCII_LESS_THAN = 0x3C;
     private static final byte ASCII_GREATER_THAN = 0x3E;
     private static final byte ASCII_BACKSLASH = 0x5C;
@@ -79,7 +78,6 @@ public final class HttpUtil
                 {
                 case ASCII_SPACE:
                 case ASCII_DOUBLE_QUOTES:
-                case ASCII_PERCENT_SIGN:
                 case ASCII_LESS_THAN:
                 case ASCII_GREATER_THAN:
                 case ASCII_BACKSLASH:
@@ -101,7 +99,7 @@ public final class HttpUtil
         if (valid)
         {
             byte_loop:
-            for (int index = (originalCapacity < 8) ? 0 : capacity; capacity > 0; index++, capacity--)
+            for (int index = (originalCapacity < 8) ? 0 : originalCapacity - capacity; index < originalCapacity; index++)
             {
                 byte candidate = path.getByte(index);
 
@@ -115,7 +113,6 @@ public final class HttpUtil
                 {
                 case ASCII_SPACE:
                 case ASCII_DOUBLE_QUOTES:
-                case ASCII_PERCENT_SIGN:
                 case ASCII_LESS_THAN:
                 case ASCII_GREATER_THAN:
                 case ASCII_BACKSLASH:

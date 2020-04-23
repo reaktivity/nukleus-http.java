@@ -81,7 +81,16 @@ public class HttpUtilTest
     }
 
     @Test
-    public void shouldAcceptValidPath()
+    public void shouldAcceptPathWithAllValidCharacters()
+    {
+        String path = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~:/?#[]@!$&'()*+,;=%";
+        assertTrue(HttpUtil.isPathValid(new UnsafeBuffer(path.getBytes())));
+    }
+
+
+
+    @Test
+    public void shouldAcceptValidPathWithDifferentLength()
     {
         String path0 = "";
         String path1 = "/path";
@@ -89,7 +98,6 @@ public class HttpUtilTest
         String path3 = "/pathof010";
         String path4 = "/pathof000000016";
         String path5 = "/pathof0000000017";
-        String path6 = "/api/valid?limit=10000&offset=0&geometry=";
 
         assertTrue(HttpUtil.isPathValid(new UnsafeBuffer(path0.getBytes())));
         assertTrue(HttpUtil.isPathValid(new UnsafeBuffer(path1.getBytes())));
@@ -97,7 +105,102 @@ public class HttpUtilTest
         assertTrue(HttpUtil.isPathValid(new UnsafeBuffer(path3.getBytes())));
         assertTrue(HttpUtil.isPathValid(new UnsafeBuffer(path4.getBytes())));
         assertTrue(HttpUtil.isPathValid(new UnsafeBuffer(path5.getBytes())));
-        assertTrue(HttpUtil.isPathValid(new UnsafeBuffer(path6.getBytes())));
+    }
+
+    @Test
+    public void shouldRejectInvalidAsciiSpaceCharacterInPath()
+    {
+        String path1 = "/pathwith ";
+        String path2 = " /pathwith";
+        assertFalse(HttpUtil.isPathValid(new UnsafeBuffer(path1.getBytes())));
+        assertFalse(HttpUtil.isPathValid(new UnsafeBuffer(path2.getBytes())));
+    }
+
+    @Test
+    public void shouldRejectInvalidAsciiDoubleQuotesCharacterInPath()
+    {
+        String path1 = "/pathwith\"";
+        String path2 = "\"/pathwith";
+        assertFalse(HttpUtil.isPathValid(new UnsafeBuffer(path1.getBytes())));
+        assertFalse(HttpUtil.isPathValid(new UnsafeBuffer(path2.getBytes())));
+    }
+
+    @Test
+    public void shouldRejectInvalidAsciiLessThanCharacterInPath()
+    {
+        String path1 = "/pathwith<";
+        String path2 = " </pathwith";
+        assertFalse(HttpUtil.isPathValid(new UnsafeBuffer(path1.getBytes())));
+        assertFalse(HttpUtil.isPathValid(new UnsafeBuffer(path2.getBytes())));
+    }
+
+    @Test
+    public void shouldRejectInvalidAsciiGreatThanCharacterInPath()
+    {
+        String path1 = "/pathwith>";
+        String path2 = ">/pathwith";
+        assertFalse(HttpUtil.isPathValid(new UnsafeBuffer(path1.getBytes())));
+        assertFalse(HttpUtil.isPathValid(new UnsafeBuffer(path2.getBytes())));
+    }
+
+    @Test
+    public void shouldRejectInvalidAsciiBackslashCharacterInPath()
+    {
+        String path1 = "/pathwith\\";
+        String path2 = "\\/pathwith";
+        assertFalse(HttpUtil.isPathValid(new UnsafeBuffer(path1.getBytes())));
+        assertFalse(HttpUtil.isPathValid(new UnsafeBuffer(path2.getBytes())));
+    }
+
+    @Test
+    public void shouldRejectInvalidAsciiCaretCharacterInPath()
+    {
+        String path1 = "/pathwith^";
+        String path2 = "^/pathwith";
+        assertFalse(HttpUtil.isPathValid(new UnsafeBuffer(path1.getBytes())));
+        assertFalse(HttpUtil.isPathValid(new UnsafeBuffer(path2.getBytes())));
+    }
+
+    @Test
+    public void shouldRejectInvalidAsciiGraveCharacterInPath()
+    {
+        String path1 = "/pathwith`";
+        String path2 = "`/pathwith";
+        assertFalse(HttpUtil.isPathValid(new UnsafeBuffer(path1.getBytes())));
+        assertFalse(HttpUtil.isPathValid(new UnsafeBuffer(path2.getBytes())));
+    }
+
+    @Test
+    public void shouldRejectInvalidAsciiOpenBraceCharacterInPath()
+    {
+        String path1 = "/pathwith{";
+        String path2 = "{/pathwith";
+        assertFalse(HttpUtil.isPathValid(new UnsafeBuffer(path1.getBytes())));
+        assertFalse(HttpUtil.isPathValid(new UnsafeBuffer(path2.getBytes())));
+    }
+
+    @Test
+    public void shouldRejectInvalidAsciiCloseBraceCharacterInPath()
+    {
+        String path1 = "/pathwith}";
+        String path2 = "}/pathwith";
+        assertFalse(HttpUtil.isPathValid(new UnsafeBuffer(path1.getBytes())));
+        assertFalse(HttpUtil.isPathValid(new UnsafeBuffer(path2.getBytes())));
+    }
+
+    @Test
+    public void shouldRejectInvalidAsciiVerticalBarCharacterInPath()
+    {
+        String path1 = "/pathwith|";
+        String path2 = "|/pathwith";
+        assertFalse(HttpUtil.isPathValid(new UnsafeBuffer(path1.getBytes())));
+        assertFalse(HttpUtil.isPathValid(new UnsafeBuffer(path2.getBytes())));
+    }
+
+    @Test
+    public void shouldRejectInvalidAsciiDeleteCharacterInPath()
+    {
+        assertFalse(HttpUtil.isPathValid(new UnsafeBuffer(new byte[0x7F])));
     }
 
     @Test
@@ -106,6 +209,5 @@ public class HttpUtilTest
         String path = "/api/invalid?limit=10000&offset=0&geometry={[[[-1,0],[-3,4]]}";
         assertFalse(HttpUtil.isPathValid(new UnsafeBuffer(path.getBytes())));
     }
-
 }
 
