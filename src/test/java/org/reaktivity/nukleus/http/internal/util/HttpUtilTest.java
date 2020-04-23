@@ -110,7 +110,7 @@ public class HttpUtilTest
     public void shouldRejectInvalidAsciiSpaceCharacterInPath()
     {
         byte[] ascii0 = "/pathwith ".getBytes(US_ASCII);
-        byte[] ascii1= " /pathwith".getBytes(US_ASCII);
+        byte[] ascii1 = " /pathwith".getBytes(US_ASCII);
         assertFalse(HttpUtil.isPathValid(new UnsafeBuffer(ascii0)));
         assertFalse(HttpUtil.isPathValid(new UnsafeBuffer(ascii1)));
     }
@@ -118,7 +118,7 @@ public class HttpUtilTest
     @Test
     public void shouldRejectInvalidAsciiDoubleQuotesCharacterInPath()
     {
-        byte[] ascii0 =  "/pathwith\"".getBytes(US_ASCII);
+        byte[] ascii0 = "/pathwith\"".getBytes(US_ASCII);
         byte[] ascii1 = "\"/pathwith".getBytes(US_ASCII);
         assertFalse(HttpUtil.isPathValid(new UnsafeBuffer(ascii0)));
         assertFalse(HttpUtil.isPathValid(new UnsafeBuffer(ascii1)));
