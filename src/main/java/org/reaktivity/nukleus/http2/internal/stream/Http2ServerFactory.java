@@ -76,7 +76,6 @@ import org.reaktivity.nukleus.http.internal.types.stream.HttpBeginExFW;
 import org.reaktivity.nukleus.http.internal.types.stream.HttpDataExFW;
 import org.reaktivity.nukleus.http.internal.types.stream.HttpEndExFW;
 import org.reaktivity.nukleus.http.internal.types.stream.ResetFW;
-import org.reaktivity.nukleus.http.internal.types.stream.SignalFW;
 import org.reaktivity.nukleus.http.internal.types.stream.WindowFW;
 import org.reaktivity.nukleus.http.internal.util.HttpUtil;
 import org.reaktivity.nukleus.http2.internal.Http2Configuration;
@@ -159,7 +158,6 @@ public final class Http2ServerFactory implements StreamFactory
     private final HttpEndExFW.Builder endExRW = new HttpEndExFW.Builder();
 
     private final WindowFW windowRO = new WindowFW();
-    private final SignalFW signalRO = new SignalFW();
     private final ResetFW resetRO = new ResetFW();
 
     private final WindowFW.Builder windowRW = new WindowFW.Builder();
@@ -1451,7 +1449,7 @@ public final class Http2ServerFactory implements StreamFactory
         {
             final int maxLength = maxLimit - offset;
             final int length = Math.max(Math.min(replyBudget - replyPadding, limit - offset), 0);
-            final int remaining = maxLength - length;
+            int remaining = maxLength - length;
 
             final int minReserved = length + replyPadding;
             final int reserved = remaining == 0 ? Math.max(minReserved, maxReserved) : minReserved;
@@ -2633,6 +2631,8 @@ public final class Http2ServerFactory implements StreamFactory
                 streamsActive[streamId & 0x01]++;
                 applicationHeadersProcessed.add(streamId);
                 localBudget = localSettings.initialWindowSize;
+
+                onResponseWindowUpdate(traceId, authorization, remoteSettings.initialWindowSize);
             }
 
             private void doRequestData(
@@ -2926,8 +2926,6 @@ public final class Http2ServerFactory implements StreamFactory
                 final long authorization = begin.authorization();
 
                 doEncodeHeaders(traceId, authorization, streamId, headers, false);
-
-                onResponseWindowUpdate(traceId, authorization, remoteSettings.initialWindowSize);
             }
 
             private void onResponseData(
@@ -3082,7 +3080,7 @@ public final class Http2ServerFactory implements StreamFactory
                 long traceId,
                 long authorization)
             {
-                if (isResponseOpen())
+                if (!Http2State.replyClosed(state))
                 {
                     final int remotePaddableMax = Math.min(remoteBudget, bufferPool.slotCapacity());
                     final int remotePadding = framePadding(remotePaddableMax, remoteSettings.maxFrameSize);
