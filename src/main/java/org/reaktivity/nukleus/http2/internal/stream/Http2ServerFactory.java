@@ -17,6 +17,7 @@ package org.reaktivity.nukleus.http2.internal.stream;
 
 import static java.util.Objects.requireNonNull;
 import static org.reaktivity.nukleus.budget.BudgetCreditor.NO_CREDITOR_INDEX;
+import static org.reaktivity.nukleus.budget.BudgetDebitor.NO_DEBITOR_INDEX;
 import static org.reaktivity.nukleus.buffer.BufferPool.NO_SLOT;
 import static org.reaktivity.nukleus.http2.internal.hpack.HpackContext.CONNECTION;
 import static org.reaktivity.nukleus.http2.internal.hpack.HpackContext.DEFAULT_ACCESS_CONTROL_ALLOW_ORIGIN;
@@ -40,6 +41,7 @@ import java.util.Objects;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.LongFunction;
 import java.util.function.LongSupplier;
 import java.util.function.LongUnaryOperator;
 import java.util.function.ToIntFunction;
@@ -54,6 +56,7 @@ import org.agrona.collections.LongLongConsumer;
 import org.agrona.collections.MutableBoolean;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.reaktivity.nukleus.budget.BudgetCreditor;
+import org.reaktivity.nukleus.budget.BudgetDebitor;
 import org.reaktivity.nukleus.buffer.BufferPool;
 import org.reaktivity.nukleus.concurrent.Signaler;
 import org.reaktivity.nukleus.function.MessageConsumer;
@@ -76,7 +79,6 @@ import org.reaktivity.nukleus.http.internal.types.stream.HttpBeginExFW;
 import org.reaktivity.nukleus.http.internal.types.stream.HttpDataExFW;
 import org.reaktivity.nukleus.http.internal.types.stream.HttpEndExFW;
 import org.reaktivity.nukleus.http.internal.types.stream.ResetFW;
-import org.reaktivity.nukleus.http.internal.types.stream.SignalFW;
 import org.reaktivity.nukleus.http.internal.types.stream.WindowFW;
 import org.reaktivity.nukleus.http.internal.util.HttpUtil;
 import org.reaktivity.nukleus.http2.internal.Http2Configuration;
@@ -159,7 +161,6 @@ public final class Http2ServerFactory implements StreamFactory
     private final HttpEndExFW.Builder endExRW = new HttpEndExFW.Builder();
 
     private final WindowFW windowRO = new WindowFW();
-    private final SignalFW signalRO = new SignalFW();
     private final ResetFW resetRO = new ResetFW();
 
     private final WindowFW.Builder windowRW = new WindowFW.Builder();
@@ -228,6 +229,7 @@ public final class Http2ServerFactory implements StreamFactory
     private final MutableDirectBuffer frameBuffer;
     private final BufferPool bufferPool;
     private final BudgetCreditor creditor;
+    private final LongFunction<BudgetDebitor> supplyDebitor;
     private final LongUnaryOperator supplyInitialId;
     private final LongUnaryOperator supplyReplyId;
     private final LongSupplier supplyBudgetId;
@@ -245,6 +247,7 @@ public final class Http2ServerFactory implements StreamFactory
         MutableDirectBuffer writeBuffer,
         BufferPool bufferPool,
         BudgetCreditor creditor,
+        LongFunction<BudgetDebitor> supplyDebitor,
         LongUnaryOperator supplyInitialId,
         LongUnaryOperator supplyReplyId,
         LongSupplier supplyBudgetId,
@@ -257,6 +260,7 @@ public final class Http2ServerFactory implements StreamFactory
         this.writeBuffer = requireNonNull(writeBuffer);
         this.bufferPool = requireNonNull(bufferPool);
         this.creditor = creditor;
+        this.supplyDebitor = supplyDebitor;
         this.supplyInitialId = requireNonNull(supplyInitialId);
         this.supplyReplyId = requireNonNull(supplyReplyId);
         this.supplyBudgetId = requireNonNull(supplyBudgetId);
@@ -1451,7 +1455,7 @@ public final class Http2ServerFactory implements StreamFactory
         {
             final int maxLength = maxLimit - offset;
             final int length = Math.max(Math.min(replyBudget - replyPadding, limit - offset), 0);
-            final int remaining = maxLength - length;
+            int remaining = maxLength - length;
 
             final int minReserved = length + replyPadding;
             final int reserved = remaining == 0 ? Math.max(minReserved, maxReserved) : minReserved;
@@ -2595,8 +2599,12 @@ public final class Http2ServerFactory implements StreamFactory
             private int state;
             private long contentObserved;
 
+            private long requestBudgetId;
             private int requestBudget;
             private int requestPadding;
+            private BudgetDebitor requestDebitor;
+            private long requestDebitorIndex = NO_DEBITOR_INDEX;
+
             private int responseBudget;
 
             private int localBudget;
@@ -2605,6 +2613,7 @@ public final class Http2ServerFactory implements StreamFactory
             private int requestSlot = NO_SLOT;
             private int requestSlotOffset;
             private long requestSlotTraceId;
+            private long requestSlotAuthorization;
 
             private Http2Exchange(
                 long routeId,
@@ -2633,6 +2642,8 @@ public final class Http2ServerFactory implements StreamFactory
                 streamsActive[streamId & 0x01]++;
                 applicationHeadersProcessed.add(streamId);
                 localBudget = localSettings.initialWindowSize;
+
+                onResponseWindowUpdate(traceId, authorization, remoteSettings.initialWindowSize);
             }
 
             private void doRequestData(
@@ -2661,6 +2672,7 @@ public final class Http2ServerFactory implements StreamFactory
                         requestBuffer.putBytes(requestSlotOffset, buffer, offset, length);
                         requestSlotOffset += length;
                         requestSlotTraceId = traceId;
+                        requestSlotAuthorization = authorization;
 
                         buffer = requestBuffer;
                         offset = 0;
@@ -2755,22 +2767,23 @@ public final class Http2ServerFactory implements StreamFactory
             {
                 final long traceId = window.traceId();
                 final long authorization = window.authorization();
+                final long budgetId = window.budgetId();
                 final int credit = window.credit();
                 final int padding = window.padding();
 
                 state = Http2State.openInitial(state);
 
+                requestBudgetId = budgetId;
                 requestBudget += credit;
                 requestPadding = padding;
 
-                if (requestSlot != NO_SLOT)
+                if (requestBudgetId != 0L && requestDebitorIndex == NO_DEBITOR_INDEX)
                 {
-                    final MutableDirectBuffer buffer = bufferPool.buffer(requestSlot);
-                    final int offset = 0;
-                    final int limit = requestSlotOffset;
-
-                    flushRequestData(requestSlotTraceId, authorization, buffer, offset, limit);
+                    requestDebitor = supplyDebitor.apply(budgetId);
+                    requestDebitorIndex = requestDebitor.acquire(budgetId, initialId, this::flushRequestDataIfNecessary);
                 }
+
+                flushRequestDataIfNecessary(traceId);
 
                 if (requestSlot == NO_SLOT)
                 {
@@ -2792,6 +2805,19 @@ public final class Http2ServerFactory implements StreamFactory
                 decodeNetworkIfNecessary(traceId, authorization);
             }
 
+            private void flushRequestDataIfNecessary(
+                long traceId)
+            {
+                if (requestSlot != NO_SLOT)
+                {
+                    final MutableDirectBuffer buffer = bufferPool.buffer(requestSlot);
+                    final int offset = 0;
+                    final int limit = requestSlotOffset;
+
+                    flushRequestData(requestSlotTraceId, requestSlotAuthorization, buffer, offset, limit);
+                }
+            }
+
             private void flushRequestData(
                 long traceId,
                 long authorization,
@@ -2800,17 +2826,25 @@ public final class Http2ServerFactory implements StreamFactory
                 int limit)
             {
                 final int maxLength = limit - offset;
-                final int length = Math.max(Math.min(requestBudget - requestPadding, maxLength), 0);
+
+                int length = Math.max(Math.min(requestBudget - requestPadding, maxLength), 0);
+                int reserved = length + requestPadding;
+
+                if (requestDebitorIndex != NO_DEBITOR_INDEX && requestDebitor != null)
+                {
+                    final int minimum = reserved; // TODO: fragmentation
+                    reserved = requestDebitor.claim(requestDebitorIndex, requestId, minimum, reserved);
+                    length = Math.max(reserved - requestPadding, 0);
+                }
 
                 if (length > 0)
                 {
-                    final int reserved = length + requestPadding;
 
                     requestBudget -= reserved;
 
                     assert requestBudget >= 0;
 
-                    doData(application, routeId, requestId, traceId, authorization, budgetId,
+                    doData(application, routeId, requestId, traceId, authorization, requestBudgetId,
                             reserved, buffer, offset, length, EMPTY_OCTETS);
                 }
 
@@ -2868,6 +2902,7 @@ public final class Http2ServerFactory implements StreamFactory
 
                 state = Http2State.closeInitial(state);
                 cleanupRequestSlotIfNecessary();
+                cleanupRequestDebitorIfNecessary();
                 removeStreamIfNecessary();
             }
 
@@ -2878,7 +2913,17 @@ public final class Http2ServerFactory implements StreamFactory
                     bufferPool.release(requestSlot);
                     requestSlot = NO_SLOT;
                     requestSlotOffset = 0;
-                    requestSlotTraceId = 0;
+                    requestSlotTraceId = 0L;
+                    requestSlotAuthorization = 0L;
+                }
+            }
+
+            private void cleanupRequestDebitorIfNecessary()
+            {
+                if (requestDebitorIndex != NO_DEBITOR_INDEX)
+                {
+                    requestDebitor.release(requestDebitorIndex, initialId);
+                    requestDebitorIndex = NO_DEBITOR_INDEX;
                 }
             }
 
@@ -2926,8 +2971,6 @@ public final class Http2ServerFactory implements StreamFactory
                 final long authorization = begin.authorization();
 
                 doEncodeHeaders(traceId, authorization, streamId, headers, false);
-
-                onResponseWindowUpdate(traceId, authorization, remoteSettings.initialWindowSize);
             }
 
             private void onResponseData(
@@ -3082,7 +3125,7 @@ public final class Http2ServerFactory implements StreamFactory
                 long traceId,
                 long authorization)
             {
-                if (isResponseOpen())
+                if (!Http2State.replyClosed(state))
                 {
                     final int remotePaddableMax = Math.min(remoteBudget, bufferPool.slotCapacity());
                     final int remotePadding = framePadding(remotePaddableMax, remoteSettings.maxFrameSize);

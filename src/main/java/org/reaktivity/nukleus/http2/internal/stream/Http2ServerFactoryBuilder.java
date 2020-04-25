@@ -16,6 +16,7 @@
 package org.reaktivity.nukleus.http2.internal.stream;
 
 import java.util.function.Function;
+import java.util.function.LongFunction;
 import java.util.function.LongSupplier;
 import java.util.function.LongUnaryOperator;
 import java.util.function.Supplier;
@@ -23,6 +24,7 @@ import java.util.function.ToIntFunction;
 
 import org.agrona.MutableDirectBuffer;
 import org.reaktivity.nukleus.budget.BudgetCreditor;
+import org.reaktivity.nukleus.budget.BudgetDebitor;
 import org.reaktivity.nukleus.buffer.BufferPool;
 import org.reaktivity.nukleus.concurrent.Signaler;
 import org.reaktivity.nukleus.http2.internal.Http2Configuration;
@@ -36,6 +38,7 @@ public final class Http2ServerFactoryBuilder implements StreamFactoryBuilder
 
     private RouteManager router;
     private MutableDirectBuffer writeBuffer;
+    private LongFunction<BudgetDebitor> supplyDebitor;
     private LongUnaryOperator supplyInitialId;
     private LongUnaryOperator supplyReplyId;
     private ToIntFunction<String> supplyTypeId;
@@ -100,6 +103,14 @@ public final class Http2ServerFactoryBuilder implements StreamFactoryBuilder
     }
 
     @Override
+    public StreamFactoryBuilder setBudgetDebitorSupplier(
+        LongFunction<BudgetDebitor> supplyDebitor)
+    {
+        this.supplyDebitor = supplyDebitor;
+        return this;
+    }
+
+    @Override
     public StreamFactoryBuilder setTypeIdSupplier(
         ToIntFunction<String> supplyTypeId)
     {
@@ -142,6 +153,7 @@ public final class Http2ServerFactoryBuilder implements StreamFactoryBuilder
                 writeBuffer,
                 bufferPool,
                 creditor,
+                supplyDebitor,
                 supplyInitialId,
                 supplyReplyId,
                 supplyBudgetId,
