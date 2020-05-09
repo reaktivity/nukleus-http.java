@@ -54,7 +54,7 @@
 
     <nukleus.plugin.version>0.51</nukleus.plugin.version>
 
-    <nukleus.http.spec.version>0.93</nukleus.http.spec.version>
+    <nukleus.http.spec.version>0.94</nukleus.http.spec.version>
     <nukleus.tcp.version>0.98</nukleus.tcp.version>
     <reaktor.version>0.131</reaktor.version>
   </properties>

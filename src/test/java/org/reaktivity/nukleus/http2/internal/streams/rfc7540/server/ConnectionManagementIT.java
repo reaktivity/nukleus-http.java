@@ -94,6 +94,15 @@ public class ConnectionManagementIT
 
     @Test
     @Specification({
+            "${route}/server.path.prefix/controller",
+            "${spec}/http.unknown.path/client" })
+    public void httpUnknownPath() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
             "${route}/server/controller",
             "${spec}/http.post.exchange/client",
             "${nukleus}/http.post.exchange/server" })
@@ -299,6 +308,16 @@ public class ConnectionManagementIT
         "${spec}/http.authority.default.port/client",
         "${nukleus}/http.authority.default.port/server" })
     public void defaultPortToAuthority() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
+        "${route}/server.path.prefix/controller",
+        "${spec}/http.path.prefix/client",
+        "${nukleus}/http.path.prefix/server" })
+    public void pathPrefix() throws Exception
     {
         k3po.finish();
     }

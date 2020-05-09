@@ -44,6 +44,7 @@ import java.util.function.Function;
 import java.util.function.LongFunction;
 import java.util.function.LongSupplier;
 import java.util.function.LongUnaryOperator;
+import java.util.function.Predicate;
 import java.util.function.ToIntFunction;
 
 import org.agrona.DirectBuffer;
@@ -116,6 +117,8 @@ public final class Http2ServerFactory implements StreamFactory
 
     private static final DirectBuffer EMPTY_BUFFER = new UnsafeBuffer(new byte[0]);
     private static final OctetsFW EMPTY_OCTETS = new OctetsFW().wrap(EMPTY_BUFFER, 0, 0);
+
+    private static final String8FW HEADER_PATH = new String8FW(":path");
 
     private static final Array32FW<HttpHeaderFW> HEADERS_200_OK =
             new Array32FW.Builder<>(new HttpHeaderFW.Builder(), new HttpHeaderFW())
@@ -1989,8 +1992,7 @@ public final class Http2ServerFactory implements StreamFactory
                     final RouteFW route = routeRO.wrap(b, o, o + l);
                     final HttpRouteExFW routeEx = route.extension().get(routeExRO::tryWrap);
 
-                    return routeEx == null ||
-                        !routeEx.headers().anyMatch(h -> !Objects.equals(h.value().asString(), headers.get(h.name().asString())));
+                    return routeEx == null || matchHeaders(headers, routeEx.headers());
                 };
 
                 final RouteFW route = router.resolve(routeId, authorization, filter, wrapRoute);
@@ -2025,6 +2027,27 @@ public final class Http2ServerFactory implements StreamFactory
                     }
                 }
             }
+        }
+
+        private boolean matchHeaders(
+            Map<String, String> beginHeaders,
+            Array32FW<HttpHeaderFW> routeHeaders)
+        {
+            final Predicate<HttpHeaderFW> matcher = r ->
+            {
+                final String8FW name = r.name();
+                final String value = r.value().asString();
+                final String candidate = beginHeaders.get(name.asString());
+                return Objects.equals(value, candidate) ||
+                       (candidate != null &&
+                        HEADER_PATH.equals(name) &&
+                        value.endsWith("/") &&
+                        candidate.startsWith(value));
+            };
+
+            final MutableBoolean match = new MutableBoolean(true);
+            routeHeaders.forEach(r -> match.value &= matcher.test(r));
+            return match.value;
         }
 
         private void onDecodeTrailers(
@@ -2268,9 +2291,7 @@ public final class Http2ServerFactory implements StreamFactory
                 final RouteFW route = routeRO.wrap(b, o, o + l);
                 final HttpRouteExFW routeEx = route.extension().get(routeExRO::tryWrap);
 
-                return routeEx == null ||
-                    !routeEx.headers().anyMatch(h -> !Objects.equals(h.value().asString(),
-                                                                     headers.get(h.name().asString())));
+                return routeEx == null || matchHeaders(headers, routeEx.headers());
             };
 
             final RouteFW route = router.resolve(routeId, authorization, filter, wrapRoute);
