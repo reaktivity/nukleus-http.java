@@ -2249,30 +2249,35 @@ public final class Http2ServerFactory implements StreamFactory
                 final int responseSharedBudgetMax =
                         Math.min(responseSharedBudget + replySharedCredit, newReplySharedBudget);
                 final int responseSharedCredit = responseSharedBudgetMax - responseSharedBudget;
-                final long responseSharedPrevious =
+
+                if (responseSharedCredit > 0)
+                {
+                    final long responseSharedPrevious =
                         creditor.credit(traceId, responseSharedBudgetIndex, responseSharedCredit);
 
-                if (Http2Configuration.DEBUG_HTTP2_BUDGETS)
-                {
-                    System.out.format("[%d] [0x%016x] [0x%016x] responseSharedBudget %d + %d => %d\n",
-                        System.nanoTime(), traceId, budgetId,
-                        responseSharedBudget, responseSharedCredit, responseSharedBudget + responseSharedCredit);
-                }
+                    if (Http2Configuration.DEBUG_HTTP2_BUDGETS)
+                    {
+                        System.out.format("[%d] [0x%016x] [0x%016x] responseSharedBudget %d + %d => %d\n",
+                            System.nanoTime(), traceId, budgetId,
+                            responseSharedBudget, responseSharedCredit, responseSharedBudget + responseSharedCredit);
+                    }
 
-                responseSharedBudget += responseSharedCredit;
+                    responseSharedBudget += responseSharedCredit;
 
-                final long responseSharedBudgetUpdated = responseSharedPrevious + responseSharedCredit;
+                    final long responseSharedBudgetUpdated = responseSharedPrevious + responseSharedCredit;
 
-                assert responseSharedBudgetUpdated <= slotCapacity
+                    assert responseSharedBudgetUpdated <= slotCapacity
                         : String.format("%d <= %d, remoteSharedBudget = %d",
-                                responseSharedBudgetUpdated, slotCapacity,
-                                remoteSharedBudget);
+                        responseSharedBudgetUpdated, slotCapacity,
+                        remoteSharedBudget);
 
-                assert responseSharedBudget <= slotCapacity
+                    assert responseSharedBudget <= slotCapacity
                         : String.format("%d <= %d", responseSharedBudget, slotCapacity);
 
+                }
+
                 assert replySharedBudget <= slotCapacity
-                        : String.format("%d <= %d", replySharedBudget, slotCapacity);
+                    : String.format("%d <= %d", replySharedBudget, slotCapacity);
             }
         }
 
