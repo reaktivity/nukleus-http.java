@@ -3065,17 +3065,10 @@ public final class Http2ServerFactory implements StreamFactory
                         final int remotePadding = framePadding(remotePaddableMax, remoteSettings.maxFrameSize);
                         final int responsePadding = replyPadding + remotePadding;
 
-                        if (Http2Configuration.DEBUG_HTTP2_BUDGETS)
-                        {
-                            System.out.format("[%d] [0x%016x] [0x%016x] responsePadding => %d \n",
-                                System.nanoTime(), traceId, budgetId, responsePadding);
-                        }
-
                         final int minimumClaim = 1024;
-                        if (responseBudget <= responsePadding + minimumClaim)
-                        {
-                            flushResponseWindow(traceId, authorization);
-                        }
+                        final int responseCreditMin = (responseBudget <= responsePadding + minimumClaim) ? 0 : remoteBudget >> 1;
+
+                        flushResponseWindow(traceId, authorization, responseCreditMin);
                     }
                 }
             }
@@ -3143,13 +3136,14 @@ public final class Http2ServerFactory implements StreamFactory
                 {
                     remoteBudget = (int) newRemoteBudget;
 
-                    flushResponseWindow(traceId, authorization);
+                    flushResponseWindow(traceId, authorization, 0);
                 }
             }
 
             private void flushResponseWindow(
                 long traceId,
-                long authorization)
+                long authorization,
+                int responseCreditMin)
             {
                 if (!Http2State.replyClosed(state))
                 {
@@ -3159,7 +3153,7 @@ public final class Http2ServerFactory implements StreamFactory
                     final int responseBudgetMax = remoteBudget + responsePadding;
                     final int responseCredit = responseBudgetMax - responseBudget;
 
-                    if (responseCredit > 0)
+                    if (responseCredit > 0 && responseCredit >= responseCreditMin)
                     {
                         if (Http2Configuration.DEBUG_HTTP2_BUDGETS)
                         {
