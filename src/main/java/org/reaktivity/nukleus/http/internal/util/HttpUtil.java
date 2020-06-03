@@ -41,6 +41,10 @@ public final class HttpUtil
     private static final byte ASCII_PERCENT = 0x25;
     private static final byte ASCII_ZERO = 0x30;
     private static final byte ASCII_NINE = 0x39;
+    private static final byte ASCII_UPPERCASE_A = 0x41;
+    private static final byte ASCII_UPPERCASE_F = 0x46;
+    private static final byte ASCII_LOWERCASE_A = 0x61;
+    private static final byte ASCII_LOWERCASE_F = 0x66;
 
     public static void appendHeader(
         StringBuilder payload,
@@ -89,10 +93,9 @@ public final class HttpUtil
                         break long_loop;
                     }
 
-                    byte followedFirstDigit = path.getByte(index + longIteration + 1);
-                    byte followedSecondDigit = path.getByte(index + longIteration + 2);
-                    if (followedFirstDigit < ASCII_ZERO || followedFirstDigit > ASCII_NINE ||
-                        followedSecondDigit < ASCII_ZERO || followedSecondDigit > ASCII_NINE)
+                    byte followedFirstByte = path.getByte(index + longIteration + 1);
+                    byte followedSecondByte = path.getByte(index + longIteration + 2);
+                    if (!percentEncoded(followedFirstByte, followedSecondByte))
                     {
                         valid = false;
                         break long_loop;
@@ -141,10 +144,9 @@ public final class HttpUtil
                         break byte_loop;
                     }
 
-                    byte followedFirstDigit = path.getByte(index + 1);
-                    byte followedSecondDigit = path.getByte(index + 2);
-                    if (followedFirstDigit < ASCII_ZERO || followedFirstDigit > ASCII_NINE ||
-                        followedSecondDigit < ASCII_ZERO || followedSecondDigit > ASCII_NINE)
+                    byte followedFirsByte = path.getByte(index + 1);
+                    byte followedSecondByte = path.getByte(index + 2);
+                    if (!percentEncoded(followedFirsByte, followedSecondByte))
                     {
                         valid = false;
                         break byte_loop;
@@ -170,6 +172,26 @@ public final class HttpUtil
         }
 
         return valid;
+    }
+
+    private static boolean percentEncoded(
+        final byte followedFirstByte,
+        final byte followedSecondByte)
+    {
+        boolean percentEncoded = true;
+
+        if (followedFirstByte < ASCII_ZERO || followedFirstByte > ASCII_NINE)
+        {
+            percentEncoded = false;
+        }
+
+        if ((followedSecondByte < ASCII_ZERO || followedSecondByte > ASCII_NINE) &&
+            (followedSecondByte < ASCII_UPPERCASE_A || followedSecondByte > ASCII_UPPERCASE_F) &&
+            (followedSecondByte < ASCII_LOWERCASE_A || followedSecondByte > ASCII_LOWERCASE_F))
+        {
+            percentEncoded = false;
+        }
+        return percentEncoded;
     }
 
     private HttpUtil()
