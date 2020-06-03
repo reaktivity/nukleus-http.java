@@ -38,6 +38,10 @@ public final class HttpUtil
     private static final byte ASCII_CLOSE_BRACE = 0x7D;
     private static final byte ASCII_DELETE = 0x7F;
 
+    private static final byte ASCII_PERCENT = 0x25;
+    private static final byte ASCII_ZERO = 0x30;
+    private static final byte ASCII_NINE = 0x39;
+
     public static void appendHeader(
         StringBuilder payload,
         String name,
@@ -60,6 +64,7 @@ public final class HttpUtil
         boolean valid = true;
         int capacity = path.capacity();
         int index = 0;
+        int longIteration = 0;
 
         long_loop:
         for (; capacity >= Long.BYTES; index += Long.BYTES, capacity -= Long.BYTES)
@@ -72,10 +77,27 @@ public final class HttpUtil
                 break long_loop;
             }
 
+            longIteration = 0;
             while (candidate != 0L)
             {
                 switch ((int)(candidate & 0x0000_0000_0000_00FFL))
                 {
+                case ASCII_PERCENT:
+                    if (index + longIteration + 2 > capacity)
+                    {
+                        valid = false;
+                        break long_loop;
+                    }
+
+                    byte followedFirstDigit = path.getByte(index + longIteration + 1);
+                    byte followedSecondDigit = path.getByte(index + longIteration + 2);
+                    if (followedFirstDigit < ASCII_ZERO || followedFirstDigit > ASCII_NINE ||
+                        followedSecondDigit < ASCII_ZERO || followedSecondDigit > ASCII_NINE)
+                    {
+                        valid = false;
+                        break long_loop;
+                    }
+                    break;
                 case ASCII_SPACE:
                 case ASCII_DOUBLE_QUOTES:
                 case ASCII_LESS_THAN:
@@ -93,6 +115,7 @@ public final class HttpUtil
                     candidate >>= 8;
                     break;
                 }
+                longIteration++;
             }
         }
 
@@ -111,6 +134,22 @@ public final class HttpUtil
 
                 switch (candidate)
                 {
+                case ASCII_PERCENT:
+                    if (capacity < 2)
+                    {
+                        valid = false;
+                        break byte_loop;
+                    }
+
+                    byte followedFirstDigit = path.getByte(index + 1);
+                    byte followedSecondDigit = path.getByte(index + 2);
+                    if (followedFirstDigit < ASCII_ZERO || followedFirstDigit > ASCII_NINE ||
+                        followedSecondDigit < ASCII_ZERO || followedSecondDigit > ASCII_NINE)
+                    {
+                        valid = false;
+                        break byte_loop;
+                    }
+                    break;
                 case ASCII_SPACE:
                 case ASCII_DOUBLE_QUOTES:
                 case ASCII_LESS_THAN:

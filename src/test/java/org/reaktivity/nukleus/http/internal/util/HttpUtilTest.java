@@ -84,7 +84,7 @@ public class HttpUtilTest
     @Test
     public void shouldAcceptPathWithAllValidCharacters()
     {
-        byte[] ascii = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~:/?#[]@!$&'()*+,;=%".getBytes(US_ASCII);
+        byte[] ascii = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~:/?#[]@!$&'()*+,;=%25".getBytes(US_ASCII);
         assertTrue(HttpUtil.isPathValid(new UnsafeBuffer(ascii)));
     }
 
@@ -200,6 +200,19 @@ public class HttpUtilTest
     public void shouldRejectInvalidAsciiDeleteCharacterInPath()
     {
         assertFalse(HttpUtil.isPathValid(new UnsafeBuffer(new byte[0x7F])));
+    }
+
+    @Test
+    public void shouldRejectInvalidAsciiPercentCharacterNotFollowedByDigitsInPath()
+    {
+        byte[] ascii0 = "/path%2ith".getBytes(US_ASCII);
+        byte[] ascii1 = "/path%a5ith".getBytes(US_ASCII);
+        byte[] ascii2 = "/path%".getBytes(US_ASCII);
+        byte[] ascii3 = "/pat%2a".getBytes(US_ASCII);
+        assertFalse(HttpUtil.isPathValid(new UnsafeBuffer(ascii0)));
+        assertFalse(HttpUtil.isPathValid(new UnsafeBuffer(ascii1)));
+        assertFalse(HttpUtil.isPathValid(new UnsafeBuffer(ascii2)));
+        assertFalse(HttpUtil.isPathValid(new UnsafeBuffer(ascii3)));
     }
 }
 
