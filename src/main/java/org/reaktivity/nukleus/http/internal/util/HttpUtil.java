@@ -38,6 +38,14 @@ public final class HttpUtil
     private static final byte ASCII_CLOSE_BRACE = 0x7D;
     private static final byte ASCII_DELETE = 0x7F;
 
+    private static final byte ASCII_PERCENT = 0x25;
+    private static final byte ASCII_ZERO = 0x30;
+    private static final byte ASCII_NINE = 0x39;
+    private static final byte ASCII_UPPERCASE_A = 0x41;
+    private static final byte ASCII_UPPERCASE_F = 0x46;
+    private static final byte ASCII_LOWERCASE_A = 0x61;
+    private static final byte ASCII_LOWERCASE_F = 0x66;
+
     public static void appendHeader(
         StringBuilder payload,
         String name,
@@ -60,6 +68,7 @@ public final class HttpUtil
         boolean valid = true;
         int capacity = path.capacity();
         int index = 0;
+        int longIteration = 0;
 
         long_loop:
         for (; capacity >= Long.BYTES; index += Long.BYTES, capacity -= Long.BYTES)
@@ -72,10 +81,26 @@ public final class HttpUtil
                 break long_loop;
             }
 
+            longIteration = 0;
             while (candidate != 0L)
             {
                 switch ((int)(candidate & 0x0000_0000_0000_00FFL))
                 {
+                case ASCII_PERCENT:
+                    if (index + longIteration + 2 > capacity)
+                    {
+                        valid = false;
+                        break long_loop;
+                    }
+
+                    byte followedFirstByte = path.getByte(index + longIteration + 1);
+                    byte followedSecondByte = path.getByte(index + longIteration + 2);
+                    if (!percentEncoded(followedFirstByte, followedSecondByte))
+                    {
+                        valid = false;
+                        break long_loop;
+                    }
+                    break;
                 case ASCII_SPACE:
                 case ASCII_DOUBLE_QUOTES:
                 case ASCII_LESS_THAN:
@@ -93,6 +118,7 @@ public final class HttpUtil
                     candidate >>= 8;
                     break;
                 }
+                longIteration++;
             }
         }
 
@@ -111,6 +137,21 @@ public final class HttpUtil
 
                 switch (candidate)
                 {
+                case ASCII_PERCENT:
+                    if (capacity < 2)
+                    {
+                        valid = false;
+                        break byte_loop;
+                    }
+
+                    byte followedFirsByte = path.getByte(index + 1);
+                    byte followedSecondByte = path.getByte(index + 2);
+                    if (!percentEncoded(followedFirsByte, followedSecondByte))
+                    {
+                        valid = false;
+                        break byte_loop;
+                    }
+                    break;
                 case ASCII_SPACE:
                 case ASCII_DOUBLE_QUOTES:
                 case ASCII_LESS_THAN:
@@ -131,6 +172,26 @@ public final class HttpUtil
         }
 
         return valid;
+    }
+
+    private static boolean percentEncoded(
+        final byte followedFirstByte,
+        final byte followedSecondByte)
+    {
+        boolean percentEncoded = true;
+
+        if (followedFirstByte < ASCII_ZERO || followedFirstByte > ASCII_NINE)
+        {
+            percentEncoded = false;
+        }
+
+        if ((followedSecondByte < ASCII_ZERO || followedSecondByte > ASCII_NINE) &&
+            (followedSecondByte < ASCII_UPPERCASE_A || followedSecondByte > ASCII_UPPERCASE_F) &&
+            (followedSecondByte < ASCII_LOWERCASE_A || followedSecondByte > ASCII_LOWERCASE_F))
+        {
+            percentEncoded = false;
+        }
+        return percentEncoded;
     }
 
     private HttpUtil()
