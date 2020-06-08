@@ -65,6 +65,7 @@ public final class HttpUtil
     public static boolean isPathValid(
         DirectBuffer path)
     {
+        final int pathLength = path.capacity();
         boolean valid = true;
         int capacity = path.capacity();
         int index = 0;
@@ -87,7 +88,7 @@ public final class HttpUtil
                 switch ((int)(candidate & 0x0000_0000_0000_00FFL))
                 {
                 case ASCII_PERCENT:
-                    if (index + longIteration + 2 > capacity)
+                    if (index + longIteration + 2 > pathLength)
                     {
                         valid = false;
                         break long_loop;
@@ -100,6 +101,7 @@ public final class HttpUtil
                         valid = false;
                         break long_loop;
                     }
+                    candidate >>= 8;
                     break;
                 case ASCII_SPACE:
                 case ASCII_DOUBLE_QUOTES:
