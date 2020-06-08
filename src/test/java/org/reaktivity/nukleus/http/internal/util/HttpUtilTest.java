@@ -215,5 +215,13 @@ public class HttpUtilTest
         assertFalse(HttpUtil.isPathValid(new UnsafeBuffer(ascii2)));
         assertFalse(HttpUtil.isPathValid(new UnsafeBuffer(ascii3)));
     }
+
+    @Test
+    public void shouldAcceptValidAsciiPercentCharacterInPath()
+    {
+        byte[] ascii0 = "where=(UPPER(hazard_name)%20LIKE".getBytes(US_ASCII);
+        assertTrue(HttpUtil.isPathValid(new UnsafeBuffer(ascii0)));
+    }
+
 }
 
