@@ -1457,13 +1457,18 @@ public final class Http2ServerFactory implements StreamFactory
             int maxLimit)
         {
             final int maxLength = maxLimit - offset;
-            final int length = Math.max(Math.min(replyBudget - replyPadding, limit - offset), 0);
-            int remaining = maxLength - length;
+            int length = Math.max(Math.min(replyBudget - replyPadding, limit - offset), 0);
 
             final int minReserved = length + replyPadding;
-            final int reserved = remaining == 0 ? Math.max(minReserved, maxReserved) : minReserved;
+            final int reserved = maxLength == length ? Math.max(minReserved, maxReserved) : minReserved;
 
-            if (length > 0 && replyBudget >= reserved)
+            if (replyBudget < reserved)
+            {
+                length = 0;
+            }
+
+            int remaining = maxLength - length;
+            if (length > 0)
             {
                 if (Http2Configuration.DEBUG_HTTP2_BUDGETS)
                 {
