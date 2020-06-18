@@ -1291,7 +1291,7 @@ public final class Http2ServerFactory implements StreamFactory
             router.setThrottle(replyId, this::onNetwork);
 
             assert responseSharedBudgetIndex == NO_CREDITOR_INDEX;
-            responseSharedBudgetIndex = creditor.acquire(budgetId);
+            responseSharedBudgetIndex = creditor.acquire(budgetId, r -> responseSharedBudget += r);
             state = Http2State.openReply(state);
         }
 
