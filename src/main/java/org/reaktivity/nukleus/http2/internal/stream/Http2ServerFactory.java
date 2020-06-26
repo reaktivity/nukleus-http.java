@@ -115,6 +115,8 @@ public final class Http2ServerFactory implements StreamFactory
 
     private static final int CLEANUP_SIGNAL = 0;
 
+    private static final long MAX_REMOTE_BUDGET = Integer.MAX_VALUE;
+
     private static final DirectBuffer EMPTY_BUFFER = new UnsafeBuffer(new byte[0]);
     private static final OctetsFW EMPTY_OCTETS = new OctetsFW().wrap(EMPTY_BUFFER, 0, 0);
 
@@ -1023,8 +1025,9 @@ public final class Http2ServerFactory implements StreamFactory
         private int encodeSlot = NO_SLOT;
         private int encodeSlotOffset;
         private int encodeSlotReserved;
-        private long encodeSlotTraceId;
-        private int encodeSlotMaxLimit = Integer.MAX_VALUE;
+        private int encodeSlotMarkOffset;
+        private int encodeHeadersSlotMarkOffset;
+        private int encodeReservedSlotMarkOffset;
 
         private MutableDirectBuffer encodeHeadersBuffer;
         private int encodeHeadersSlotOffset;
@@ -1278,7 +1281,7 @@ public final class Http2ServerFactory implements StreamFactory
             replyBudget += credit;
             replyPadding = padding;
 
-            flushNetwork(authorization, budgetId);
+            encodeNetwork(traceId, authorization, budgetId);
 
             flushResponseSharedBudget(traceId);
         }
@@ -1304,31 +1307,31 @@ public final class Http2ServerFactory implements StreamFactory
             int offset,
             int limit)
         {
-            int maxLimit = limit;
-            limit = Math.min(maxLimit, encodeSlotMaxLimit);
+            if (encodeSlot == NO_SLOT)
+            {
+                encodeSlot = bufferPool.acquire(replyId);
+            }
 
-            if (encodeSlot != NO_SLOT)
+            if (encodeSlot == NO_SLOT)
+            {
+                cleanupNetwork(traceId, authorization);
+            }
+            else
             {
                 final MutableDirectBuffer encodeBuffer = bufferPool.buffer(encodeSlot);
                 encodeBuffer.putBytes(encodeSlotOffset, buffer, offset, limit - offset);
                 encodeSlotOffset += limit - offset;
                 encodeSlotReserved += reserved;
-                encodeSlotTraceId = traceId;
 
                 if (Http2Configuration.DEBUG_HTTP2_BUDGETS)
                 {
                     System.out.format("[%d] [0x%016x] [0x%016x] encode slot %d => %d\n",
-                            System.nanoTime(), traceId, budgetId, limit - offset, encodeSlotOffset);
+                        System.nanoTime(), traceId, budgetId, limit - offset, encodeSlotOffset);
                 }
 
-                reserved = encodeSlotReserved;
-                buffer = encodeBuffer;
-                offset = 0;
-                maxLimit = encodeSlotOffset;
-                limit = Math.min(maxLimit, encodeSlotMaxLimit);
+                encodeNetwork(traceId, authorization, budgetId);
             }
 
-            encodeNetwork(traceId, authorization, budgetId, reserved, buffer, offset, limit, maxLimit);
         }
 
         private void doNetworkHeadersData(
@@ -1351,15 +1354,18 @@ public final class Http2ServerFactory implements StreamFactory
         {
             if (encodeHeadersSlotOffset == 0)
             {
-                encodeSlotMaxLimit = encodeSlotOffset;
-                assert encodeSlotMaxLimit >= 0;
+                encodeSlotMarkOffset = encodeSlotOffset;
+                assert encodeSlotMarkOffset >= 0;
+
+                encodeReservedSlotMarkOffset = encodeReservedSlotOffset;
+                assert encodeReservedSlotMarkOffset >= 0;
             }
 
             encodeHeadersBuffer.putBytes(encodeHeadersSlotOffset, buffer, offset, limit - offset);
             encodeHeadersSlotOffset += limit - offset;
             encodeHeadersSlotTraceId = traceId;
 
-            flushNetwork(authorization, budgetId);
+            encodeNetwork(traceId, authorization, budgetId);
         }
 
         private void doNetworkReservedData(
@@ -1384,7 +1390,7 @@ public final class Http2ServerFactory implements StreamFactory
             encodeReservedSlotOffset += limit - offset;
             encodeReservedSlotTraceId = traceId;
 
-            flushNetwork(authorization, budgetId);
+            encodeNetwork(traceId, authorization, budgetId);
         }
 
         private void doNetworkEnd(
@@ -1434,103 +1440,78 @@ public final class Http2ServerFactory implements StreamFactory
         private void encodeNetwork(
             long traceId,
             long authorization,
-            long budgetId,
-            int reserved,
-            DirectBuffer buffer,
-            int offset,
-            int limit,
-            int maxLimit)
+            long budgetId)
         {
-            encodeNetworkData(traceId, authorization, budgetId, reserved, buffer, offset, limit, maxLimit);
             encodeNetworkHeaders(authorization, budgetId);
+            encodeNetworkData(traceId, authorization, budgetId);
             encodeNetworkReserved(authorization, budgetId);
         }
 
         private void encodeNetworkData(
             long traceId,
             long authorization,
-            long budgetId,
-            int maxReserved,
-            DirectBuffer buffer,
-            int offset,
-            int limit,
-            int maxLimit)
+            long budgetId)
         {
-            final int maxLength = maxLimit - offset;
-            int length = Math.max(Math.min(replyBudget - replyPadding, limit - offset), 0);
-
-            final int minReserved = length + replyPadding;
-            final int reserved = maxLength == length ? Math.max(minReserved, maxReserved) : minReserved;
-
-            if (replyBudget < reserved)
+            if (encodeSlotOffset != 0 &&
+                (encodeSlotMarkOffset != 0 || (encodeHeadersSlotOffset == 0 && encodeReservedSlotMarkOffset == 0)))
             {
-                length = 0;
-            }
+                final int maxEncodeLength = encodeSlotMarkOffset != 0 ? encodeSlotMarkOffset : encodeSlotOffset;
+                final int encodeLength = Math.max(Math.min(replyBudget - replyPadding, maxEncodeLength), 0);
 
-            int remaining = maxLength - length;
-            if (length > 0)
-            {
-                if (Http2Configuration.DEBUG_HTTP2_BUDGETS)
+                if (encodeLength > 0)
                 {
-                    System.out.format("[%d] [0x%016x] [0x%016x] replyBudget %d - %d => %d\n",
-                            System.nanoTime(), traceId, budgetId,
-                            replyBudget, reserved, replyBudget - reserved);
-
-                    System.out.format("[%d] [0x%016x] [0x%016x] replySharedBudget %d - %d => %d\n",
-                        System.nanoTime(), traceId, budgetId,
-                        replySharedBudget, reserved, replySharedBudget - reserved);
-                }
-
-                maxReserved -= reserved;
-
-                replyBudget -= reserved;
-
-                assert replyBudget >= 0 : String.format("%d >= 0", replyBudget);
-
-                replySharedBudget -= reserved;
-
-                doData(network, routeId, replyId, traceId, authorization, budgetId,
-                       reserved, buffer, offset, length, EMPTY_OCTETS);
-
-                if (encodeSlot != NO_SLOT)
-                {
-                    encodeSlotMaxLimit -= length;
-                    assert encodeSlotMaxLimit >= 0;
-                }
-            }
-
-            if (remaining > 0)
-            {
-                if (encodeSlot == NO_SLOT)
-                {
-                    encodeSlot = bufferPool.acquire(replyId);
-                }
-
-                if (encodeSlot == NO_SLOT)
-                {
-                    cleanupNetwork(traceId, authorization);
-                }
-                else
-                {
-                    final MutableDirectBuffer encodeBuffer = bufferPool.buffer(encodeSlot);
-                    encodeBuffer.putBytes(0, buffer, offset + length, remaining);
-                    encodeSlotOffset = remaining;
-                    encodeSlotReserved = maxReserved;
+                    final int encodeReserved = encodeLength + replyPadding;
 
                     if (Http2Configuration.DEBUG_HTTP2_BUDGETS)
                     {
-                        System.out.format("[%d] [0x%016x] [0x%016x] encode slot %d - %d => %d\n",
-                            System.nanoTime(), traceId, budgetId, limit - offset, length, encodeSlotOffset);
-                    }
-                }
-            }
-            else
-            {
-                cleanupEncodeSlotIfNecessary();
+                        System.out.format("[%d] [0x%016x] [0x%016x] replyBudget %d - %d => %d\n",
+                            System.nanoTime(), traceId, budgetId,
+                            replyBudget, replyPadding, replyBudget - encodeReserved);
 
-                if (streams.isEmpty() && decoder == decodeIgnoreAll)
-                {
-                    doNetworkEnd(traceId, authorization);
+                        System.out.format("[%d] [0x%016x] [0x%016x] replySharedBudget %d - %d => %d\n",
+                            System.nanoTime(), traceId, budgetId,
+                            replySharedBudget, encodeReserved, replySharedBudget - encodeReserved);
+                    }
+
+                    replyBudget -= encodeReserved;
+
+                    assert replyBudget >= 0 : String.format("%d >= 0", replyBudget);
+
+                    replySharedBudget -= encodeReserved;
+
+                    assert encodeSlot != NO_SLOT;
+                    final MutableDirectBuffer encodeBuffer = bufferPool.buffer(encodeSlot);
+
+                    doData(network, routeId, replyId, traceId, authorization, budgetId,
+                        encodeReserved, encodeBuffer, 0, encodeLength, EMPTY_OCTETS);
+
+                    if (encodeSlotMarkOffset != 0)
+                    {
+                        encodeSlotMarkOffset -= encodeLength;
+                        assert encodeSlotMarkOffset >= 0;
+                    }
+
+                    encodeSlotOffset -= encodeLength;
+                    assert encodeSlotOffset >= 0;
+
+                    if (encodeSlotOffset > 0)
+                    {
+                        encodeBuffer.putBytes(0, encodeBuffer, encodeLength, encodeSlotOffset);
+
+                        if (encodeSlotMarkOffset == 0 && encodeHeadersSlotOffset == 0)
+                        {
+                            encodeSlotMarkOffset += encodeSlotOffset;
+                        }
+                    }
+                    else
+                    {
+                        cleanupEncodeSlotIfNecessary();
+
+                        if (streams.isEmpty() && decoder == decodeIgnoreAll)
+                        {
+                            doNetworkEnd(traceId, authorization);
+                        }
+                    }
                 }
             }
         }
@@ -1539,14 +1520,18 @@ public final class Http2ServerFactory implements StreamFactory
             long authorization,
             long budgetId)
         {
-            if (encodeHeadersSlotOffset != 0 && encodeSlotMaxLimit == 0)
+            if (encodeHeadersSlotOffset != 0 &&
+                encodeSlotMarkOffset == 0 &&
+                encodeReservedSlotMarkOffset == 0)
             {
-                final int maxEncodeLength = encodeHeadersSlotOffset;
+                final int maxEncodeLength =
+                    encodeHeadersSlotMarkOffset != 0 ? encodeHeadersSlotMarkOffset : encodeHeadersSlotOffset;
                 final int encodeLength = Math.max(Math.min(replyBudget - replyPadding, maxEncodeLength), 0);
-                final int encodeReserved = encodeLength + replyPadding;
 
                 if (encodeLength > 0)
                 {
+                    final int encodeReserved = encodeLength + replyPadding;
+
                     if (Http2Configuration.DEBUG_HTTP2_BUDGETS)
                     {
                         System.out.format("[%d] [0x%016x] [0x%016x] replyBudget %d - %d => %d\n",
@@ -1555,25 +1540,32 @@ public final class Http2ServerFactory implements StreamFactory
                     }
 
                     replyBudget -= encodeReserved;
-
                     assert replyBudget >= 0;
 
                     doData(network, routeId, replyId, encodeHeadersSlotTraceId, authorization, budgetId,
                            encodeReserved, encodeHeadersBuffer, 0, encodeLength, EMPTY_OCTETS);
 
-                    encodeHeadersSlotOffset -= encodeLength;
+                    if (encodeHeadersSlotMarkOffset != 0)
+                    {
+                        encodeHeadersSlotMarkOffset -= encodeLength;
+                        assert encodeHeadersSlotMarkOffset >= 0;
+                    }
 
+                    encodeHeadersSlotOffset -= encodeLength;
                     assert encodeHeadersSlotOffset >= 0;
 
-                    encodeHeadersBuffer.putBytes(0, encodeHeadersBuffer, encodeLength, encodeHeadersSlotOffset);
+                    if (encodeHeadersSlotOffset > 0)
+                    {
+                        encodeHeadersBuffer.putBytes(0, encodeHeadersBuffer, encodeLength, encodeHeadersSlotOffset);
+
+                        if (encodeHeadersSlotMarkOffset == 0)
+                        {
+                            encodeHeadersSlotMarkOffset = encodeHeadersSlotOffset;
+                        }
+                    }
 
                     replyBudgetReserved += encodeReserved;
                 }
-            }
-
-            if (encodeHeadersSlotOffset == 0 && encodeSlotMaxLimit != Integer.MAX_VALUE)
-            {
-                encodeSlotMaxLimit = Integer.MAX_VALUE;
             }
         }
 
@@ -1582,14 +1574,16 @@ public final class Http2ServerFactory implements StreamFactory
             long budgetId)
         {
             if (encodeReservedSlotOffset != 0 &&
-                (encodeSlotMaxLimit == 0 || encodeSlotMaxLimit == Integer.MAX_VALUE))
+                (encodeReservedSlotMarkOffset != 0 || (encodeHeadersSlotOffset == 0 && encodeSlotOffset == 0)))
             {
-                final int maxEncodeLength = encodeReservedSlotOffset;
+                final int maxEncodeLength =
+                    encodeReservedSlotMarkOffset != 0 ? encodeReservedSlotMarkOffset : encodeReservedSlotOffset;
                 final int encodeLength = Math.max(Math.min(replyBudget - replyPadding, maxEncodeLength), 0);
-                final int encodeReserved = encodeLength + replyPadding;
 
                 if (encodeLength > 0)
                 {
+                    final int encodeReserved = encodeLength + replyPadding;
+
                     if (Http2Configuration.DEBUG_HTTP2_BUDGETS)
                     {
                         System.out.format("[%d] [0x%016x] [0x%016x] replyBudget %d - %d => %d\n",
@@ -1598,40 +1592,34 @@ public final class Http2ServerFactory implements StreamFactory
                     }
 
                     replyBudget -= encodeReserved;
-
                     assert replyBudget >= 0;
 
                     doData(network, routeId, replyId, encodeReservedSlotTraceId, authorization, budgetId,
                            encodeReserved, encodeReservedBuffer, 0, encodeLength, EMPTY_OCTETS);
 
-                    encodeReservedSlotOffset -= encodeLength;
+                    if (encodeReservedSlotMarkOffset != 0)
+                    {
+                        encodeReservedSlotMarkOffset -= encodeLength;
+                        assert encodeReservedSlotMarkOffset >= 0;
+                    }
 
+                    encodeReservedSlotOffset -= encodeLength;
                     assert encodeReservedSlotOffset >= 0;
 
-                    encodeReservedBuffer.putBytes(0, encodeReservedBuffer, encodeLength, encodeReservedSlotOffset);
+                    if (encodeReservedSlotOffset > 0)
+                    {
+                        encodeReservedBuffer.putBytes(0, encodeReservedBuffer, encodeLength, encodeReservedSlotOffset);
+
+                        if (encodeReservedSlotMarkOffset == 0 &&
+                            encodeHeadersSlotOffset == 0 &&
+                            encodeSlotOffset == 0)
+                        {
+                            encodeReservedSlotMarkOffset = encodeReservedSlotOffset;
+                        }
+                    }
 
                     replyBudgetReserved += encodeReserved;
                 }
-            }
-        }
-
-        private void flushNetwork(
-            long authorization,
-            long budgetId)
-        {
-            if (encodeSlot != NO_SLOT)
-            {
-                final MutableDirectBuffer buffer = bufferPool.buffer(encodeSlot);
-                final int limit = Math.min(encodeSlotOffset, encodeSlotMaxLimit);
-                final int maxLimit = encodeSlotOffset;
-                final int maxReserved = encodeSlotReserved;
-
-                encodeNetwork(encodeSlotTraceId, authorization, budgetId, maxReserved, buffer, 0, limit, maxLimit);
-            }
-            else
-            {
-                encodeNetworkHeaders(authorization, budgetId);
-                encodeNetworkReserved(authorization, budgetId);
             }
         }
 
@@ -1753,7 +1741,7 @@ public final class Http2ServerFactory implements StreamFactory
                         for (Http2Exchange stream: streams.values())
                         {
                             final long newRemoteBudget = stream.remoteBudget + remoteInitialCredit;
-                            if (newRemoteBudget > Integer.MAX_VALUE)
+                            if (newRemoteBudget > MAX_REMOTE_BUDGET)
                             {
                                 decodeError = Http2ErrorCode.FLOW_CONTROL_ERROR;
                                 break;
@@ -2599,7 +2587,7 @@ public final class Http2ServerFactory implements StreamFactory
                 bufferPool.release(encodeSlot);
                 encodeSlot = NO_SLOT;
                 encodeSlotOffset = 0;
-                encodeSlotTraceId = 0;
+                encodeSlotReserved = 0;
 
                 if (Http2Configuration.DEBUG_HTTP2_BUDGETS)
                 {
@@ -3132,7 +3120,7 @@ public final class Http2ServerFactory implements StreamFactory
             {
                 final long newRemoteBudget = (long) remoteBudget + size;
 
-                if (newRemoteBudget > Integer.MAX_VALUE)
+                if (newRemoteBudget > MAX_REMOTE_BUDGET)
                 {
                     doEncodeRstStream(traceId, authorization, streamId, Http2ErrorCode.FLOW_CONTROL_ERROR);
                     cleanup(traceId, authorization);
