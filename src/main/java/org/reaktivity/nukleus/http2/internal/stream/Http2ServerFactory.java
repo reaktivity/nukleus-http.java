@@ -1386,15 +1386,6 @@ public final class Http2ServerFactory implements StreamFactory
             int offset,
             int limit)
         {
-            if (encodeReservedSlotOffset == 0)
-            {
-                if (encodeSlotMarkOffset != 0)
-                {
-                    encodeSlotMarkOffset = encodeSlotOffset;
-                    assert encodeSlotMarkOffset >= 0;
-                }
-            }
-
             encodeReservedBuffer.putBytes(encodeReservedSlotOffset, buffer, offset, limit - offset);
             encodeReservedSlotOffset += limit - offset;
             encodeReservedSlotTraceId = traceId;
