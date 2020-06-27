@@ -1273,7 +1273,7 @@ public final class Http2ServerFactory implements StreamFactory
 
             if (Http2Configuration.DEBUG_HTTP2_BUDGETS)
             {
-                System.out.format("[%d] [0x%016x] [0x%016x] replyBudget %d + %d => %d\n",
+                System.out.format("[%d] [onNetworkWindow] [0x%016x] [0x%016x] replyBudget %d + %d => %d\n",
                         System.nanoTime(), encodeReservedSlotTraceId, budgetId,
                         replyBudget, credit, replyBudget + credit);
             }
@@ -1325,7 +1325,7 @@ public final class Http2ServerFactory implements StreamFactory
 
                 if (Http2Configuration.DEBUG_HTTP2_BUDGETS)
                 {
-                    System.out.format("[%d] [0x%016x] [0x%016x] encode slot %d => %d\n",
+                    System.out.format("[%d] [doNetworkData] [0x%016x] [0x%016x] encode slot %d => %d\n",
                         System.nanoTime(), traceId, budgetId, limit - offset, encodeSlotOffset);
                 }
 
@@ -1464,20 +1464,21 @@ public final class Http2ServerFactory implements StreamFactory
 
                     if (Http2Configuration.DEBUG_HTTP2_BUDGETS)
                     {
-                        System.out.format("[%d] [0x%016x] [0x%016x] replyBudget %d - %d => %d\n",
+                        System.out.format("[%d] [encodeNetworkData] [0x%016x] [0x%016x] replyBudget %d - %d => %d\n",
                             System.nanoTime(), traceId, budgetId,
-                            replyBudget, replyPadding, replyBudget - encodeReserved);
+                            replyBudget, encodeReserved, replyBudget - encodeReserved);
 
-                        System.out.format("[%d] [0x%016x] [0x%016x] replySharedBudget %d - %d => %d\n",
+                        System.out.format("[%d] [encodeNetworkData] [0x%016x]  [0x%016x] replySharedBudget %d - %d => %d\n",
                             System.nanoTime(), traceId, budgetId,
-                            replySharedBudget, encodeReserved, replySharedBudget - encodeReserved);
+                            replySharedBudget, encodeSlotReserved, replySharedBudget - encodeSlotReserved);
                     }
 
                     replyBudget -= encodeReserved;
 
                     assert replyBudget >= 0 : String.format("%d >= 0", replyBudget);
 
-                    replySharedBudget -= encodeReserved;
+                    replySharedBudget -= encodeSlotReserved;
+                    encodeSlotReserved -= encodeReserved;
 
                     assert encodeSlot != NO_SLOT;
                     final MutableDirectBuffer encodeBuffer = bufferPool.buffer(encodeSlot);
@@ -1534,7 +1535,7 @@ public final class Http2ServerFactory implements StreamFactory
 
                     if (Http2Configuration.DEBUG_HTTP2_BUDGETS)
                     {
-                        System.out.format("[%d] [0x%016x] [0x%016x] replyBudget %d - %d => %d\n",
+                        System.out.format("[%d] [encodeNetworkHeaders] [0x%016x] [0x%016x] replyBudget %d - %d => %d\n",
                                 System.nanoTime(), encodeHeadersSlotTraceId, budgetId,
                                 replyBudget, encodeReserved, replyBudget - encodeReserved);
                     }
@@ -1586,7 +1587,7 @@ public final class Http2ServerFactory implements StreamFactory
 
                     if (Http2Configuration.DEBUG_HTTP2_BUDGETS)
                     {
-                        System.out.format("[%d] [0x%016x] [0x%016x] replyBudget %d - %d => %d\n",
+                        System.out.format("[%d] [encodeNetworkReserved] [0x%016x] [0x%016x] replyBudget %d - %d => %d\n",
                                 System.nanoTime(), encodeReservedSlotTraceId, budgetId,
                                 replyBudget, encodeReserved, replyBudget - encodeReserved);
                     }
@@ -2230,7 +2231,7 @@ public final class Http2ServerFactory implements StreamFactory
             {
                 if (Http2Configuration.DEBUG_HTTP2_BUDGETS)
                 {
-                    System.out.format("[%d] [0x%016x] [0x%016x] replySharedBudget %d + %d => %d\n",
+                    System.out.format("[%d] [flushResponseSharedBudget] [0x%016x] [0x%016x] replySharedBudget %d + %d => %d\n",
                         System.nanoTime(), traceId, budgetId,
                         replySharedBudget, replySharedCredit, newReplySharedBudget);
                 }
@@ -2250,7 +2251,8 @@ public final class Http2ServerFactory implements StreamFactory
 
                     if (Http2Configuration.DEBUG_HTTP2_BUDGETS)
                     {
-                        System.out.format("[%d] [0x%016x] [0x%016x] responseSharedBudget %d + %d => %d\n",
+                        System.out.format("[%d] [flushResponseSharedBudget] [0x%016x] [0x%016x] " +
+                                          "responseSharedBudget %d + %d => %d\n",
                             System.nanoTime(), traceId, budgetId,
                             responseSharedBudget, responseSharedCredit, responseSharedBudget + responseSharedCredit);
                     }
@@ -2591,7 +2593,7 @@ public final class Http2ServerFactory implements StreamFactory
 
                 if (Http2Configuration.DEBUG_HTTP2_BUDGETS)
                 {
-                    System.out.format("[%d] [0x%016x] [0x%016x] encode slot => %d\n",
+                    System.out.format("[%d] [cleanupEncodeSlotIfNecessary] [0x%016x] [0x%016x] encode encodeSlotOffset => %d\n",
                         System.nanoTime(), 0, budgetId, encodeSlotOffset);
                 }
             }
@@ -3000,11 +3002,11 @@ public final class Http2ServerFactory implements StreamFactory
 
                 if (Http2Configuration.DEBUG_HTTP2_BUDGETS)
                 {
-                    System.out.format("[%d] [0x%016x] [0x%016x] responseBudget %d - %d => %d\n",
+                    System.out.format("[%d] [onResponseData] [0x%016x] [0x%016x] responseBudget %d - %d => %d\n",
                         System.nanoTime(), traceId, budgetId,
                         responseBudget, reserved, responseBudget - reserved);
 
-                    System.out.format("[%d] [0x%016x] [0x%016x] responseSharedBudget %d - %d => %d\n",
+                    System.out.format("[%d] [onResponseData] [0x%016x] [0x%016x] responseSharedBudget %d - %d => %d\n",
                             System.nanoTime(), traceId, budgetId,
                             responseSharedBudget, reserved, responseSharedBudget - reserved);
                 }
@@ -3042,10 +3044,10 @@ public final class Http2ServerFactory implements StreamFactory
 
                         if (Http2Configuration.DEBUG_HTTP2_BUDGETS)
                         {
-                            System.out.format("[%d] [0x%016x] [0x%016x] remoteBudget %d - %d => %d \n",
+                            System.out.format("[%d] [onResponseData] [0x%016x] [0x%016x] remoteBudget %d - %d => %d \n",
                                 System.nanoTime(), traceId, budgetId, remoteBudget, length, remoteBudget - length);
 
-                            System.out.format("[%d] [0x%016x] [0x%016x] remoteSharedBudget %d - %d => %d \n",
+                            System.out.format("[%d] [onResponseData] [0x%016x] [0x%016x] remoteSharedBudget %d - %d => %d \n",
                                 System.nanoTime(), traceId, budgetId, remoteSharedBudget, length, remoteSharedBudget - length);
                         }
 
@@ -3150,7 +3152,7 @@ public final class Http2ServerFactory implements StreamFactory
                     {
                         if (Http2Configuration.DEBUG_HTTP2_BUDGETS)
                         {
-                            System.out.format("[%d] [0x%016x] [0x%016x] responseBudget %d + %d => %d\n",
+                            System.out.format("[%d] [flushResponseWindow] [0x%016x] [0x%016x] responseBudget %d + %d => %d\n",
                                 System.nanoTime(), traceId, budgetId,
                                 responseBudget, responseCredit, responseBudget + responseCredit);
                         }
