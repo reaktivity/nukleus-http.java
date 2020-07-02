@@ -2251,19 +2251,19 @@ public final class Http2ServerFactory implements StreamFactory
             if (replySharedCredit > 0)
             {
                 final long responseSharedPrevious =
-                    creditor.credit(traceId, responseSharedBudgetIndex, responseSharedCredit);
+                    creditor.credit(traceId, responseSharedBudgetIndex, replySharedCredit);
 
                 if (Http2Configuration.DEBUG_HTTP2_BUDGETS)
                 {
                     System.out.format("[%d] [flushResponseSharedBudget] [0x%016x] [0x%016x] " +
                                       "responseSharedBudget %d + %d => %d\n",
                         System.nanoTime(), traceId, budgetId,
-                        responseSharedBudget, responseSharedCredit, responseSharedBudget + responseSharedCredit);
+                        responseSharedBudget, replySharedCredit, responseSharedBudget + replySharedCredit);
                 }
 
-                responseSharedBudget += responseSharedCredit;
+                responseSharedBudget += replySharedCredit;
 
-                final long responseSharedBudgetUpdated = responseSharedPrevious + responseSharedCredit;
+                final long responseSharedBudgetUpdated = responseSharedPrevious + replySharedCredit;
                 assert responseSharedBudgetUpdated <= slotCapacity
                     : String.format("%d <= %d, remoteSharedBudget = %d",
                     responseSharedBudgetUpdated, slotCapacity, remoteSharedBudget);
