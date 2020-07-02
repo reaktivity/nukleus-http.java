@@ -1266,10 +1266,8 @@ public final class Http2ServerFactory implements StreamFactory
             final long traceId = window.traceId();
             final long authorization = window.authorization();
             final long budgetId = window.budgetId();
-            final int credit = window.credit();
+            int credit = window.credit();
             final int padding = window.padding();
-
-            replyBudgetReserved = Math.max(replyBudgetReserved - credit, 0);
 
             if (Http2Configuration.DEBUG_HTTP2_BUDGETS)
             {
@@ -1280,6 +1278,21 @@ public final class Http2ServerFactory implements StreamFactory
 
             replyBudget += credit;
             replyPadding = padding;
+
+            if (replyBudgetReserved > 0)
+            {
+                final int minCredit = Math.min(credit, replyBudgetReserved);
+                replyBudgetReserved -= minCredit;
+                credit -= minCredit;
+            }
+
+            if (credit > 0)
+            {
+                replySharedBudget += credit;
+                credit -= credit;
+            }
+
+            assert credit == 0;
 
             encodeNetwork(traceId, authorization, budgetId);
 
@@ -1325,8 +1338,9 @@ public final class Http2ServerFactory implements StreamFactory
 
                 if (Http2Configuration.DEBUG_HTTP2_BUDGETS)
                 {
-                    System.out.format("[%d] [doNetworkData] [0x%016x] [0x%016x] encode slot %d => %d\n",
-                        System.nanoTime(), traceId, budgetId, limit - offset, encodeSlotOffset);
+                    System.out.format("[%d] [doNetworkData] [0x%016x] [0x%016x] encodeSlotOffset %d => %d " +
+                                      "encodeSlotReserved=%d\n",
+                        System.nanoTime(), traceId, budgetId, limit - offset, encodeSlotOffset, encodeSlotReserved);
                 }
 
                 encodeNetwork(traceId, authorization, budgetId);
@@ -1461,6 +1475,7 @@ public final class Http2ServerFactory implements StreamFactory
                 if (encodeLength > 0)
                 {
                     final int encodeReserved = encodeLength + replyPadding;
+                    final int minEncodeReserved = (int) (((long) encodeSlotReserved * encodeLength) / encodeSlotOffset);
 
                     if (Http2Configuration.DEBUG_HTTP2_BUDGETS)
                     {
@@ -1470,15 +1485,15 @@ public final class Http2ServerFactory implements StreamFactory
 
                         System.out.format("[%d] [encodeNetworkData] [0x%016x]  [0x%016x] replySharedBudget %d - %d => %d\n",
                             System.nanoTime(), traceId, budgetId,
-                            replySharedBudget, encodeSlotReserved, replySharedBudget - encodeSlotReserved);
+                            replySharedBudget, minEncodeReserved, replySharedBudget - minEncodeReserved);
                     }
 
                     replyBudget -= encodeReserved;
-
                     assert replyBudget >= 0 : String.format("%d >= 0", replyBudget);
 
-                    replySharedBudget -= encodeSlotReserved;
-                    encodeSlotReserved -= encodeReserved;
+                    encodeSlotReserved -= minEncodeReserved;
+
+                    replySharedBudget -= encodeReserved;
 
                     assert encodeSlot != NO_SLOT;
                     final MutableDirectBuffer encodeBuffer = bufferPool.buffer(encodeSlot);
@@ -1830,6 +1845,12 @@ public final class Http2ServerFactory implements StreamFactory
 
             if (streamId == 0)
             {
+                if (Http2Configuration.DEBUG_HTTP2_BUDGETS)
+                {
+                    System.out.format("[%d] [onDecodeWindowUpdate] [0x%016x] [0x%016x] %d + %d => %d \n",
+                        System.nanoTime(), traceId, budgetId, remoteSharedBudget, credit, remoteSharedBudget + credit);
+                }
+
                 remoteSharedBudget += credit;
 
                 // TODO: instead use Http2State.replyClosed(state)
@@ -2219,61 +2240,40 @@ public final class Http2ServerFactory implements StreamFactory
         private void flushResponseSharedBudget(
             long traceId)
         {
+            final int slotCapacity = bufferPool.slotCapacity();
             final int responseSharedPadding = framePadding(remoteSharedBudget, remoteSettings.maxFrameSize);
-            final int replyBudgetLimit = replyBudgetReserved == 0 ? replyBudget : 0;
-            final int replySharedBudgetMax =
-                    Math.min(remoteSharedBudget + responseSharedPadding + replyPadding, replyBudgetLimit);
-            final int replySharedCredit =
-                    replySharedBudgetMax - Math.max(replySharedBudget, 0) - Math.max(encodeSlotReserved, 0);
-            final int newReplySharedBudget = replySharedBudget + replySharedCredit;
+            final int remoteSharedBudgetMax = remoteSharedBudget + responseSharedPadding + replyPadding;
+            final int responseReplySharedBudget =
+                Math.min(slotCapacity - responseSharedBudget - encodeSlotReserved, replySharedBudget);
+            final int responseSharedBudgetDelta = remoteSharedBudgetMax - (responseSharedBudget + encodeSlotReserved);
+            final int responseSharedCredit = Math.min(responseReplySharedBudget, responseSharedBudgetDelta);
 
-            if (replySharedCredit > 0 && newReplySharedBudget > 0)
+            if (responseSharedCredit > 0)
             {
+                final long responseSharedPrevious =
+                    creditor.credit(traceId, responseSharedBudgetIndex, responseSharedCredit);
+
                 if (Http2Configuration.DEBUG_HTTP2_BUDGETS)
                 {
-                    System.out.format("[%d] [flushResponseSharedBudget] [0x%016x] [0x%016x] replySharedBudget %d + %d => %d\n",
+                    System.out.format("[%d] [flushResponseSharedBudget] [0x%016x] [0x%016x] " +
+                                      "responseSharedBudget %d + %d => %d\n",
                         System.nanoTime(), traceId, budgetId,
-                        replySharedBudget, replySharedCredit, newReplySharedBudget);
+                        responseSharedBudget, responseSharedCredit, responseSharedBudget + responseSharedCredit);
                 }
 
-                replySharedBudget = newReplySharedBudget;
+                responseSharedBudget += responseSharedCredit;
 
-                final int slotCapacity = bufferPool.slotCapacity();
+                final long responseSharedBudgetUpdated = responseSharedPrevious + responseSharedCredit;
+                assert responseSharedBudgetUpdated <= slotCapacity
+                    : String.format("%d <= %d, remoteSharedBudget = %d",
+                    responseSharedBudgetUpdated, slotCapacity, remoteSharedBudget);
 
-                final int responseSharedBudgetMax =
-                        Math.min(responseSharedBudget + replySharedCredit, newReplySharedBudget);
-                final int responseSharedCredit = responseSharedBudgetMax - responseSharedBudget;
-
-                if (responseSharedCredit > 0)
-                {
-                    final long responseSharedPrevious =
-                        creditor.credit(traceId, responseSharedBudgetIndex, responseSharedCredit);
-
-                    if (Http2Configuration.DEBUG_HTTP2_BUDGETS)
-                    {
-                        System.out.format("[%d] [flushResponseSharedBudget] [0x%016x] [0x%016x] " +
-                                          "responseSharedBudget %d + %d => %d\n",
-                            System.nanoTime(), traceId, budgetId,
-                            responseSharedBudget, responseSharedCredit, responseSharedBudget + responseSharedCredit);
-                    }
-
-                    responseSharedBudget += responseSharedCredit;
-
-                    final long responseSharedBudgetUpdated = responseSharedPrevious + responseSharedCredit;
-
-                    assert responseSharedBudgetUpdated <= slotCapacity
-                        : String.format("%d <= %d, remoteSharedBudget = %d",
-                        responseSharedBudgetUpdated, slotCapacity,
-                        remoteSharedBudget);
-
-                    assert responseSharedBudget <= slotCapacity
-                        : String.format("%d <= %d", responseSharedBudget, slotCapacity);
-
-                }
-
-                assert replySharedBudget <= slotCapacity
-                    : String.format("%d <= %d", replySharedBudget, slotCapacity);
+                assert responseSharedBudget <= slotCapacity
+                    : String.format("%d <= %d", responseSharedBudget, slotCapacity);
             }
+
+            assert replySharedBudget <= slotCapacity
+                : String.format("%d <= %d", replySharedBudget, slotCapacity);
         }
 
         private void onEncodePromise(
@@ -2589,7 +2589,7 @@ public final class Http2ServerFactory implements StreamFactory
                 bufferPool.release(encodeSlot);
                 encodeSlot = NO_SLOT;
                 encodeSlotOffset = 0;
-                encodeSlotReserved = 0;
+                encodeSlotMarkOffset = 0;
 
                 if (Http2Configuration.DEBUG_HTTP2_BUDGETS)
                 {
