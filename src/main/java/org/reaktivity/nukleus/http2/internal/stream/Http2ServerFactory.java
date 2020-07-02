@@ -1281,9 +1281,9 @@ public final class Http2ServerFactory implements StreamFactory
 
             if (replyBudgetReserved > 0)
             {
-                final int minCredit = Math.min(credit, replyBudgetReserved);
-                replyBudgetReserved -= minCredit;
-                credit -= minCredit;
+                final int reservedCredit = Math.min(credit, replyBudgetReserved);
+                replyBudgetReserved -= reservedCredit;
+                credit -= reservedCredit;
             }
 
             if (credit > 0)
@@ -2243,12 +2243,12 @@ public final class Http2ServerFactory implements StreamFactory
             final int slotCapacity = bufferPool.slotCapacity();
             final int responseSharedPadding = framePadding(remoteSharedBudget, remoteSettings.maxFrameSize);
             final int remoteSharedBudgetMax = remoteSharedBudget + responseSharedPadding + replyPadding;
-            final int responseReplySharedBudget =
+            final int responseSharedCredit =
                 Math.min(slotCapacity - responseSharedBudget - encodeSlotReserved, replySharedBudget);
             final int responseSharedBudgetDelta = remoteSharedBudgetMax - (responseSharedBudget + encodeSlotReserved);
-            final int responseSharedCredit = Math.min(responseReplySharedBudget, responseSharedBudgetDelta);
+            final int replySharedCredit = Math.min(responseSharedCredit, responseSharedBudgetDelta);
 
-            if (responseSharedCredit > 0)
+            if (replySharedCredit > 0)
             {
                 final long responseSharedPrevious =
                     creditor.credit(traceId, responseSharedBudgetIndex, responseSharedCredit);
@@ -2270,10 +2270,10 @@ public final class Http2ServerFactory implements StreamFactory
 
                 assert responseSharedBudget <= slotCapacity
                     : String.format("%d <= %d", responseSharedBudget, slotCapacity);
-            }
 
-            assert replySharedBudget <= slotCapacity
-                : String.format("%d <= %d", replySharedBudget, slotCapacity);
+                assert replySharedBudget <= slotCapacity
+                    : String.format("%d <= %d", replySharedBudget, slotCapacity);
+            }
         }
 
         private void onEncodePromise(
