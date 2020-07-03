@@ -1491,9 +1491,8 @@ public final class Http2ServerFactory implements StreamFactory
                     replyBudget -= encodeReserved;
                     assert replyBudget >= 0 : String.format("%d >= 0", replyBudget);
 
-                    encodeSlotReserved -= minEncodeReserved;
-
                     replySharedBudget -= encodeReserved;
+                    encodeSlotReserved -= minEncodeReserved;
 
                     assert encodeSlot != NO_SLOT;
                     final MutableDirectBuffer encodeBuffer = bufferPool.buffer(encodeSlot);
@@ -2589,7 +2588,6 @@ public final class Http2ServerFactory implements StreamFactory
                 bufferPool.release(encodeSlot);
                 encodeSlot = NO_SLOT;
                 encodeSlotOffset = 0;
-                encodeSlotMarkOffset = 0;
 
                 if (Http2Configuration.DEBUG_HTTP2_BUDGETS)
                 {
