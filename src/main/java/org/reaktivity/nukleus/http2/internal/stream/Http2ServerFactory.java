@@ -1469,13 +1469,13 @@ public final class Http2ServerFactory implements StreamFactory
             if (encodeSlotOffset != 0 &&
                 (encodeSlotMarkOffset != 0 || (encodeHeadersSlotOffset == 0 && encodeReservedSlotMarkOffset == 0)))
             {
-                final int maxEncodeLength = encodeSlotMarkOffset != 0 ? encodeSlotMarkOffset : encodeSlotOffset;
-                final int encodeLength = Math.max(Math.min(replyBudget - replyPadding, maxEncodeLength), 0);
+                final int encodeLengthMax = encodeSlotMarkOffset != 0 ? encodeSlotMarkOffset : encodeSlotOffset;
+                final int encodeLength = Math.max(Math.min(replyBudget - replyPadding, encodeLengthMax), 0);
 
                 if (encodeLength > 0)
                 {
                     final int encodeReserved = encodeLength + replyPadding;
-                    final int minEncodeReserved = (int) (((long) encodeSlotReserved * encodeLength) / encodeSlotOffset);
+                    final int encodeReservedMin = (int) (((long) encodeSlotReserved * encodeLength) / encodeSlotOffset);
 
                     if (Http2Configuration.DEBUG_HTTP2_BUDGETS)
                     {
@@ -1485,14 +1485,14 @@ public final class Http2ServerFactory implements StreamFactory
 
                         System.out.format("[%d] [encodeNetworkData] [0x%016x]  [0x%016x] replySharedBudget %d - %d => %d\n",
                             System.nanoTime(), traceId, budgetId,
-                            replySharedBudget, minEncodeReserved, replySharedBudget - minEncodeReserved);
+                            replySharedBudget, encodeReservedMin, replySharedBudget - encodeReservedMin);
                     }
 
                     replyBudget -= encodeReserved;
                     assert replyBudget >= 0 : String.format("%d >= 0", replyBudget);
 
                     replySharedBudget -= encodeReserved;
-                    encodeSlotReserved -= minEncodeReserved;
+                    encodeSlotReserved -= encodeReservedMin;
 
                     assert encodeSlot != NO_SLOT;
                     final MutableDirectBuffer encodeBuffer = bufferPool.buffer(encodeSlot);
