@@ -2806,7 +2806,7 @@ public final class Http2ServerFactory implements StreamFactory
 
                 if (requestSlot == NO_SLOT)
                 {
-                    if (!Http2State.initialClosed(padding))
+                    if (!Http2State.initialClosed(state))
                     {
                         if (Http2State.initialClosing(state))
                         {
