@@ -17,7 +17,8 @@ package org.reaktivity.nukleus.http2.internal.streams.rfc7540.server;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.rules.RuleChain.outerRule;
-import static org.reaktivity.nukleus.http2.internal.Http2Configuration.HTTP2_SERVER_CONCURRENT_STREAMS;
+import static org.reaktivity.nukleus.http2.internal.Http2ConfigurationTest.HTTP2_SERVER_CONCURRENT_STREAMS_NAME;
+import static org.reaktivity.nukleus.http2.internal.Http2ConfigurationTest.HTTP2_SERVER_MAX_HEADER_LIST_SIZE_NAME;
 import static org.reaktivity.reaktor.test.ReaktorRule.EXTERNAL_AFFINITY_MASK;
 
 import org.junit.Rule;
@@ -28,6 +29,7 @@ import org.junit.rules.Timeout;
 import org.kaazing.k3po.junit.annotation.Specification;
 import org.kaazing.k3po.junit.rules.K3poRule;
 import org.reaktivity.reaktor.test.ReaktorRule;
+import org.reaktivity.reaktor.test.annotation.Configure;
 
 public class SettingsIT
 {
@@ -44,7 +46,6 @@ public class SettingsIT
             .responseBufferCapacity(1024)
             .counterValuesBufferCapacity(8192)
             .nukleus("http2"::equals)
-            .configure(HTTP2_SERVER_CONCURRENT_STREAMS, 250)
             .affinityMask("target#0", EXTERNAL_AFFINITY_MASK)
             .clean();
 
@@ -53,11 +54,21 @@ public class SettingsIT
 
     @Test
     @Specification({
-            "${route}/server/controller",
-            "${spec}/max.concurrent.streams/client" })
+        "${route}/server/controller",
+        "${spec}/max.concurrent.streams/client" })
+    @Configure(name = HTTP2_SERVER_CONCURRENT_STREAMS_NAME, value = "250")
     public void maxConcurrentStreams() throws Exception
     {
         k3po.finish();
     }
 
+    @Test
+    @Specification({
+        "${route}/server/controller",
+        "${spec}/max.header.list.size/client" })
+    @Configure(name = HTTP2_SERVER_MAX_HEADER_LIST_SIZE_NAME, value = "4096")
+    public void maxHeaderListSize() throws Exception
+    {
+        k3po.finish();
+    }
 }

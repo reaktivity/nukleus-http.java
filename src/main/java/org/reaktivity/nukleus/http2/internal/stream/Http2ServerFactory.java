@@ -272,8 +272,8 @@ public final class Http2ServerFactory implements StreamFactory
         this.counters = new Http2Counters(supplyCounter);
         this.signaler = signaler;
         this.correlations = new Long2ObjectHashMap<>();
-        this.initialSettings = new Http2Settings(config.serverConcurrentStreams(), 0);
         this.headersPool = bufferPool.duplicate();
+        this.initialSettings = new Http2Settings(config, headersPool);
         this.httpTypeId = supplyTypeId.applyAsInt(HttpNukleus.NAME);
         this.frameBuffer = new UnsafeBuffer(new byte[writeBuffer.capacity()]);
         this.extensionBuffer = new UnsafeBuffer(new byte[writeBuffer.capacity()]);
@@ -785,12 +785,19 @@ public final class Http2ServerFactory implements StreamFactory
 
         final Http2ContinuationFW http2Continuation = http2ContinuationRO.wrap(buffer, offset, limit);
         final int streamId = http2Continuation.streamId();
+        final int length = http2Continuation.length();
 
         Http2ErrorCode error = Http2ErrorCode.NO_ERROR;
 
         if ((streamId & 0x01) != 0x01 ||
             streamId != server.continuationStreamId)
         {
+            error = Http2ErrorCode.PROTOCOL_ERROR;
+        }
+
+        if (server.headersSlotOffset + length > headersPool.slotCapacity())
+        {
+            // TODO: decoded header list size check, recoverable error instead
             error = Http2ErrorCode.PROTOCOL_ERROR;
         }
 
@@ -2352,6 +2359,7 @@ public final class Http2ServerFactory implements StreamFactory
                     .streamId(0)
                     .maxConcurrentStreams(initialSettings.maxConcurrentStreams)
                     .initialWindowSize(initialSettings.initialWindowSize)
+                    .maxHeaderListSize(initialSettings.maxHeaderListSize)
                     .build();
 
             doNetworkReservedData(traceId, authorization, 0L, http2Settings);
