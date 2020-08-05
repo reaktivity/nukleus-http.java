@@ -15,6 +15,8 @@
  */
 package org.reaktivity.nukleus.http2.internal.stream;
 
+import org.reaktivity.nukleus.buffer.BufferPool;
+import org.reaktivity.nukleus.http2.internal.Http2Configuration;
 import org.reaktivity.nukleus.http2.internal.types.Http2ErrorCode;
 
 public class Http2Settings
@@ -24,20 +26,23 @@ public class Http2Settings
     private static final int DEFAULT_MAX_CONCURRENT_STREAMS = Integer.MAX_VALUE;
     private static final int DEFAULT_INITIAL_WINDOW_SIZE = 65_535;
     private static final int DEFAULT_MAX_FRAME_SIZE = 16_384;
+    private static final long DEFAULT_MAX_HEADER_LIST_SIZE = Long.MAX_VALUE;
 
     public int headerTableSize = DEFAULT_HEADER_TABLE_SIZE;
     public int enablePush = DEFAULT_ENABLE_PUSH;
     public int maxConcurrentStreams = DEFAULT_MAX_CONCURRENT_STREAMS;
     public int initialWindowSize = DEFAULT_INITIAL_WINDOW_SIZE;
     public int maxFrameSize = DEFAULT_MAX_FRAME_SIZE;
-    public long maxHeaderListSize;
+    public long maxHeaderListSize = DEFAULT_MAX_HEADER_LIST_SIZE;
 
     public Http2Settings(
-        int maxConcurrentStreams,
-        int initialWindowSize)
+        Http2Configuration config,
+        BufferPool bufferPool)
     {
-        this.maxConcurrentStreams = maxConcurrentStreams;
-        this.initialWindowSize = initialWindowSize;
+        this.maxConcurrentStreams = config.serverConcurrentStreams();
+        this.initialWindowSize = 0;
+        this.maxFrameSize = Math.min(DEFAULT_MAX_FRAME_SIZE, bufferPool.slotCapacity() >> 1);
+        this.maxHeaderListSize = Math.min(config.serverMaxHeaderListSize(), bufferPool.slotCapacity() >> 1);
     }
 
     public Http2Settings()
@@ -49,6 +54,7 @@ public class Http2Settings
     {
         this.maxConcurrentStreams = settings.maxConcurrentStreams;
         this.initialWindowSize = settings.initialWindowSize;
+        this.maxHeaderListSize = settings.maxHeaderListSize;
     }
 
     public Http2ErrorCode error()

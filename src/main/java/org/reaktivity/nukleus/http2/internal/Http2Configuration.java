@@ -28,6 +28,7 @@ public class Http2Configuration extends Configuration
             ReaktorConfiguration.DEBUG_BUDGETS || Boolean.getBoolean("nukleus.http2.debug.budgets");
 
     public static final IntPropertyDef HTTP2_SERVER_CONCURRENT_STREAMS;
+    public static final LongPropertyDef HTTP2_SERVER_MAX_HEADER_LIST_SIZE;
     public static final IntPropertyDef HTTP2_MAX_CONCURRENT_STREAMS_CLEANUP;
     public static final IntPropertyDef HTTP2_STREAMS_CLEANUP_DELAY;
     public static final IntPropertyDef HTTP2_MAX_CONCURRENT_APPLICATION_HEADERS;
@@ -40,6 +41,7 @@ public class Http2Configuration extends Configuration
     {
         final ConfigurationDef config = new ConfigurationDef("nukleus.http2");
         HTTP2_SERVER_CONCURRENT_STREAMS = config.property("server.concurrent.streams", Integer.MAX_VALUE);
+        HTTP2_SERVER_MAX_HEADER_LIST_SIZE = config.property("server.max.header.list.size", 8_192L);
         HTTP2_ACCESS_CONTROL_ALLOW_ORIGIN = config.property("server.access.control.allow.origin", false);
         HTTP2_SERVER_HEADER = config.property("server.header");
         HTTP2_MAX_CONCURRENT_STREAMS_CLEANUP = config.property("max.concurrent.streams.cleanup", 1000);
@@ -61,6 +63,11 @@ public class Http2Configuration extends Configuration
     public int serverConcurrentStreams()
     {
         return HTTP2_SERVER_CONCURRENT_STREAMS.getAsInt(this);
+    }
+
+    public long serverMaxHeaderListSize()
+    {
+        return HTTP2_SERVER_MAX_HEADER_LIST_SIZE.getAsLong(this);
     }
 
     public int maxConcurrentStreamsCleanup()
@@ -87,5 +94,4 @@ public class Http2Configuration extends Configuration
     {
         return serverHeader;
     }
-
 }
