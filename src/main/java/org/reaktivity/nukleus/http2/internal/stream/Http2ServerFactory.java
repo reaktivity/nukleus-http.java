@@ -2745,15 +2745,17 @@ public final class Http2ServerFactory implements StreamFactory
                 int offset,
                 int limit)
             {
-                int progress = offset;
+                int progress = 0;
                 assert Http2State.initialOpening(state);
 
                 final int maxLength = limit - offset;
+                localBudget -= maxLength;
 
                 if (localBudget < 0)
                 {
                     doEncodeRstStream(traceId, authorization, streamId, Http2ErrorCode.FLOW_CONTROL_ERROR);
                     cleanup(traceId, authorization);
+                    progress += maxLength;
                 }
                 else
                 {
@@ -2771,7 +2773,6 @@ public final class Http2ServerFactory implements StreamFactory
                     {
                         progress += length;
                         requestBudget -= reserved;
-                        localBudget -= length;
 
                         assert requestBudget >= 0;
 
