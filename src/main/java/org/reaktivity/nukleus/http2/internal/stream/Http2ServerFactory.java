@@ -2887,13 +2887,16 @@ public final class Http2ServerFactory implements StreamFactory
                 {
                     if (!Http2State.initialClosed(state))
                     {
-                        // TODO: trailers extension?
-                        flushRequestEnd(traceId, authorization, EMPTY_OCTETS);
-                        cleanupDataDecode();
-                    }
-                    else
-                    {
-                        flushRequestWindowUpdate(traceId, authorization);
+                        if (Http2State.initialClosing(state))
+                        {
+                            // TODO: trailers extension?
+                            flushRequestEnd(traceId, authorization, EMPTY_OCTETS);
+                            cleanupDataDecode();
+                        }
+                        else
+                        {
+                            flushRequestWindowUpdate(traceId, authorization);
+                        }
                     }
                 }
 
