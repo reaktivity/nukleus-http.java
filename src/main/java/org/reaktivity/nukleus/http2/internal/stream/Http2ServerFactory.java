@@ -1417,7 +1417,7 @@ public final class Http2ServerFactory implements StreamFactory
             Flyweight payload)
         {
             doNetworkHeadersData(traceId, authorization, budgetId, payload.buffer(),
-                          payload.offset(), payload.limit());
+                                  payload.offset(), payload.limit());
         }
 
         private void doNetworkHeadersData(
@@ -1451,7 +1451,7 @@ public final class Http2ServerFactory implements StreamFactory
             Flyweight payload)
         {
             doNetworkReservedData(traceId, authorization, budgetId, payload.buffer(),
-                           payload.offset(), payload.limit());
+                                   payload.offset(), payload.limit());
         }
 
         private void doNetworkReservedData(
@@ -1620,7 +1620,7 @@ public final class Http2ServerFactory implements StreamFactory
                     assert replyBudget >= 0;
 
                     doData(network, routeId, replyId, encodeHeadersSlotTraceId, authorization, budgetId,
-                  encodeReserved, encodeHeadersBuffer, 0, encodeLength, EMPTY_OCTETS);
+                          encodeReserved, encodeHeadersBuffer, 0, encodeLength, EMPTY_OCTETS);
 
                     if (encodeHeadersSlotMarkOffset != 0)
                     {
@@ -1672,7 +1672,7 @@ public final class Http2ServerFactory implements StreamFactory
                     assert replyBudget >= 0;
 
                     doData(network, routeId, replyId, encodeReservedSlotTraceId, authorization, budgetId,
-                  encodeReserved, encodeReservedBuffer, 0, encodeLength, EMPTY_OCTETS);
+                          encodeReserved, encodeReservedBuffer, 0, encodeLength, EMPTY_OCTETS);
 
                     if (encodeReservedSlotMarkOffset != 0)
                     {
@@ -2090,9 +2090,9 @@ public final class Http2ServerFactory implements StreamFactory
                         new Http2Exchange(this::decodeNetworkIfNecessary, routeId, streamId, contentLength);
 
                     final HttpBeginExFW beginEx = beginExRW.wrap(extensionBuffer, 0, extensionBuffer.capacity())
-                                                   .typeId(httpTypeId)
-                                                   .headers(hs -> headers.forEach((n, v) -> hs.item(h -> h.name(n).value(v))))
-                                                   .build();
+                           .typeId(httpTypeId)
+                           .headers(hs -> headers.forEach((n, v) -> hs.item(h -> h.name(n).value(v))))
+                           .build();
 
                     exchange.doRequestBegin(traceId, authorization, beginEx);
                     correlations.put(exchange.responseId, exchange);
@@ -2191,7 +2191,7 @@ public final class Http2ServerFactory implements StreamFactory
             {
                 final HpackHeaderBlockFW headerBlock = headerBlockRO.wrap(buffer, offset, limit);
                 headersDecoder.decodeTrailers(decodeContext, localSettings.headerTableSize,
-                    expectDynamicTableSizeUpdate, headerBlock);
+                            expectDynamicTableSizeUpdate, headerBlock);
 
                 if (headersDecoder.error())
                 {
@@ -2210,9 +2210,9 @@ public final class Http2ServerFactory implements StreamFactory
                 {
                     final Map<String, String> trailers = headersDecoder.headers;
                     final HttpEndExFW endEx = endExRW.wrap(extensionBuffer, 0, extensionBuffer.capacity())
-                           .typeId(httpTypeId)
-                           .trailers(ts -> trailers.forEach((n, v) -> ts.item(t -> t.name(n).value(v))))
-                           .build();
+                            .typeId(httpTypeId)
+                            .trailers(ts -> trailers.forEach((n, v) -> ts.item(t -> t.name(n).value(v))))
+                            .build();
 
                     exchange.doRequestEnd(traceId, authorization, endEx);
                 }
@@ -2370,13 +2370,13 @@ public final class Http2ServerFactory implements StreamFactory
                         ? (streamId & 0x01) == CLIENT_INITIATED
                             ? streamId
                             : streams.entrySet()
-                                 .stream()
-                                 .map(Map.Entry::getValue)
-                                 .filter(ex -> (ex.streamId & 0x01) == CLIENT_INITIATED)
-                                 .filter(Http2Exchange::isResponseOpen)
-                                 .mapToInt(ex -> ex.streamId)
-                                 .findAny()
-                                 .orElse(-1)
+                                     .stream()
+                                     .map(Map.Entry::getValue)
+                                     .filter(ex -> (ex.streamId & 0x01) == CLIENT_INITIATED)
+                                     .filter(Http2Exchange::isResponseOpen)
+                                     .mapToInt(ex -> ex.streamId)
+                                     .findAny()
+                                     .orElse(-1)
                         : -1;
 
                 if (pushId != -1)
@@ -2397,9 +2397,9 @@ public final class Http2ServerFactory implements StreamFactory
                         new Http2Exchange(this::decodeNetworkIfNecessary, routeId, promiseId, contentLength);
 
                     final HttpBeginExFW beginEx = beginExRW.wrap(extensionBuffer, 0, extensionBuffer.capacity())
-                           .typeId(httpTypeId)
-                           .headers(hs -> headers.forEach((n, v) -> hs.item(i -> i.name(n).value(v))))
-                           .build();
+                            .typeId(httpTypeId)
+                            .headers(hs -> headers.forEach((n, v) -> hs.item(i -> i.name(n).value(v))))
+                            .build();
 
                     exchange.doRequestBegin(traceId, authorization, beginEx);
                     correlations.put(exchange.responseId, exchange);
@@ -2418,11 +2418,11 @@ public final class Http2ServerFactory implements StreamFactory
             long authorization)
         {
             final Http2SettingsFW http2Settings = http2SettingsRW.wrap(frameBuffer, 0, frameBuffer.capacity())
-                   .streamId(0)
-                   .maxConcurrentStreams(initialSettings.maxConcurrentStreams)
-                   .initialWindowSize(initialSettings.initialWindowSize)
-                   .maxHeaderListSize(initialSettings.maxHeaderListSize)
-                   .build();
+                    .streamId(0)
+                    .maxConcurrentStreams(initialSettings.maxConcurrentStreams)
+                    .initialWindowSize(initialSettings.initialWindowSize)
+                    .maxHeaderListSize(initialSettings.maxHeaderListSize)
+                    .build();
 
             doNetworkReservedData(traceId, authorization, 0L, http2Settings);
 
@@ -2434,9 +2434,9 @@ public final class Http2ServerFactory implements StreamFactory
             long authorization)
         {
             final Http2SettingsFW http2Settings = http2SettingsRW.wrap(frameBuffer, 0, frameBuffer.capacity())
-                   .streamId(0)
-                   .ack()
-                   .build();
+                    .streamId(0)
+                    .ack()
+                    .build();
 
             doNetworkReservedData(traceId, authorization, 0L, http2Settings);
 
@@ -2448,10 +2448,10 @@ public final class Http2ServerFactory implements StreamFactory
             long authorization)
         {
             final Http2GoawayFW http2Goaway = http2GoawayRW.wrap(frameBuffer, 0, frameBuffer.capacity())
-                   .streamId(0)
-                   .lastStreamId(0) // TODO: maxClientStreamId?
-                   .errorCode(decodeError)
-                   .build();
+                    .streamId(0)
+                    .lastStreamId(0) // TODO: maxClientStreamId?
+                    .errorCode(decodeError)
+                    .build();
 
             doNetworkReservedData(traceId, authorization, 0L, http2Goaway);
             doNetworkEnd(traceId, authorization);
@@ -2465,10 +2465,10 @@ public final class Http2ServerFactory implements StreamFactory
             DirectBuffer payload)
         {
             final Http2PingFW http2Ping = http2PingRW.wrap(frameBuffer, 0, frameBuffer.capacity())
-                   .streamId(0)
-                   .ack()
-                   .payload(payload)
-                   .build();
+                    .streamId(0)
+                    .ack()
+                    .payload(payload)
+                    .build();
 
             doNetworkReservedData(traceId, authorization, 0L, http2Ping);
 
@@ -2483,11 +2483,11 @@ public final class Http2ServerFactory implements StreamFactory
             boolean endResponse)
         {
             final Http2HeadersFW http2Headers = http2HeadersRW.wrap(frameBuffer, 0, frameBuffer.capacity())
-                   .streamId(streamId)
-                   .headers(hb -> headersEncoder.encodeHeaders(encodeContext, headers, hb))
-                   .endHeaders()
-                   .endStream(endResponse)
-                   .build();
+                    .streamId(streamId)
+                    .headers(hb -> headersEncoder.encodeHeaders(encodeContext, headers, hb))
+                    .endHeaders()
+                    .endStream(endResponse)
+                    .build();
 
             doNetworkHeadersData(traceId, authorization, 0L, http2Headers);
 
@@ -2513,9 +2513,9 @@ public final class Http2ServerFactory implements StreamFactory
             {
                 final int length = Math.min(limit - progress, remoteSettings.maxFrameSize);
                 final Http2DataFW http2Data = http2DataRW.wrap(frameBuffer, frameOffset, frameBuffer.capacity())
-                       .streamId(streamId)
-                       .payload(buffer, progress, length)
-                       .build();
+                        .streamId(streamId)
+                        .payload(buffer, progress, length)
+                        .build();
                 frameOffset = http2Data.limit();
                 progress += length;
 
@@ -2536,20 +2536,20 @@ public final class Http2ServerFactory implements StreamFactory
             if (trailers.isEmpty())
             {
                 final Http2DataFW http2Data = http2DataRW.wrap(frameBuffer, 0, frameBuffer.capacity())
-                       .streamId(streamId)
-                       .endStream()
-                       .build();
+                        .streamId(streamId)
+                        .endStream()
+                        .build();
 
                 doNetworkReservedData(traceId, authorization, 0L, http2Data);
             }
             else
             {
                 final Http2HeadersFW http2Headers = http2HeadersRW.wrap(frameBuffer, 0, frameBuffer.capacity())
-                                                      .streamId(streamId)
-                                                      .headers(hb -> headersEncoder.encodeTrailers(encodeContext, trailers, hb))
-                                                      .endHeaders()
-                                                      .endStream()
-                                                      .build();
+                        .streamId(streamId)
+                        .headers(hb -> headersEncoder.encodeTrailers(encodeContext, trailers, hb))
+                        .endHeaders()
+                        .endStream()
+                        .build();
 
                 doNetworkReservedData(traceId, authorization, 0L, http2Headers);
             }
@@ -2565,11 +2565,11 @@ public final class Http2ServerFactory implements StreamFactory
             Array32FW<HttpHeaderFW> promise)
         {
             final Http2PushPromiseFW http2PushPromise = http2PushPromiseRW.wrap(frameBuffer, 0, frameBuffer.capacity())
-                   .streamId(streamId)
-                   .promisedStreamId(promiseId)
-                   .headers(hb -> headersEncoder.encodePromise(encodeContext, promise, hb))
-                   .endHeaders()
-                   .build();
+                    .streamId(streamId)
+                    .promisedStreamId(promiseId)
+                    .headers(hb -> headersEncoder.encodePromise(encodeContext, promise, hb))
+                    .endHeaders()
+                    .build();
 
             doNetworkHeadersData(traceId, authorization, 0L, http2PushPromise);
 
@@ -2583,9 +2583,9 @@ public final class Http2ServerFactory implements StreamFactory
             Http2ErrorCode error)
         {
             final Http2RstStreamFW http2RstStream = http2RstStreamRW.wrap(frameBuffer, 0, frameBuffer.capacity())
-                   .streamId(streamId)
-                   .errorCode(error)
-                   .build();
+                    .streamId(streamId)
+                    .errorCode(error)
+                    .build();
 
             doNetworkReservedData(traceId, authorization, 0L, http2RstStream);
 
@@ -2599,16 +2599,16 @@ public final class Http2ServerFactory implements StreamFactory
             int size)
         {
             final int frameOffset = http2WindowUpdateRW.wrap(frameBuffer, 0, frameBuffer.capacity())
-                   .streamId(0)
-                   .size(size)
-                   .build()
-                   .limit();
+                    .streamId(0)
+                    .size(size)
+                    .build()
+                    .limit();
 
             final int frameLimit = http2WindowUpdateRW.wrap(frameBuffer, frameOffset, frameBuffer.capacity())
-                   .streamId(streamId)
-                   .size(size)
-                   .build()
-                   .limit();
+                    .streamId(streamId)
+                    .size(size)
+                    .build()
+                    .limit();
 
             doNetworkReservedData(traceId, authorization, 0L, frameBuffer, 0, frameLimit);
 
@@ -3158,7 +3158,7 @@ public final class Http2ServerFactory implements StreamFactory
                         responseBudget += responseCredit;
 
                         doWindow(application, routeId, responseId, traceId, authorization,
-                        budgetId, responseCredit, responsePadding);
+                                budgetId, responseCredit, responsePadding);
                     }
                 }
             }
