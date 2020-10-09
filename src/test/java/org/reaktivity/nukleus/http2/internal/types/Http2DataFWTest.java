@@ -46,7 +46,6 @@ public class Http2DataFWTest
         assertTrue(fw.endStream());
         assertEquals(DATA, fw.type());
         assertEquals(3, fw.streamId());
-        assertEquals(payload, fw.data());
     }
 
     @Test
@@ -69,7 +68,6 @@ public class Http2DataFWTest
         assertTrue(fw.endStream());
         assertEquals(DATA, fw.type());
         assertEquals(3, fw.streamId());
-        assertEquals(payload, fw.data());
     }
 
     @Test
@@ -92,6 +90,5 @@ public class Http2DataFWTest
         assertTrue(fw.endStream());
         assertEquals(DATA, fw.type());
         assertEquals(3, fw.streamId());
-        assertEquals(payload, fw.data());
     }
 }

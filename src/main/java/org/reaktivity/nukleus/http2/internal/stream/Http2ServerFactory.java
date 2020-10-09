@@ -94,7 +94,6 @@ import org.reaktivity.nukleus.http2.internal.hpack.HpackLiteralHeaderFieldFW;
 import org.reaktivity.nukleus.http2.internal.hpack.HpackStringFW;
 import org.reaktivity.nukleus.http2.internal.types.Http2ContinuationFW;
 import org.reaktivity.nukleus.http2.internal.types.Http2DataFW;
-import org.reaktivity.nukleus.http2.internal.types.Http2DecodeDataFW;
 import org.reaktivity.nukleus.http2.internal.types.Http2ErrorCode;
 import org.reaktivity.nukleus.http2.internal.types.Http2FrameInfoFW;
 import org.reaktivity.nukleus.http2.internal.types.Http2FrameType;
@@ -180,7 +179,7 @@ public final class Http2ServerFactory implements StreamFactory
     private final Http2SettingsFW http2SettingsRO = new Http2SettingsFW();
     private final Http2GoawayFW http2GoawayRO = new Http2GoawayFW();
     private final Http2PingFW http2PingRO = new Http2PingFW();
-    private final Http2DecodeDataFW dataDecodeRO = new Http2DecodeDataFW();
+    private final Http2DataFW dataDecodeRO = new Http2DataFW();
     private final Http2HeadersFW http2HeadersRO = new Http2HeadersFW();
     private final Http2ContinuationFW http2ContinuationRO = new Http2ContinuationFW();
     private final Http2WindowUpdateFW http2WindowUpdateRO = new Http2WindowUpdateFW();
@@ -197,6 +196,8 @@ public final class Http2ServerFactory implements StreamFactory
     private final Http2PushPromiseFW.Builder http2PushPromiseRW = new Http2PushPromiseFW.Builder();
 
     private final HpackHeaderBlockFW headerBlockRO = new HpackHeaderBlockFW();
+
+    private final MutableInteger payloadLength = new MutableInteger(0);
 
     private final Http2ServerDecoder decodePreface = this::decodePreface;
     private final Http2ServerDecoder decodeFrameType = this::decodeFrameType;
@@ -838,30 +839,27 @@ public final class Http2ServerFactory implements StreamFactory
         if (length != 0)
         {
             Http2ErrorCode error = Http2ErrorCode.NO_ERROR;
-            if (server.dataStreamId == 0)
+            Http2DataFW http2Data = dataDecodeRO.wrap(buffer, offset, limit);
+            final int streamId = http2Data.streamId();
+
+            if ((streamId & 0x01) != 0x01)
             {
-                Http2DecodeDataFW http2Data = dataDecodeRO.wrap(buffer, offset, limit);
-                final int streamId = http2Data.streamId();
+                error = Http2ErrorCode.PROTOCOL_ERROR;
+            }
 
-                if ((streamId & 0x01) != 0x01)
-                {
-                    error = Http2ErrorCode.PROTOCOL_ERROR;
-                }
+            if (error != Http2ErrorCode.NO_ERROR)
+            {
+                server.onDecodeError(traceId, authorization, error);
+                server.decoder = decodeIgnoreAll;
+            }
+            else
+            {
+                server.decodedStreamId = streamId;
+                server.decodedFlags = http2Data.flags();
+                server.decodableDataBytes = http2Data.dataLength();
+                progress = http2Data.dataOffset();
 
-                if (error != Http2ErrorCode.NO_ERROR)
-                {
-                    server.onDecodeError(traceId, authorization, error);
-                    server.decoder = decodeIgnoreAll;
-                }
-                else
-                {
-                    server.dataStreamId = streamId;
-                    server.endStream = http2Data.endStream();
-                    server.decodableDataBytes = http2Data.dataLength();
-                    progress = http2Data.dataOffset();
-
-                    server.decoder = decodeDataPayload;
-                }
+                server.decoder = decodeDataPayload;
             }
         }
 
@@ -886,14 +884,21 @@ public final class Http2ServerFactory implements StreamFactory
         if (maxLength >= remaining)
         {
             payloadRO.wrap(buffer, progress, length);
-            final int decodedPayload = server.onDecodeData(traceId, authorization, payloadRO);
+            final boolean endRequest = Http2Flags.endStream(server.decodedFlags);
+            final int decodedPayload = server.onDecodeData(
+                traceId,
+                authorization,
+                server.decodedStreamId,
+                server.decodableDataBytes,
+                endRequest,
+                payloadRO);
+            server.decodableDataBytes -= decodedPayload;
             progress += decodedPayload;
         }
 
         if (server.decodableDataBytes == 0)
         {
             server.decoder = decodeFrameType;
-            server.cleanupDataDecode();
         }
 
         return progress;
@@ -1103,8 +1108,8 @@ public final class Http2ServerFactory implements StreamFactory
         private Http2ErrorCode decodeError;
         private LongLongConsumer cleanupHandler;
 
-        private int dataStreamId;
-        private boolean endStream;
+        private int decodedStreamId;
+        private byte decodedFlags;
         private int decodableDataBytes;
 
         private Http2Server(
@@ -2219,20 +2224,19 @@ public final class Http2ServerFactory implements StreamFactory
         private int onDecodeData(
             long traceId,
             long authorization,
+            int streamId,
+            int maxDecodableDataBytes,
+            boolean endRequest,
             DirectBuffer payload)
         {
             int progress = 0;
-
-            final int streamId = dataStreamId;
-            final boolean endRequest = endStream;
-            final MutableInteger payloadLength = new MutableInteger(payload.capacity());
 
             final Http2Exchange exchange = streams.get(streamId);
             if (exchange != null)
             {
                 Http2ErrorCode error = Http2ErrorCode.NO_ERROR;
 
-                if (Http2State.initialClosing(exchange.state) || decodableDataBytes < 0)
+                if (Http2State.initialClosing(exchange.state))
                 {
                     error = Http2ErrorCode.STREAM_CLOSED;
                 }
@@ -2245,15 +2249,16 @@ public final class Http2ServerFactory implements StreamFactory
                 }
                 else
                 {
+                    payloadLength.set(payload.capacity());
+
                     if (payloadLength.value > 0)
                     {
                         exchange.doRequestData(traceId, authorization, payload, payloadLength);
                         progress = payloadLength.value;
-                        decodableDataBytes -= progress;
                     }
 
-                    if (endRequest &&
-                        (decodableDataBytes == 0))
+                    final int remaining = maxDecodableDataBytes - progress;
+                    if (endRequest && (remaining == 0))
                     {
                         if (exchange.contentLength != -1 && exchange.contentObserved != exchange.contentLength)
                         {
@@ -2268,7 +2273,6 @@ public final class Http2ServerFactory implements StreamFactory
             }
             else
             {
-                cleanupDataDecode();
                 progress += payloadLength.value;
             }
 
@@ -2678,13 +2682,6 @@ public final class Http2ServerFactory implements StreamFactory
             }
         }
 
-        public void cleanupDataDecode()
-        {
-            dataStreamId = 0;
-            endStream = false;
-            decodableDataBytes = 0;
-        }
-
         private final class Http2Exchange
         {
             private final MessageConsumer application;
@@ -2719,6 +2716,7 @@ public final class Http2ServerFactory implements StreamFactory
                 this.requestId = supplyInitialId.applyAsLong(routeId);
                 this.application = router.supplyReceiver(requestId);
                 this.responseId = supplyReplyId.applyAsLong(requestId);
+
             }
 
             private void doRequestBegin(
@@ -2881,20 +2879,9 @@ public final class Http2ServerFactory implements StreamFactory
 
                 decodeNetworkIfNecessary(traceId);
 
-                if (decodableDataBytes == 0)
+                if (!Http2State.initialClosed(state) && !Http2State.initialClosing(state))
                 {
-                    if (!Http2State.initialClosed(state))
-                    {
-                        if (Http2State.initialClosing(state))
-                        {
-                            // TODO: trailers extension?
-                            flushRequestEnd(traceId, authorization, EMPTY_OCTETS);
-                        }
-                        else
-                        {
-                            flushRequestWindowUpdate(traceId, authorization);
-                        }
-                    }
+                    flushRequestWindowUpdate(traceId, authorization);
                 }
 
                 applicationHeadersProcessed.remove(streamId);
