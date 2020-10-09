@@ -879,12 +879,17 @@ public final class Http2ServerFactory implements StreamFactory
     {
         int progress = offset;
 
-        final int length = limit - progress;
-        final int length0 = Math.min(length, server.dataLength - server.dataBytesConsumed);
+        final int maxLength = limit - progress;
+        final int maxRemaining = Math.min(server.dataLength - server.dataBytesConsumed, bufferPool.slotCapacity());
+        final int length = Math.min(maxLength, maxRemaining);
 
-        payloadRO.wrap(buffer, progress, length0);
-        final int decodedPayload = server.onDecodeData(traceId, authorization, payloadRO);
-        progress += decodedPayload;
+        if (maxLength >= maxRemaining)
+        {
+            payloadRO.wrap(buffer, progress, length);
+            final int decodedPayload = server.onDecodeData(traceId, authorization, payloadRO);
+            progress += decodedPayload;
+
+        }
 
         if (server.dataLength == server.dataBytesConsumed)
         {
@@ -2702,8 +2707,6 @@ public final class Http2ServerFactory implements StreamFactory
 
             private int localBudget;
             private int remoteBudget;
-
-            private long requestSlotAuthorization;
 
             private Http2Exchange(
                 LongConsumer decodeNetworkIfNecessary,
