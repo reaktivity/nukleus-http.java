@@ -100,27 +100,5 @@ public class Http2DecodeDataFW extends Http2FrameFW
         return String.format("%s frame <length=%s, type=%s, flags=%s, id=%s>",
                 type(), length(), type(), flags(), streamId());
     }
-
-    public static final class Builder extends Http2FrameFW.Builder<Builder, Http2DecodeDataFW>
-    {
-        public Builder()
-        {
-            super(new Http2DecodeDataFW());
-        }
-
-        @Override
-        public Builder wrap(MutableDirectBuffer buffer, int offset, int maxLimit)
-        {
-            super.wrap(buffer, offset, maxLimit);
-            return this;
-        }
-
-        public Builder endStream()
-        {
-            buffer().putByte(offset() + FLAGS_OFFSET, END_STREAM);
-            return this;
-        }
-
-    }
 }
 
