@@ -1417,7 +1417,7 @@ public final class Http2ServerFactory implements StreamFactory
             Flyweight payload)
         {
             doNetworkHeadersData(traceId, authorization, budgetId, payload.buffer(),
-                                  payload.offset(), payload.limit());
+                                 payload.offset(), payload.limit());
         }
 
         private void doNetworkHeadersData(
@@ -1451,7 +1451,7 @@ public final class Http2ServerFactory implements StreamFactory
             Flyweight payload)
         {
             doNetworkReservedData(traceId, authorization, budgetId, payload.buffer(),
-                                   payload.offset(), payload.limit());
+                                  payload.offset(), payload.limit());
         }
 
         private void doNetworkReservedData(
@@ -1560,7 +1560,7 @@ public final class Http2ServerFactory implements StreamFactory
                     final MutableDirectBuffer encodeBuffer = bufferPool.buffer(encodeSlot);
 
                     doData(network, routeId, replyId, traceId, authorization, budgetId,
-                        encodeReserved, encodeBuffer, 0, encodeLength, EMPTY_OCTETS);
+                         encodeReserved, encodeBuffer, 0, encodeLength, EMPTY_OCTETS);
 
                     if (encodeSlotMarkOffset != 0)
                     {
@@ -1620,7 +1620,7 @@ public final class Http2ServerFactory implements StreamFactory
                     assert replyBudget >= 0;
 
                     doData(network, routeId, replyId, encodeHeadersSlotTraceId, authorization, budgetId,
-                          encodeReserved, encodeHeadersBuffer, 0, encodeLength, EMPTY_OCTETS);
+                           encodeReserved, encodeHeadersBuffer, 0, encodeLength, EMPTY_OCTETS);
 
                     if (encodeHeadersSlotMarkOffset != 0)
                     {
@@ -2090,9 +2090,9 @@ public final class Http2ServerFactory implements StreamFactory
                         new Http2Exchange(this::decodeNetworkIfNecessary, routeId, streamId, contentLength);
 
                     final HttpBeginExFW beginEx = beginExRW.wrap(extensionBuffer, 0, extensionBuffer.capacity())
-                           .typeId(httpTypeId)
-                           .headers(hs -> headers.forEach((n, v) -> hs.item(h -> h.name(n).value(v))))
-                           .build();
+                            .typeId(httpTypeId)
+                            .headers(hs -> headers.forEach((n, v) -> hs.item(h -> h.name(n).value(v))))
+                            .build();
 
                     exchange.doRequestBegin(traceId, authorization, beginEx);
                     correlations.put(exchange.responseId, exchange);
@@ -2191,7 +2191,7 @@ public final class Http2ServerFactory implements StreamFactory
             {
                 final HpackHeaderBlockFW headerBlock = headerBlockRO.wrap(buffer, offset, limit);
                 headersDecoder.decodeTrailers(decodeContext, localSettings.headerTableSize,
-                            expectDynamicTableSizeUpdate, headerBlock);
+                                             expectDynamicTableSizeUpdate, headerBlock);
 
                 if (headersDecoder.error())
                 {
