@@ -1560,7 +1560,7 @@ public final class Http2ServerFactory implements StreamFactory
                     final MutableDirectBuffer encodeBuffer = bufferPool.buffer(encodeSlot);
 
                     doData(network, routeId, replyId, traceId, authorization, budgetId,
-                          encodeReserved, encodeBuffer, 0, encodeLength, EMPTY_OCTETS);
+                        encodeReserved, encodeBuffer, 0, encodeLength, EMPTY_OCTETS);
 
                     if (encodeSlotMarkOffset != 0)
                     {
@@ -1620,7 +1620,7 @@ public final class Http2ServerFactory implements StreamFactory
                     assert replyBudget >= 0;
 
                     doData(network, routeId, replyId, encodeHeadersSlotTraceId, authorization, budgetId,
-                          encodeReserved, encodeHeadersBuffer, 0, encodeLength, EMPTY_OCTETS);
+                         encodeReserved, encodeHeadersBuffer, 0, encodeLength, EMPTY_OCTETS);
 
                     if (encodeHeadersSlotMarkOffset != 0)
                     {
@@ -1672,7 +1672,7 @@ public final class Http2ServerFactory implements StreamFactory
                     assert replyBudget >= 0;
 
                     doData(network, routeId, replyId, encodeReservedSlotTraceId, authorization, budgetId,
-                          encodeReserved, encodeReservedBuffer, 0, encodeLength, EMPTY_OCTETS);
+                         encodeReserved, encodeReservedBuffer, 0, encodeLength, EMPTY_OCTETS);
 
                     if (encodeReservedSlotMarkOffset != 0)
                     {
