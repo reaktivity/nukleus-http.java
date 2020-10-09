@@ -15,11 +15,9 @@
  */
 package org.reaktivity.nukleus.http2.internal.types;
 
-import static org.reaktivity.nukleus.http2.internal.stream.Http2Flags.END_STREAM;
 import static org.reaktivity.nukleus.http2.internal.types.Http2FrameType.DATA;
 
 import org.agrona.DirectBuffer;
-import org.agrona.MutableDirectBuffer;
 import org.reaktivity.nukleus.http2.internal.stream.Http2Flags;
 
 /*
