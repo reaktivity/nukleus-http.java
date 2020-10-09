@@ -126,16 +126,16 @@ public final class Http2ServerFactory implements StreamFactory
     private static final String8FW HEADER_PATH = new String8FW(":path");
 
     private static final Array32FW<HttpHeaderFW> HEADERS_200_OK =
-        new Array32FW.Builder<>(new HttpHeaderFW.Builder(), new HttpHeaderFW())
-            .wrap(new UnsafeBuffer(new byte[64]), 0, 64)
-            .item(h -> h.name(":status").value("200"))
-            .build();
+            new Array32FW.Builder<>(new HttpHeaderFW.Builder(), new HttpHeaderFW())
+                .wrap(new UnsafeBuffer(new byte[64]), 0, 64)
+                .item(h -> h.name(":status").value("200"))
+                .build();
 
     private static final Array32FW<HttpHeaderFW> HEADERS_404_NOT_FOUND =
-        new Array32FW.Builder<>(new HttpHeaderFW.Builder(), new HttpHeaderFW())
-            .wrap(new UnsafeBuffer(new byte[64]), 0, 64)
-            .item(h -> h.name(":status").value("404"))
-            .build();
+            new Array32FW.Builder<>(new HttpHeaderFW.Builder(), new HttpHeaderFW())
+                .wrap(new UnsafeBuffer(new byte[64]), 0, 64)
+                .item(h -> h.name(":status").value("404"))
+                .build();
 
     private static final Array32FW<HttpHeaderFW> HEADERS_400_BAD_REQUEST =
         new Array32FW.Builder<>(new HttpHeaderFW.Builder(), new HttpHeaderFW())
@@ -144,9 +144,9 @@ public final class Http2ServerFactory implements StreamFactory
             .build();
 
     private static final Array32FW<HttpHeaderFW> TRAILERS_EMPTY =
-        new Array32FW.Builder<>(new HttpHeaderFW.Builder(), new HttpHeaderFW())
-            .wrap(new UnsafeBuffer(new byte[64]), 0, 64)
-            .build();
+            new Array32FW.Builder<>(new HttpHeaderFW.Builder(), new HttpHeaderFW())
+                .wrap(new UnsafeBuffer(new byte[64]), 0, 64)
+                .build();
 
     private final RouteFW routeRO = new RouteFW();
     private final HttpRouteExFW routeExRO = new HttpRouteExFW();
