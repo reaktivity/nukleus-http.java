@@ -524,6 +524,8 @@ public final class Http2ServerFactory implements StreamFactory
             final int length = http2FrameInfo.length();
             final Http2FrameType type = http2FrameInfo.type();
             final Http2ServerDecoder decoder = decodersByFrameType.getOrDefault(type, decodeIgnoreOne);
+            server.decodedStreamId = http2FrameInfo.streamId();
+            server.decodedFlags = http2FrameInfo.flags();
 
             Http2ErrorCode error = Http2ErrorCode.NO_ERROR;
 
@@ -854,8 +856,6 @@ public final class Http2ServerFactory implements StreamFactory
             }
             else
             {
-                server.decodedStreamId = streamId;
-                server.decodedFlags = http2Data.flags();
                 server.decodableDataBytes = http2Data.dataLength();
                 progress = http2Data.dataOffset();
 
