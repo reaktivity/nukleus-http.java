@@ -42,7 +42,6 @@ import org.reaktivity.nukleus.http2.internal.stream.Http2Flags;
  */
 public class Http2DataFW extends Http2FrameFW
 {
-
     private static final int FLAGS_OFFSET = 4;
     private static final int PAYLOAD_OFFSET = 9;
 
@@ -122,7 +121,6 @@ public class Http2DataFW extends Http2FrameFW
             buffer().putByte(offset() + FLAGS_OFFSET, END_STREAM);
             return this;
         }
-
     }
 }
 

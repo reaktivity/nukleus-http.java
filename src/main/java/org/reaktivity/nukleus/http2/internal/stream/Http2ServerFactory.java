@@ -179,7 +179,7 @@ public final class Http2ServerFactory implements StreamFactory
     private final Http2SettingsFW http2SettingsRO = new Http2SettingsFW();
     private final Http2GoawayFW http2GoawayRO = new Http2GoawayFW();
     private final Http2PingFW http2PingRO = new Http2PingFW();
-    private final Http2DataFW dataDecodeRO = new Http2DataFW();
+    private final Http2DataFW http2DataRO = new Http2DataFW();
     private final Http2HeadersFW http2HeadersRO = new Http2HeadersFW();
     private final Http2ContinuationFW http2ContinuationRO = new Http2ContinuationFW();
     private final Http2WindowUpdateFW http2WindowUpdateRO = new Http2WindowUpdateFW();
@@ -197,7 +197,7 @@ public final class Http2ServerFactory implements StreamFactory
 
     private final HpackHeaderBlockFW headerBlockRO = new HpackHeaderBlockFW();
 
-    private final MutableInteger payloadLength = new MutableInteger(0);
+    private final MutableInteger payloadRemaining = new MutableInteger(0);
 
     private final Http2ServerDecoder decodePreface = this::decodePreface;
     private final Http2ServerDecoder decodeFrameType = this::decodeFrameType;
@@ -841,7 +841,7 @@ public final class Http2ServerFactory implements StreamFactory
         if (length != 0)
         {
             Http2ErrorCode error = Http2ErrorCode.NO_ERROR;
-            Http2DataFW http2Data = dataDecodeRO.wrap(buffer, offset, limit);
+            Http2DataFW http2Data = http2DataRO.wrap(buffer, offset, limit);
             final int streamId = http2Data.streamId();
 
             if ((streamId & 0x01) != 0x01)
@@ -884,13 +884,14 @@ public final class Http2ServerFactory implements StreamFactory
         if (maxLength >= remaining)
         {
             payloadRO.wrap(buffer, progress, length);
-            final boolean endRequest = Http2Flags.endStream(server.decodedFlags);
+            final int deferred = server.decodableDataBytes - length;
+
             final int decodedPayload = server.onDecodeData(
                 traceId,
                 authorization,
                 server.decodedStreamId,
-                server.decodableDataBytes,
-                endRequest,
+                server.decodedFlags,
+                deferred,
                 payloadRO);
             server.decodableDataBytes -= decodedPayload;
             progress += decodedPayload;
@@ -899,6 +900,7 @@ public final class Http2ServerFactory implements StreamFactory
         if (server.decodableDataBytes == 0)
         {
             server.decoder = decodeFrameType;
+            counters.dataFramesRead.getAsLong();
         }
 
         return progress;
@@ -1189,8 +1191,6 @@ public final class Http2ServerFactory implements StreamFactory
             final long traceId = data.traceId();
             final long budgetId = data.budgetId();
             authorization = data.authorization();
-
-            counters.dataFramesRead.getAsLong();
 
             initialBudget -= data.reserved();
 
@@ -2225,8 +2225,8 @@ public final class Http2ServerFactory implements StreamFactory
             long traceId,
             long authorization,
             int streamId,
-            int maxDecodableDataBytes,
-            boolean endRequest,
+            byte flags,
+            int deferred,
             DirectBuffer payload)
         {
             int progress = 0;
@@ -2245,20 +2245,21 @@ public final class Http2ServerFactory implements StreamFactory
                 {
                     exchange.cleanup(traceId, authorization);
                     doEncodeRstStream(traceId, authorization, streamId, error);
-                    progress += payloadLength.value;
+                    progress += payloadRemaining.value;
                 }
                 else
                 {
-                    payloadLength.set(payload.capacity());
+                    final int payloadLength = payload.capacity();
 
-                    if (payloadLength.value > 0)
+                    if (payloadLength > 0)
                     {
-                        exchange.doRequestData(traceId, authorization, payload, payloadLength);
-                        progress = payloadLength.value;
+                        payloadRemaining.set(payloadLength);
+                        exchange.doRequestData(traceId, authorization, payload, payloadRemaining);
+                        progress = payloadLength - payloadRemaining.value;
+                        deferred += payloadRemaining.value;
                     }
 
-                    final int remaining = maxDecodableDataBytes - progress;
-                    if (endRequest && (remaining == 0))
+                    if (deferred == 0 && Http2Flags.endStream(flags))
                     {
                         if (exchange.contentLength != -1 && exchange.contentObserved != exchange.contentLength)
                         {
@@ -2273,7 +2274,7 @@ public final class Http2ServerFactory implements StreamFactory
             }
             else
             {
-                progress += payloadLength.value;
+                progress += payload.capacity();
             }
 
             return progress;
@@ -2716,7 +2717,6 @@ public final class Http2ServerFactory implements StreamFactory
                 this.requestId = supplyInitialId.applyAsLong(routeId);
                 this.application = router.supplyReceiver(requestId);
                 this.responseId = supplyReplyId.applyAsLong(requestId);
-
             }
 
             private void doRequestBegin(
@@ -2741,11 +2741,11 @@ public final class Http2ServerFactory implements StreamFactory
                 long traceId,
                 long authorization,
                 DirectBuffer buffer,
-                MutableInteger length)
+                MutableInteger remaining)
             {
                 assert Http2State.initialOpening(state);
 
-                final int maxLength = length.intValue();
+                final int maxLength = remaining.value;
                 localBudget -= maxLength;
 
                 if (localBudget < 0)
@@ -2755,28 +2755,29 @@ public final class Http2ServerFactory implements StreamFactory
                 }
                 else
                 {
-                    int length0 = Math.max(Math.min(requestBudget - requestPadding, maxLength), 0);
-                    int reserved = length0 + requestPadding;
+                    int length = Math.max(Math.min(requestBudget - requestPadding, maxLength), 0);
+                    int reserved = length + requestPadding;
 
                     if (requestDebitorIndex != NO_DEBITOR_INDEX && requestDebitor != null)
                     {
                         final int minimum = reserved; // TODO: fragmentation
                         reserved = requestDebitor.claim(requestDebitorIndex, requestId, minimum, reserved);
-                        length0 = Math.max(reserved - requestPadding, 0);
+                        length = Math.max(reserved - requestPadding, 0);
                     }
 
-                    if (length0 > 0)
+                    if (length > 0)
                     {
                         requestBudget -= reserved;
 
                         assert requestBudget >= 0;
 
                         doData(application, routeId, requestId, traceId, authorization, requestBudgetId,
-                            reserved, buffer, 0, length0, EMPTY_OCTETS);
-                        contentObserved += length0;
+                            reserved, buffer, 0, length, EMPTY_OCTETS);
+                        contentObserved += length;
                     }
 
-                    length.set(length0);
+                    remaining.value -= length;
+                    assert remaining.value >= 0;
                 }
             }
 
