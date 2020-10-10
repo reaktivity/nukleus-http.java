@@ -877,11 +877,11 @@ public final class Http2ServerFactory implements StreamFactory
     {
         int progress = offset;
 
-        final int maxLength = limit - progress;
-        final int remaining = Math.min(server.decodableDataBytes, bufferPool.slotCapacity());
-        final int length = Math.min(maxLength, remaining);
+        final int available = limit - progress;
+        final int decodableMax = Math.min(server.decodableDataBytes, bufferPool.slotCapacity());
+        final int length = Math.min(available, decodableMax);
 
-        if (maxLength >= remaining)
+        if (available >= decodableMax)
         {
             payloadRO.wrap(buffer, progress, length);
             final int deferred = server.decodableDataBytes - length;
@@ -2232,7 +2232,12 @@ public final class Http2ServerFactory implements StreamFactory
             int progress = 0;
 
             final Http2Exchange exchange = streams.get(streamId);
-            if (exchange != null)
+
+            if (exchange == null)
+            {
+                progress += payload.capacity();
+            }
+            else
             {
                 Http2ErrorCode error = Http2ErrorCode.NO_ERROR;
 
@@ -2255,7 +2260,7 @@ public final class Http2ServerFactory implements StreamFactory
                     {
                         payloadRemaining.set(payloadLength);
                         exchange.doRequestData(traceId, authorization, payload, payloadRemaining);
-                        progress = payloadLength - payloadRemaining.value;
+                        progress += payloadRemaining.value;
                         deferred += payloadRemaining.value;
                     }
 
@@ -2271,10 +2276,6 @@ public final class Http2ServerFactory implements StreamFactory
                         }
                     }
                 }
-            }
-            else
-            {
-                progress += payload.capacity();
             }
 
             return progress;
