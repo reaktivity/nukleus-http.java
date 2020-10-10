@@ -207,7 +207,7 @@ public final class Http2ServerFactory implements StreamFactory
     private final Http2ServerDecoder decodeWindowUpdate = this::decodeWindowUpdate;
     private final Http2ServerDecoder decodeHeaders = this::decodeHeaders;
     private final Http2ServerDecoder decodeContinuation = this::decodeContinuation;
-    private final Http2ServerDecoder decodeDataLength = this::decodeData;
+    private final Http2ServerDecoder decodeData = this::decodeData;
     private final Http2ServerDecoder decodeDataPayload = this::decodeDataPayload;
     private final Http2ServerDecoder decodePriority = this::decodePriority;
     private final Http2ServerDecoder decodeRstStream = this::decodeRstStream;
@@ -223,7 +223,7 @@ public final class Http2ServerFactory implements StreamFactory
         decodersByFrameType.put(Http2FrameType.WINDOW_UPDATE, decodeWindowUpdate);
         decodersByFrameType.put(Http2FrameType.HEADERS, decodeHeaders);
         decodersByFrameType.put(Http2FrameType.CONTINUATION, decodeContinuation);
-        decodersByFrameType.put(Http2FrameType.DATA, decodeDataLength);
+        decodersByFrameType.put(Http2FrameType.DATA, decodeData);
         decodersByFrameType.put(Http2FrameType.PRIORITY, decodePriority);
         decodersByFrameType.put(Http2FrameType.RST_STREAM, decodeRstStream);
         this.decodersByFrameType = decodersByFrameType;
@@ -2879,11 +2879,18 @@ public final class Http2ServerFactory implements StreamFactory
 
                 decodeNetworkIfNecessary(traceId);
 
-                if (!Http2State.initialClosed(state) && !Http2State.initialClosing(state))
+                if (!Http2State.initialClosed(state))
                 {
-                    flushRequestWindowUpdate(traceId, authorization);
+                    if (Http2State.initialClosing(state))
+                    {
+                        // TODO: trailers extension?
+                        flushRequestEnd(traceId, authorization, EMPTY_OCTETS);
+                    }
+                    else
+                    {
+                        flushRequestWindowUpdate(traceId, authorization);
+                    }
                 }
-
                 applicationHeadersProcessed.remove(streamId);
             }
 
