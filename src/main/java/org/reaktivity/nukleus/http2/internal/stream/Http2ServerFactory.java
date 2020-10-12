@@ -2260,7 +2260,7 @@ public final class Http2ServerFactory implements StreamFactory
                     {
                         payloadRemaining.set(payloadLength);
                         exchange.doRequestData(traceId, authorization, payload, payloadRemaining);
-                        progress += payloadRemaining.value;
+                        progress += payloadLength - payloadRemaining.value;
                         deferred += payloadRemaining.value;
                     }
 
@@ -2747,7 +2747,6 @@ public final class Http2ServerFactory implements StreamFactory
                 assert Http2State.initialOpening(state);
 
                 final int maxLength = remaining.value;
-                localBudget -= maxLength;
 
                 if (localBudget < 0)
                 {
@@ -2777,6 +2776,7 @@ public final class Http2ServerFactory implements StreamFactory
                         contentObserved += length;
                     }
 
+                    localBudget -= length;
                     remaining.value -= length;
                     assert remaining.value >= 0;
                 }

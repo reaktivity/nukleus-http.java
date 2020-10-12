@@ -113,6 +113,17 @@ public class ConnectionManagementIT
 
     @Test
     @Specification({
+        "${route}/server/controller",
+        "${spec}/http.post.exchange.with.large.payload.before.settings/client",
+        "${nukleus}/http.post.exchange.with.large.payload.before.settings/server" })
+    @Configure(name = ReaktorRule.REAKTOR_BUFFER_SLOT_CAPACITY_NAME, value = "32768")
+    public void httpPostExchangeWithLargePayloadBeforeSettings() throws Exception
+    {
+        k3po.finish();
+    }
+
+    @Test
+    @Specification({
             "${route}/server/controller",
             "${spec}/http.post.exchange.streaming/client",
             "${nukleus}/http.post.exchange.streaming/server" })
@@ -354,6 +365,7 @@ public class ConnectionManagementIT
 
     @Test
     @Configure(name = HTTP2_MAX_CONCURRENT_STREAMS_CLEANUP_NAME, value = "1")
+    @Configure(name = HTTP2_STREAMS_CLEANUP_DELAY_NAME, value = "10")
     @Configure(name = HTTP2_STREAMS_CLEANUP_DELAY_NAME, value = "10")
     @Specification({
         "${route}/server/controller",
