@@ -2746,17 +2746,14 @@ public final class Http2ServerFactory implements StreamFactory
             {
                 assert Http2State.initialOpening(state);
 
-                final int maxLength = remaining.value;
-                final int availableLocalBudget = localBudget - maxLength;
-
-                if (availableLocalBudget < 0)
+                if (localBudget < remaining.value)
                 {
                     doEncodeRstStream(traceId, authorization, streamId, Http2ErrorCode.FLOW_CONTROL_ERROR);
                     cleanup(traceId, authorization);
                 }
                 else
                 {
-                    int length = Math.max(Math.min(requestBudget - requestPadding, maxLength), 0);
+                    int length = Math.max(Math.min(requestBudget - requestPadding, remaining.value), 0);
                     int reserved = length + requestPadding;
 
                     if (requestDebitorIndex != NO_DEBITOR_INDEX && requestDebitor != null)
