@@ -114,10 +114,10 @@ public class ConnectionManagementIT
     @Test
     @Specification({
         "${route}/server/controller",
-        "${spec}/http.post.exchange.with.large.payload.before.settings/client",
-        "${nukleus}/http.post.exchange.with.large.payload.before.settings/server" })
+        "${spec}/http.post.exchange.before.settings.exchange/client",
+        "${nukleus}/http.post.exchange.before.settings.exchange/server" })
     @Configure(name = ReaktorRule.REAKTOR_BUFFER_SLOT_CAPACITY_NAME, value = "32768")
-    public void httpPostExchangeWithLargePayloadBeforeSettings() throws Exception
+    public void httpPostExchangeBeforeSettingsExchange() throws Exception
     {
         k3po.finish();
     }

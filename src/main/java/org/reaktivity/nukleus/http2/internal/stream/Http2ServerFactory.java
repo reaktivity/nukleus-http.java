@@ -2747,8 +2747,9 @@ public final class Http2ServerFactory implements StreamFactory
                 assert Http2State.initialOpening(state);
 
                 final int maxLength = remaining.value;
+                final int availableLocalBudget = localBudget - maxLength;
 
-                if (localBudget < 0)
+                if (availableLocalBudget < 0)
                 {
                     doEncodeRstStream(traceId, authorization, streamId, Http2ErrorCode.FLOW_CONTROL_ERROR);
                     cleanup(traceId, authorization);
