@@ -366,7 +366,6 @@ public class ConnectionManagementIT
     @Test
     @Configure(name = HTTP2_MAX_CONCURRENT_STREAMS_CLEANUP_NAME, value = "1")
     @Configure(name = HTTP2_STREAMS_CLEANUP_DELAY_NAME, value = "10")
-    @Configure(name = HTTP2_STREAMS_CLEANUP_DELAY_NAME, value = "10")
     @Specification({
         "${route}/server/controller",
         "${spec}/client.sent.write.abort.then.read.abort.on.open.request/client",
