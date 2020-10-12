@@ -20,8 +20,6 @@ import static org.reaktivity.nukleus.http2.internal.types.Http2FrameType.DATA;
 
 import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
-import org.agrona.concurrent.AtomicBuffer;
-import org.agrona.concurrent.UnsafeBuffer;
 import org.reaktivity.nukleus.http2.internal.stream.Http2Flags;
 
 /*
@@ -44,11 +42,8 @@ import org.reaktivity.nukleus.http2.internal.stream.Http2Flags;
  */
 public class Http2DataFW extends Http2FrameFW
 {
-
     private static final int FLAGS_OFFSET = 4;
     private static final int PAYLOAD_OFFSET = 9;
-
-    private final AtomicBuffer dataRO = new UnsafeBuffer(new byte[0]);
 
     @Override
     public Http2FrameType type()
@@ -80,10 +75,6 @@ public class Http2DataFW extends Http2FrameFW
         }
     }
 
-    public DirectBuffer data()
-    {
-        return dataRO;
-    }
 
     @Override
     public Http2DataFW wrap(
@@ -97,11 +88,6 @@ public class Http2DataFW extends Http2FrameFW
         {
             throw new IllegalArgumentException(
                     String.format("Invalid DATA frame stream-id=%d (must not be 0)", streamId));
-        }
-
-        if (dataLength() > 0)
-        {
-            dataRO.wrap(buffer, dataOffset(), dataLength());
         }
 
         checkLimit(limit(), maxLimit);
@@ -135,7 +121,6 @@ public class Http2DataFW extends Http2FrameFW
             buffer().putByte(offset() + FLAGS_OFFSET, END_STREAM);
             return this;
         }
-
     }
 }
 
