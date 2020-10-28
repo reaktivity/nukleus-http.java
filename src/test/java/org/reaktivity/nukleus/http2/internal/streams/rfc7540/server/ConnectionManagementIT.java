@@ -116,7 +116,7 @@ public class ConnectionManagementIT
         "${route}/server/controller",
         "${spec}/http.post.exchange.before.settings.exchange/client",
         "${nukleus}/http.post.exchange.before.settings.exchange/server" })
-    @Configure(name = ReaktorRule.REAKTOR_BUFFER_SLOT_CAPACITY_NAME, value = "32768")
+    @Configure(name = ReaktorRule.REAKTOR_BUFFER_SLOT_CAPACITY_NAME, value = "65536")
     public void httpPostExchangeBeforeSettingsExchange() throws Exception
     {
         k3po.finish();
