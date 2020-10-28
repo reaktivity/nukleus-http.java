@@ -1799,6 +1799,7 @@ public final class Http2ServerFactory implements StreamFactory
                     for (Http2Exchange stream: streams.values())
                     {
                         stream.localBudget += localInitialCredit;
+                        stream.flushRequestWindowUpdate(traceId, authorization);
                     }
                 }
 
