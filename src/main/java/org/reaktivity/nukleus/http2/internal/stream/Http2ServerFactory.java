@@ -2908,7 +2908,7 @@ public final class Http2ServerFactory implements StreamFactory
                 long traceId,
                 long authorization)
             {
-                final int size = requestBudget - Math.max(localBudget, 0);
+                final int size = requestBudget - localBudget;
                 if (size > 0)
                 {
                     localBudget = requestBudget;
