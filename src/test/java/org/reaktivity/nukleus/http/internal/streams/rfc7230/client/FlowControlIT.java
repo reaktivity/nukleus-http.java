@@ -27,6 +27,7 @@ import org.junit.rules.Timeout;
 import org.kaazing.k3po.junit.annotation.ScriptProperty;
 import org.kaazing.k3po.junit.annotation.Specification;
 import org.kaazing.k3po.junit.rules.K3poRule;
+import org.reaktivity.reaktor.ReaktorConfiguration;
 import org.reaktivity.reaktor.test.ReaktorRule;
 
 public class FlowControlIT
@@ -45,6 +46,7 @@ public class FlowControlIT
         .responseBufferCapacity(1024)
         .counterValuesBufferCapacity(8192)
         .affinityMask("target#0", EXTERNAL_AFFINITY_MASK)
+        .configure(ReaktorConfiguration.REAKTOR_DRAIN_ON_CLOSE, false)
         .clean();
 
     @Rule

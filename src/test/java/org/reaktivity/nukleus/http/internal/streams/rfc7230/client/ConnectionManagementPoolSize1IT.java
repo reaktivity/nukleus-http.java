@@ -30,6 +30,7 @@ import org.junit.rules.Timeout;
 import org.kaazing.k3po.junit.annotation.Specification;
 import org.kaazing.k3po.junit.rules.K3poRule;
 import org.reaktivity.nukleus.http.internal.test.HttpCountersRule;
+import org.reaktivity.reaktor.ReaktorConfiguration;
 import org.reaktivity.reaktor.test.ReaktorRule;
 import org.reaktivity.reaktor.test.annotation.Configure;
 
@@ -50,6 +51,7 @@ public class ConnectionManagementPoolSize1IT
         .counterValuesBufferCapacity(8192)
         .configure(HTTP_MAXIMUM_CONNECTIONS, 1)
         .affinityMask("target#0", EXTERNAL_AFFINITY_MASK)
+        .configure(ReaktorConfiguration.REAKTOR_DRAIN_ON_CLOSE, false)
         .clean();
 
     private final HttpCountersRule counters = new HttpCountersRule(reaktor);
