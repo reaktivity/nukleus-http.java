@@ -17,21 +17,19 @@ package org.reaktivity.nukleus.http.internal.stream;
 
 import java.util.function.Function;
 import java.util.function.LongConsumer;
-import java.util.function.LongFunction;
 import java.util.function.LongSupplier;
 import java.util.function.LongUnaryOperator;
 import java.util.function.Supplier;
 import java.util.function.ToIntFunction;
 
 import org.agrona.MutableDirectBuffer;
-import org.reaktivity.nukleus.budget.BudgetDebitor;
 import org.reaktivity.nukleus.buffer.BufferPool;
 import org.reaktivity.nukleus.http.internal.HttpConfiguration;
 import org.reaktivity.nukleus.route.RouteManager;
 import org.reaktivity.nukleus.stream.StreamFactory;
 import org.reaktivity.nukleus.stream.StreamFactoryBuilder;
 
-public final class ClientStreamFactoryBuilder implements StreamFactoryBuilder
+public final class HttpClientFactoryBuilder implements StreamFactoryBuilder
 {
     private final HttpConfiguration config;
 
@@ -44,16 +42,15 @@ public final class ClientStreamFactoryBuilder implements StreamFactoryBuilder
     private Supplier<BufferPool> supplyBufferPool;
     private Function<String, LongSupplier> supplyCounter;
     private Function<String, LongConsumer> supplyAccumulator;
-    private LongFunction<BudgetDebitor> supplyDebitor;
 
-    public ClientStreamFactoryBuilder(
+    public HttpClientFactoryBuilder(
         HttpConfiguration config)
     {
         this.config = config;
     }
 
     @Override
-    public ClientStreamFactoryBuilder setRouteManager(
+    public HttpClientFactoryBuilder setRouteManager(
         RouteManager router)
     {
         this.router = router;
@@ -61,7 +58,7 @@ public final class ClientStreamFactoryBuilder implements StreamFactoryBuilder
     }
 
     @Override
-    public ClientStreamFactoryBuilder setWriteBuffer(
+    public HttpClientFactoryBuilder setWriteBuffer(
         MutableDirectBuffer writeBuffer)
     {
         this.writeBuffer = writeBuffer;
@@ -69,15 +66,15 @@ public final class ClientStreamFactoryBuilder implements StreamFactoryBuilder
     }
 
     @Override
-    public ClientStreamFactoryBuilder setInitialIdSupplier(
-        LongUnaryOperator supplyInitialId)
+    public HttpClientFactoryBuilder setInitialIdSupplier(
+        LongUnaryOperator supplyStreamId)
     {
-        this.supplyInitialId = supplyInitialId;
+        this.supplyInitialId = supplyStreamId;
         return this;
     }
 
     @Override
-    public ClientStreamFactoryBuilder setReplyIdSupplier(
+    public HttpClientFactoryBuilder setReplyIdSupplier(
         LongUnaryOperator supplyReplyId)
     {
         this.supplyReplyId = supplyReplyId;
@@ -125,19 +122,11 @@ public final class ClientStreamFactoryBuilder implements StreamFactoryBuilder
     }
 
     @Override
-    public StreamFactoryBuilder setBudgetDebitorSupplier(
-        LongFunction<BudgetDebitor> supplyDebitor)
-    {
-        this.supplyDebitor = supplyDebitor;
-        return this;
-    }
-
-    @Override
     public StreamFactory build()
     {
         final BufferPool bufferPool = supplyBufferPool.get();
 
-        return new ClientStreamFactory(
+        return new HttpClientFactory(
                 config,
                 router,
                 writeBuffer,
@@ -147,7 +136,6 @@ public final class ClientStreamFactoryBuilder implements StreamFactoryBuilder
                 supplyTraceId,
                 supplyTypeId,
                 supplyCounter,
-                supplyAccumulator,
-                supplyDebitor);
+                supplyAccumulator);
     }
 }
