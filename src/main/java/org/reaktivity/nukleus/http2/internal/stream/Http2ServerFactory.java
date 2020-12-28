@@ -1461,7 +1461,7 @@ public final class Http2ServerFactory implements StreamFactory
             final long traceId = window.traceId();
             final long authorization = window.authorization();
             final long budgetId = window.budgetId();
-            int maximum = window.maximum();;
+            int maximum = window.maximum();
             final int padding = window.padding();
 
             assert acknowledge <= sequence;
@@ -1506,7 +1506,8 @@ public final class Http2ServerFactory implements StreamFactory
             long traceId,
             long authorization)
         {
-            doBegin(network, routeId, replyId, initialSeq, initialAck, initialMax,traceId, authorization, affinity, EMPTY_OCTETS);
+            doBegin(network, routeId, replyId, initialSeq, initialAck, initialMax,
+                traceId, authorization, affinity, EMPTY_OCTETS);
             router.setThrottle(replyId, this::onNetwork);
 
             assert responseSharedBudgetIndex == NO_CREDITOR_INDEX;
@@ -1755,8 +1756,8 @@ public final class Http2ServerFactory implements StreamFactory
                             replyMax, encodeReserved, replyMax - encodeReserved);
                     }
 
-                    doData(network, routeId, replyId, replySeq, replyAck, replyMax, encodeHeadersSlotTraceId, authorization, budgetId,
-                           encodeReserved, encodeHeadersBuffer, 0, encodeLength, EMPTY_OCTETS);
+                    doData(network, routeId, replyId, replySeq, replyAck, replyMax, encodeHeadersSlotTraceId,
+                        authorization, budgetId, encodeReserved, encodeHeadersBuffer, 0, encodeLength, EMPTY_OCTETS);
 
                     replySeq -= encodeReserved;
 
@@ -1809,8 +1810,8 @@ public final class Http2ServerFactory implements StreamFactory
                             replyMax, encodeReserved, replyMax - encodeReserved);
                     }
 
-                    doData(network, routeId, replyId, replySeq, replyAck, replyMax, encodeReservedSlotTraceId, authorization, budgetId,
-                           encodeReserved, encodeReservedBuffer, 0, encodeLength, EMPTY_OCTETS);
+                    doData(network, routeId, replyId, replySeq, replyAck, replyMax, encodeReservedSlotTraceId,
+                        authorization, budgetId, encodeReserved, encodeReservedBuffer, 0, encodeLength, EMPTY_OCTETS);
 
                     replySeq -= encodeReserved;
 
@@ -1861,7 +1862,7 @@ public final class Http2ServerFactory implements StreamFactory
                     initialAck = initialAckMax;
                     assert initialAck <= initialSeq;
 
-                    doNetworkWindow(traceId, authorization, 0, 0,(int) initialAck);
+                    doNetworkWindow(traceId, authorization, 0, 0, (int) initialAck);
                 }
             }
         }
@@ -2882,7 +2883,8 @@ public final class Http2ServerFactory implements StreamFactory
                 assert state == 0;
                 state = Http2State.openingInitial(state);
 
-                doBegin(application, routeId, requestId, requestSeq, requestAck, requestMax, traceId, authorization, affinity, extension);
+                doBegin(application, routeId, requestId, requestSeq, requestAck, requestMax,
+                    traceId, authorization, affinity, extension);
                 router.setThrottle(requestId, this::onRequest);
                 streams.put(streamId, this);
                 streamsActive[streamId & 0x01]++;
@@ -2919,8 +2921,8 @@ public final class Http2ServerFactory implements StreamFactory
 
                     if (length > 0)
                     {
-                        doData(application, routeId, requestId, requestSeq, requestAck, requestMax, traceId, authorization, requestBudgetId,
-                            reserved, buffer, 0, length, EMPTY_OCTETS);
+                        doData(application, routeId, requestId, requestSeq, requestAck, requestMax, traceId,
+                            authorization, requestBudgetId, reserved, buffer, 0, length, EMPTY_OCTETS);
                         contentObserved += length;
 
                         requestSeq += reserved;
