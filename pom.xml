@@ -6,7 +6,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>org.reaktivity</groupId>
   <artifactId>nukleus-http</artifactId>
-  <version>0.154</version>
+  <version>0.155</version>
   <name>HTTP Nukleus Implementation</name>
   <description>HTTP Nukleus Implementation</description>
   <url>https://github.com/reaktivity/nukleus-http.java</url>
@@ -42,7 +42,7 @@
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     <checkstyle.config.location>src/conf/checkstyle/configuration.xml</checkstyle.config.location>
     <checkstyle.suppressions.location>src/conf/checkstyle/suppressions.xml</checkstyle.suppressions.location>
-    <jacoco.coverage.ratio>0.86</jacoco.coverage.ratio>
+    <jacoco.coverage.ratio>0.88</jacoco.coverage.ratio>
     <jacoco.missed.count>0</jacoco.missed.count>
 
     <junit.version>4.13.1</junit.version>
@@ -54,7 +54,7 @@
 
     <nukleus.plugin.version>0.64</nukleus.plugin.version>
 
-    <nukleus.http.spec.version>0.103</nukleus.http.spec.version>
+    <nukleus.http.spec.version>0.104</nukleus.http.spec.version>
     <nukleus.tcp.version>0.101</nukleus.tcp.version>
     <reaktor.version>0.146</reaktor.version>
   </properties>
@@ -188,10 +188,7 @@
         <artifactId>maven-checkstyle-plugin</artifactId>
         <version>3.1.0</version>
         <configuration>
-          <sourceDirectories>
-            <sourceDirectory>${project.build.sourceDirectory}</sourceDirectory>
-            <sourceDirectory>${project.build.testSourceDirectory}</sourceDirectory>
-          </sourceDirectories>
+          <includeTestSourceDirectory>true</includeTestSourceDirectory>
         </configuration>
         <executions>
           <execution>
@@ -217,7 +214,7 @@
       <plugin>
         <groupId>org.jacoco</groupId>
         <artifactId>jacoco-maven-plugin</artifactId>
-        <version>0.8.5</version>
+        <version>0.8.6</version>
         <configuration>
           <excludes>
             <exclude>org/reaktivity/nukleus/http/internal/types/**/*.class</exclude>
@@ -399,6 +396,9 @@
                     <requireReleaseDeps>
                       <message>No Snapshots Allowed!</message>
                     </requireReleaseDeps>
+                    <requireJavaVersion>
+                      <version>[9,10)</version>
+                    </requireJavaVersion>
                   </rules>
                 </configuration>
               </execution>
