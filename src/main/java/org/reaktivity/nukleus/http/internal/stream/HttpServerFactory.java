@@ -1105,7 +1105,7 @@ public final class HttpServerFactory implements StreamFactory
         private final long replyId;
         private final long affinity;
 
-        private int replyPadding;
+        private int replyPad;
         private boolean replyCloseOnFlush;
 
         private int decodeSlot;
@@ -1124,6 +1124,7 @@ public final class HttpServerFactory implements StreamFactory
         private long initialAck;
         private long replySeq;
         private long replyAck;
+        private long replyBudgetId;
         private int replyMax;
 
         private HttpServer(
@@ -1231,8 +1232,6 @@ public final class HttpServerFactory implements StreamFactory
             assert acknowledge <= sequence;
             assert sequence >= initialSeq;
             assert acknowledge <= initialAck;
-
-            initialSeq = sequence + data.reserved();
 
             assert initialAck <= initialSeq;
 
@@ -1405,16 +1404,17 @@ public final class HttpServerFactory implements StreamFactory
 
             replyAck = acknowledge;
             replyMax = maximum;
-            replyPadding = padding;
+            replyBudgetId = budgetId;
+            replyPad = padding;
 
             assert replyAck <= replySeq;
-            replyPadding = padding;
+            replyPad = padding;
 
             flushNetworkIfBuffered(traceId, authorization, budgetId);
 
             if (exchange != null && exchange.responseState == HttpState.OPEN)
             {
-                exchange.doResponseWindow(traceId, authorization, budgetId, replyMax, replyPadding);
+                exchange.flushAppWindow(traceId);
             }
         }
 
@@ -1427,7 +1427,7 @@ public final class HttpServerFactory implements StreamFactory
             {
                 final MutableDirectBuffer buffer = bufferPool.buffer(encodeSlot);
                 final int limit = encodeSlotOffset;
-                final int reserved = limit + replyPadding;
+                final int reserved = limit + replyPad;
                 doNetworkData(traceId, authorization, budgetId, reserved, buffer, 0, limit);
             }
         }
@@ -1451,11 +1451,11 @@ public final class HttpServerFactory implements StreamFactory
             int limit)
         {
             final int maxLength = limit - offset;
-            final int length = Math.min(replyWindow() - replyPadding, maxLength);
+            final int length = Math.min(replyWindow() - replyPad, maxLength);
 
             if (length > 0)
             {
-                final int required = length + replyPadding;
+                final int required = length + replyPad;
 
                 assert reserved >= required;
 
@@ -1533,6 +1533,24 @@ public final class HttpServerFactory implements StreamFactory
             doWindow(network, routeId, initialId, initialSeq, initialAck, maximum, traceId, authorization, budgetId, padding);
         }
 
+        private void flushNetWindow(
+            long traceId,
+            long budgetId,
+            int initialPad)
+        {
+            final int initialMax = exchange != null ? decodeMax : 0;
+            final int decodable = decodeMax - initialMax;
+
+            final long initialAckMax = Math.min(initialAck + decodable, initialSeq);
+            if (initialAckMax > initialAck)
+            {
+                initialAck = initialAckMax;
+                assert initialAck <= initialSeq;
+
+                doNetworkWindow(traceId, budgetId, 0, initialPad, initialMax);
+            }
+        }
+
         private void decodeNetworkIfBuffered(
             long traceId,
             long authorization,
@@ -1592,7 +1610,7 @@ public final class HttpServerFactory implements StreamFactory
             long authorization,
             DirectBuffer error)
         {
-            doNetworkData(traceId, authorization, 0L, error.capacity() + replyPadding, error, 0, error.capacity());
+            doNetworkData(traceId, authorization, 0L, error.capacity() + replyPad, error, 0, error.capacity());
             doNetworkEnd(traceId, authorization);
 
             assert exchange == null;
@@ -1695,11 +1713,11 @@ public final class HttpServerFactory implements StreamFactory
                 replyCloseOnFlush = true;
 
                 DirectBuffer error = ERROR_507_INSUFFICIENT_STORAGE;
-                doNetworkData(traceId, authorization, 0L, error.capacity() + replyPadding, error, 0, error.capacity());
+                doNetworkData(traceId, authorization, 0L, error.capacity() + replyPad, error, 0, error.capacity());
             }
             else
             {
-                final int reserved = length + replyPadding;
+                final int reserved = length + replyPad;
                 doNetworkData(traceId, authorization, budgetId, reserved, codecBuffer, 0, length);
             }
         }
@@ -1845,7 +1863,7 @@ public final class HttpServerFactory implements StreamFactory
                     limit = codecOffset.value;
                 }
 
-                final int reserved = limit + replyPadding;
+                final int reserved = limit + replyPad;
                 doNetworkData(traceId, authorization, budgetId, reserved, buffer, offset, limit);
             }
 
@@ -1911,6 +1929,7 @@ public final class HttpServerFactory implements StreamFactory
             private HttpState responseState;
             private boolean responseChunked;
             private boolean responseClosing;
+            private long authorization;
 
             private HttpExchange(
                 MessageConsumer application,
@@ -2063,10 +2082,12 @@ public final class HttpServerFactory implements StreamFactory
             private void onRequestWindow(
                 WindowFW window)
             {
+                final long sequence = window.sequence();
+                final long acknowledge = window.acknowledge();
                 final long traceId = window.traceId();
                 final long authorization = window.authorization();
                 final long budgetId = window.budgetId();
-                final int credit = window.credit();
+                final int maximum = window.maximum();
                 final int padding = window.padding();
 
                 if (requestState == HttpState.PENDING)
@@ -2074,23 +2095,28 @@ public final class HttpServerFactory implements StreamFactory
                     requestState = HttpState.OPEN;
                 }
 
-                initialMax += credit;
+                assert acknowledge <= sequence;
+                assert sequence <= initialSeq;
+                assert acknowledge >= initialAck;
+                assert maximum >= initialMax;
+
+                initialAck = acknowledge;
+                initialMax = maximum;
                 requestPadding = padding;
+
+                assert initialAck <= initialSeq;
 
                 decodeNetworkIfBuffered(traceId, authorization, budgetId);
 
                 if (decodeSlot == NO_SLOT && requestState == HttpState.CLOSED)
                 {
                     // TODO: non-empty extension?
-                    doEnd(application, routeId, requestId, initialSeq, initialAck, initialMax, traceId, authorization, EMPTY_OCTETS);
+                    doEnd(application, routeId, requestId, initialSeq, initialAck, initialMax,
+                        traceId, authorization, EMPTY_OCTETS);
                 }
                 else
                 {
-                    final int initialCredit = Math.max(initialMax - initialBudget, 0);
-                    if (initialCredit > 0)
-                    {
-                        doNetworkWindow(traceId, authorization, budgetId, initialCredit, padding);
-                    }
+                    flushNetWindow(traceId, budgetId, requestPadding);
                 }
             }
 
@@ -2128,7 +2154,7 @@ public final class HttpServerFactory implements StreamFactory
                 final Array32FW<HttpHeaderFW> headers = beginEx != null ? beginEx.headers() : DEFAULT_HEADERS;
 
                 final long traceId = begin.traceId();
-                final long authorization = begin.authorization();
+                authorization = begin.authorization();
 
                 responseState = HttpState.OPEN;
                 doEncodeHeaders(this, traceId, authorization, 0L, headers);
@@ -2187,22 +2213,29 @@ public final class HttpServerFactory implements StreamFactory
                 long authorization)
             {
                 responseState = HttpState.CLOSED;
-                doReset(application, routeId, responseId, traceId, authorization);
+                doReset(application, routeId, responseId, replySeq, replyAck, replyMax, traceId, authorization);
             }
 
             private void doResponseWindow(
-                long traceId,
-                long authorization,
-                long budgetId,
-                int replyBudget,
-                int replyPadding)
+                long traceId)
             {
-                final int credit = Math.max(replyBudget - responseBudget, 0);
+                final int replyPad = HttpServer.this.replyPad ;
 
-                if (credit > 0)
+                doWindow(application, routeId, responseId, replySeq, replyAck, replyMax,
+                    traceId, authorization, replyBudgetId, HttpServer.this.replyPad);
+            }
+
+            private void flushAppWindow(
+                long traceId)
+            {
+                // TODO: consider encodePool capacity
+                int replyAckMax = (int)(replySeq - replyPendingAck());
+                if (replyAckMax > replyAck)
                 {
-                    responseBudget += credit;
-                    doWindow(application, routeId, responseId, initialSeq, initialAck, initialMax, traceId, authorization, budgetId, credit, replyPadding);
+                    replyAck = replyAckMax;
+                    assert replyAck <= replySeq;
+
+                    doResponseWindow(traceId);
                 }
             }
         }
