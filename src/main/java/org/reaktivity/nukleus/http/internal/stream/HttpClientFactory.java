@@ -899,7 +899,7 @@ public final class HttpClientFactory implements StreamFactory
                 final long authorization = begin.authorization();
                 final long replyId = supplyReplyId.applyAsLong(initialId);
 
-                doWindow(sender, routeId, initialId, client.replySeq, client.replyAck, client.replyMax, traceId, authorization, 0L, 0);
+                doWindow(sender, routeId, initialId, client.replySeq, client.replyAck, 0, traceId, authorization, 0L, 0);
 
                 HttpBeginExFW beginEx = beginExRW.wrap(codecBuffer, 0, codecBuffer.capacity())
                         .typeId(httpTypeId)
@@ -1042,10 +1042,6 @@ public final class HttpClientFactory implements StreamFactory
         private final long initialId;
         private final long replyId;
 
-        private int initialBudget;
-        private int initialPadding;
-        private int replyBudget;
-
         private int decodeSlot;
         private int decodeSlotOffset;
         private int decodeSlotReserved;
@@ -1064,10 +1060,10 @@ public final class HttpClientFactory implements StreamFactory
         private long initialAck;
         private int initialMax;
         private int initialPad;
-        private long replyAuth;
-        private long replyAck;
-        private int replyMax;
+
         private long replySeq;
+        private long replyAck;
+        private long replyAuth;
 
         private HttpClient(
             HttpClientPool pool)
@@ -1145,19 +1141,28 @@ public final class HttpClientFactory implements StreamFactory
             final long authorization = begin.authorization();
             replyAuth = authorization;
 
-            doNetworkWindow(traceId, authorization, 0, bufferPool.slotCapacity(), 0);
+            doNetworkWindow(traceId, authorization, 0, 0, bufferPool.slotCapacity());
         }
 
         private void onNetworkData(
             DataFW data)
         {
+            final long sequence = data.sequence();
+            final long acknowledge = data.acknowledge();
             final long traceId = data.traceId();
             final long authorization = data.authorization();
             final long budgetId = data.budgetId();
 
-            replyBudget -= data.reserved();
+            assert acknowledge <= sequence;
+            assert sequence >= replySeq;
+            assert acknowledge <= replyAck;
 
-            if (replyBudget < 0)
+            replySeq = sequence + data.reserved();
+            replyAuth = authorization;
+
+            assert replyAck <= replySeq;
+
+            if (replySeq > replyAck + decodeMax)
             {
                 cleanupNetwork(traceId, authorization);
             }
@@ -1282,7 +1287,7 @@ public final class HttpClientFactory implements StreamFactory
             {
                 final MutableDirectBuffer buffer = bufferPool.buffer(encodeSlot);
                 final int limit = encodeSlotOffset;
-                final int reserved = limit + initialPadding;
+                final int reserved = limit + initialPad;
                 doNetworkData(traceId, authorization, budgetId, reserved, buffer, 0, limit);
             }
         }
@@ -1323,18 +1328,21 @@ public final class HttpClientFactory implements StreamFactory
             int limit)
         {
             final int maxLength = limit - offset;
-            final int length = Math.min(initialBudget - initialPadding, maxLength);
+            final int length = Math.max(Math.min(initialWindow() - initialPad, maxLength), 0);
 
             if (length > 0)
             {
-                final int required = length + initialPadding;
+                final int required = length + initialPad;
 
                 assert reserved >= required;
 
-                assert initialBudget >= 0;
-
                 doData(network, routeId, initialId, initialSeq, initialAck, initialMax, traceId, authorization, budgetId,
                        required, buffer, offset, length, EMPTY_OCTETS);
+
+                initialSeq += required;
+
+                assert initialSeq <= initialAck + initialMax :
+                    String.format("%d <= %d + %d", initialSeq, initialAck, initialMax);
             }
 
             final int remaining = maxLength - length;
@@ -1614,7 +1622,7 @@ public final class HttpClientFactory implements StreamFactory
             }
             else
             {
-                final int reserved = length + initialPadding;
+                final int reserved = length + initialPad;
                 doNetworkData(traceId, authorization, budgetId, reserved, codecBuffer, 0, length);
             }
         }
@@ -1787,7 +1795,7 @@ public final class HttpClientFactory implements StreamFactory
                     limit = codecOffset.value;
                 }
 
-                final int reserved = limit + initialPadding;
+                final int reserved = limit + initialPad;
                 doNetworkData(traceId, authorization, budgetId, reserved, buffer, offset, limit);
             }
 
@@ -2069,8 +2077,6 @@ public final class HttpClientFactory implements StreamFactory
             long traceId,
             long budgetId)
         {
-            assert HttpState.initialOpened(state);
-
             // TODO: consider encodePool capacity
             int initialAckMax = (int)(initialSeq - client.initialPendingAck());
             if (initialAckMax > initialAck)

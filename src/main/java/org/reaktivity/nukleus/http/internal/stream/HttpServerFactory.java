@@ -1226,12 +1226,12 @@ public final class HttpServerFactory implements StreamFactory
             assert sequence >= initialSeq;
             assert acknowledge <= initialAck;
 
-            initialSeq = sequence + data.reserved();
-
             assert initialAck <= initialSeq;
             assert acknowledge <= sequence;
             assert sequence >= initialSeq;
             assert acknowledge <= initialAck;
+
+            initialSeq = sequence + data.reserved();
 
             assert initialAck <= initialSeq;
 
@@ -1286,7 +1286,7 @@ public final class HttpServerFactory implements StreamFactory
             {
                 cleanupNetwork(traceId, authorization);
             }
-            else
+            else if (exchange != null)
             {
                 exchange.doAppFlush(traceId, budgetId, reserved, authorization, extension);
             }
@@ -1451,7 +1451,7 @@ public final class HttpServerFactory implements StreamFactory
             int limit)
         {
             final int maxLength = limit - offset;
-            final int length = Math.min(replyWindow() - replyPad, maxLength);
+            final int length = Math.min(Math.max(replyWindow() - replyPad, 0), maxLength);
 
             if (length > 0)
             {
@@ -1462,7 +1462,7 @@ public final class HttpServerFactory implements StreamFactory
                 doData(network, routeId, replyId, replySeq, replyAck, replyMax, traceId, authorization, budgetId,
                        required, buffer, offset, length, EMPTY_OCTETS);
 
-                replySeq += reserved;
+                replySeq += required;
 
                 assert replySeq <= replyAck + replyMax :
                     String.format("%d <= %d + %d", replySeq, replyAck, replyMax);
@@ -1921,7 +1921,10 @@ public final class HttpServerFactory implements StreamFactory
             private final long requestId;
             private final long responseId;
 
+            private long initialSeq;
+            private long initialAck;
             private int initialMax;
+            private int initialPad;
             private int requestPadding;
             private int responseBudget;
 
@@ -1950,6 +1953,9 @@ public final class HttpServerFactory implements StreamFactory
                 long authorization,
                 Flyweight extension)
             {
+                initialSeq = HttpServer.this.initialSeq;
+                initialAck = initialSeq;
+
                 doBegin(application, routeId, requestId, initialSeq, initialAck, initialMax,
                     traceId, authorization, affinity, extension);
                 router.setThrottle(requestId, this::onRequest);
@@ -1970,12 +1976,11 @@ public final class HttpServerFactory implements StreamFactory
                 {
                     final int reserved = length + requestPadding;
 
-                    initialMax -= reserved;
-
-                    assert initialMax >= 0;
-
                     doData(application, routeId, requestId, initialSeq, initialAck, initialMax,
                         traceId, authorization, budgetId, reserved, buffer, offset, length, extension);
+
+                    initialSeq += reserved;
+                    assert initialSeq <= initialAck + initialMax;
                 }
 
                 return offset + length;

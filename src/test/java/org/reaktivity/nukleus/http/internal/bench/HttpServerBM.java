@@ -248,7 +248,6 @@ public class HttpServerBM
             {
             case WindowFW.TYPE_ID:
                 windowRO.wrap(buffer, index, index + length);
-                availableSourceInputWindow += windowRO.credit();
                 padding = windowRO.padding();
                 break;
             case ResetFW.TYPE_ID:
@@ -301,7 +300,6 @@ public class HttpServerBM
         {
             final WindowFW window = windowRW.wrap(throttleBuffer, 0, throttleBuffer.capacity())
                     .streamId(streamId)
-                    .credit(credit)
                     .build();
             sourceOutputEst.throttle.test(window.typeId(), window.buffer(), window.offset(), window.sizeof());
         }
