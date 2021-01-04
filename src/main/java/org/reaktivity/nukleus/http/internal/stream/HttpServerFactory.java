@@ -1347,7 +1347,7 @@ public final class HttpServerFactory implements StreamFactory
             cleanupDecodeSlotIfNecessary();
 
             if (exchange != null)
-            {
+            {   
                 exchange.onNetworkAbort(traceId, authorization);
                 exchange.onNetworkReset(traceId, authorization);
                 doNetworkAbort(traceId, authorization);
@@ -2224,10 +2224,8 @@ public final class HttpServerFactory implements StreamFactory
             private void doResponseWindow(
                 long traceId)
             {
-                final int replyPad = HttpServer.this.replyPad ;
-
                 doWindow(application, routeId, responseId, replySeq, replyAck, replyMax,
-                    traceId, authorization, replyBudgetId, HttpServer.this.replyPad);
+                     traceId, authorization, replyBudgetId, HttpServer.this.replyPad);
             }
 
             private void flushAppWindow(

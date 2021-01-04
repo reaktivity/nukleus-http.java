@@ -907,7 +907,7 @@ public final class HttpClientFactory implements StreamFactory
                         .headersItem(h -> h.name(HEADER_RETRY_AFTER).value(RETRY_AFTER_0))
                         .build();
                 doBegin(sender, routeId, replyId, sequence, acknowledge, maximum, supplyTraceId.getAsLong(), 0L, 0, beginEx);
-                doEnd(sender, routeId, replyId,  sequence, acknowledge, maximum,supplyTraceId.getAsLong(), 0, EMPTY_OCTETS);
+                doEnd(sender, routeId, replyId, sequence, acknowledge, maximum, supplyTraceId.getAsLong(), 0, EMPTY_OCTETS);
 
                 // count rejected requests (no connection or no space in the queue)
                 countRequestsRejected.getAsLong();
@@ -1395,7 +1395,7 @@ public final class HttpClientFactory implements StreamFactory
             {
                 state = HttpState.closeInitial(state);
                 cleanupEncodeSlotIfNecessary();
-                doAbort(network, routeId, initialId, initialSeq, initialAck, initialMax,traceId, authorization, EMPTY_OCTETS);
+                doAbort(network, routeId, initialId, initialSeq, initialAck, initialMax, traceId, authorization, EMPTY_OCTETS);
 
                 if (HttpState.closed(state))
                 {
@@ -1427,7 +1427,7 @@ public final class HttpClientFactory implements StreamFactory
             long budgetId,
             int replyPad)
         {
-            final int replyMax = exchange != null? decodeMax : 0;
+            final int replyMax = exchange != null ? decodeMax : 0;
             final int decodable = decodeMax - replyMax;
 
             final long replyAckMax = Math.min(replyAck + decodable, replySeq);
@@ -2093,7 +2093,8 @@ public final class HttpClientFactory implements StreamFactory
             long budgetId)
         {
             state = HttpState.openInitial(state);
-            doWindow(application, routeId, requestId, initialSeq, initialAck, client.initialMax,traceId, initialAuth, budgetId, client.initialPad);
+            doWindow(application, routeId, requestId,
+                initialSeq, initialAck, client.initialMax, traceId, initialAuth, budgetId, client.initialPad);
         }
 
         private void doResponseBegin(
@@ -2106,7 +2107,7 @@ public final class HttpClientFactory implements StreamFactory
 
             state = HttpState.openingReply(state);
 
-            doBegin(application, routeId, responseId, replySeq,replyAck, replyMax, traceId, authorization, 0, extension);
+            doBegin(application, routeId, responseId, replySeq, replyAck, replyMax, traceId, authorization, 0, extension);
             router.setThrottle(responseId, this::onApplication);
         }
 
