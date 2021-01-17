@@ -255,7 +255,7 @@ public final class Http2ServerFactory implements StreamFactory
     private final BufferPool headersPool;
     private final int httpTypeId;
     private final MutableDirectBuffer extensionBuffer;
-    private final long decodeMax;
+    private final int decodeMax;
 
     Http2ServerFactory(
         Http2Configuration config,
@@ -288,7 +288,7 @@ public final class Http2ServerFactory implements StreamFactory
         this.httpTypeId = supplyTypeId.applyAsInt(HttpNukleus.NAME);
         this.frameBuffer = new UnsafeBuffer(new byte[writeBuffer.capacity()]);
         this.extensionBuffer = new UnsafeBuffer(new byte[writeBuffer.capacity()]);
-        decodeMax = bufferPool.slotCapacity();
+        this.decodeMax = bufferPool.slotCapacity();
     }
 
     @Override
@@ -1141,7 +1141,7 @@ public final class Http2ServerFactory implements StreamFactory
         private long replySeq;
         private long replyAck;
         private int replyMax;
-        private int replyPadding;
+        private int replyPad;
 
         private long authorization;
 
@@ -1214,12 +1214,7 @@ public final class Http2ServerFactory implements StreamFactory
 
         private int replyPendingAck()
         {
-            return (int)(replySeq - replyAck) + encodeSlotOffset;
-        }
-
-        private int replyWindow()
-        {
-            return replyMax - replyPendingAck();
+            return (int)(replySeq - replyAck);
         }
 
         private void onNetwork(
@@ -1275,7 +1270,7 @@ public final class Http2ServerFactory implements StreamFactory
 
             assert initialAck <= initialSeq;
 
-            doNetworkWindow(traceId, authorization,  0, 0, bufferPool.slotCapacity());
+            doNetworkWindow(traceId, authorization, 0L, 0, bufferPool.slotCapacity());
             doNetworkBegin(traceId, authorization);
         }
 
@@ -1322,15 +1317,6 @@ public final class Http2ServerFactory implements StreamFactory
                 }
 
                 decodeNetwork(traceId, authorization, budgetId, reserved, buffer, offset, limit);
-
-                final long initialAckMax = Math.min(reserved - decodeSlotReserved, initialSeq);
-                if (initialAckMax > 0)
-                {
-                    initialAck = initialAckMax;
-                    assert initialAck <= initialSeq;
-
-                    doNetworkWindow(traceId, authorization, 0, 0, (int) initialAck);
-                }
             }
         }
 
@@ -1461,7 +1447,7 @@ public final class Http2ServerFactory implements StreamFactory
             final long traceId = window.traceId();
             final long authorization = window.authorization();
             final long budgetId = window.budgetId();
-            int maximum = window.maximum();
+            final int maximum = window.maximum();
             final int padding = window.padding();
 
             assert acknowledge <= sequence;
@@ -1476,26 +1462,30 @@ public final class Http2ServerFactory implements StreamFactory
                     replyMax, maximum, replyMax + maximum);
             }
 
+            int credit = (int) (acknowledge - replyAck) + (maximum - replyMax);
+            assert credit >= 0;
+
             replyAck = acknowledge;
             replyMax = maximum;
-            replyPadding = padding;
+            replyPad = padding;
 
             assert replyAck <= replySeq;
 
             if (replyBudgetReserved > 0)
             {
-                final int reservedCredit = Math.min(maximum, replyBudgetReserved);
+                final int reservedCredit = Math.min(credit, replyBudgetReserved);
                 replyBudgetReserved -= reservedCredit;
-                maximum -= reservedCredit;
+                credit -= reservedCredit;
             }
 
-            if (maximum > 0)
+            if (credit > 0)
             {
-                replySharedBudget += maximum;
-                maximum -= maximum;
+                replySharedBudget += credit;
+                assert replySharedBudget <= replyMax;
+                credit -= credit;
             }
 
-            assert maximum == 0;
+            assert credit == 0;
 
             encodeNetwork(traceId, authorization, budgetId);
 
@@ -1506,7 +1496,7 @@ public final class Http2ServerFactory implements StreamFactory
             long traceId,
             long authorization)
         {
-            doBegin(network, routeId, replyId, initialSeq, initialAck, initialMax,
+            doBegin(network, routeId, replyId, replySeq, replyAck, replyMax,
                 traceId, authorization, affinity, EMPTY_OCTETS);
             router.setThrottle(replyId, this::onNetwork);
 
@@ -1637,18 +1627,30 @@ public final class Http2ServerFactory implements StreamFactory
         {
             cleanupDecodeSlotIfNecessary();
             cleanupHeadersSlotIfNecessary();
-            doReset(network, routeId, initialId, replySeq, replyAck, replyMax, traceId, authorization);
+            doReset(network, routeId, initialId, initialSeq, initialAck, initialMax, traceId, authorization);
             state = Http2State.closeInitial(state);
         }
 
         private void doNetworkWindow(
             long traceId,
             long authorization,
-            int padding,
             long budgetId,
-            int maximum)
+            int minInitialNoAck,
+            int minInitialMax)
         {
-            doWindow(network, routeId, initialId, initialSeq, initialAck, maximum, traceId, authorization, budgetId, padding);
+            final long newInitialAck = Math.max(initialSeq - minInitialNoAck, initialAck);
+
+            if (newInitialAck > initialAck || minInitialMax > initialMax || !Http2State.initialOpened(state))
+            {
+                initialAck = newInitialAck;
+                assert initialAck <= initialSeq;
+
+                initialMax = minInitialMax;
+
+                state = Http2State.openInitial(state);
+
+                doWindow(network, routeId, initialId, initialSeq, initialAck, initialMax, traceId, authorization, budgetId, 0);
+            }
         }
 
         private void encodeNetwork(
@@ -1669,12 +1671,13 @@ public final class Http2ServerFactory implements StreamFactory
             if (encodeSlotOffset != 0 &&
                 (encodeSlotMarkOffset != 0 || (encodeHeadersSlotOffset == 0 && encodeReservedSlotMarkOffset == 0)))
             {
+                final int replyWin = replyMax - replyPendingAck();
                 final int encodeLengthMax = encodeSlotMarkOffset != 0 ? encodeSlotMarkOffset : encodeSlotOffset;
-                final int encodeLength = Math.max(Math.min(replyWindow() - replyPadding, encodeLengthMax), 0);
+                final int encodeLength = Math.max(Math.min(replyWin - replyPad, encodeLengthMax), 0);
 
                 if (encodeLength > 0)
                 {
-                    final int encodeReserved = encodeLength + replyPadding;
+                    final int encodeReserved = encodeLength + replyPad;
                     final int encodeReservedMin = (int) (((long) encodeSlotReserved * encodeLength) / encodeSlotOffset);
 
                     if (Http2Configuration.DEBUG_HTTP2_BUDGETS)
@@ -1697,7 +1700,7 @@ public final class Http2ServerFactory implements StreamFactory
                     doData(network, routeId, replyId, replySeq, replyAck, replyMax, traceId, authorization, budgetId,
                         encodeReserved, encodeBuffer, 0, encodeLength, EMPTY_OCTETS);
 
-                    replySeq -= encodeReserved;
+                    replySeq += encodeReserved;
 
                     assert replySeq <= replyAck + replyMax :
                         String.format("%d <= %d + %d", replySeq, replyAck, replyMax);
@@ -1741,13 +1744,14 @@ public final class Http2ServerFactory implements StreamFactory
                 encodeSlotMarkOffset == 0 &&
                 encodeReservedSlotMarkOffset == 0)
             {
+                final int replyWin = replyMax - replyPendingAck();
                 final int maxEncodeLength =
                     encodeHeadersSlotMarkOffset != 0 ? encodeHeadersSlotMarkOffset : encodeHeadersSlotOffset;
-                final int encodeLength = Math.max(Math.min(replyWindow() - replyPadding, maxEncodeLength), 0);
+                final int encodeLength = Math.max(Math.min(replyWin - replyPad, maxEncodeLength), 0);
 
                 if (encodeLength > 0)
                 {
-                    final int encodeReserved = encodeLength + replyPadding;
+                    final int encodeReserved = encodeLength + replyPad;
 
                     if (Http2Configuration.DEBUG_HTTP2_BUDGETS)
                     {
@@ -1759,7 +1763,7 @@ public final class Http2ServerFactory implements StreamFactory
                     doData(network, routeId, replyId, replySeq, replyAck, replyMax, encodeHeadersSlotTraceId,
                         authorization, budgetId, encodeReserved, encodeHeadersBuffer, 0, encodeLength, EMPTY_OCTETS);
 
-                    replySeq -= encodeReserved;
+                    replySeq += encodeReserved;
 
                     assert replySeq <= replyAck + replyMax :
                         String.format("%d <= %d + %d", replySeq, replyAck, replyMax);
@@ -1795,13 +1799,14 @@ public final class Http2ServerFactory implements StreamFactory
             if (encodeReservedSlotOffset != 0 &&
                 (encodeReservedSlotMarkOffset != 0 || (encodeHeadersSlotOffset == 0 && encodeSlotOffset == 0)))
             {
+                final int replyWin = replyMax - replyPendingAck();
                 final int maxEncodeLength =
                     encodeReservedSlotMarkOffset != 0 ? encodeReservedSlotMarkOffset : encodeReservedSlotOffset;
-                final int encodeLength = Math.max(Math.min(replyWindow() - replyPadding, maxEncodeLength), 0);
+                final int encodeLength = Math.max(Math.min(replyWin - replyPad, maxEncodeLength), 0);
 
                 if (encodeLength > 0)
                 {
-                    final int encodeReserved = encodeLength + replyPadding;
+                    final int encodeReserved = encodeLength + replyPad;
 
                     if (Http2Configuration.DEBUG_HTTP2_BUDGETS)
                     {
@@ -1813,7 +1818,7 @@ public final class Http2ServerFactory implements StreamFactory
                     doData(network, routeId, replyId, replySeq, replyAck, replyMax, encodeReservedSlotTraceId,
                         authorization, budgetId, encodeReserved, encodeReservedBuffer, 0, encodeLength, EMPTY_OCTETS);
 
-                    replySeq -= encodeReserved;
+                    replySeq += encodeReserved;
 
                     assert replySeq <= replyAck + replyMax :
                         String.format("%d <= %d + %d", replySeq, replyAck, replyMax);
@@ -1855,15 +1860,6 @@ public final class Http2ServerFactory implements StreamFactory
                 final int reserved = decodeSlotReserved;
 
                 decodeNetwork(traceId, authorization, budgetId, reserved, decodeBuffer, offset, limit);
-
-                final long initialAckMax = Math.min(reserved - decodeSlotReserved, initialSeq);
-                if (initialAckMax > 0)
-                {
-                    initialAck = initialAckMax;
-                    assert initialAck <= initialSeq;
-
-                    doNetworkWindow(traceId, authorization, 0, 0, (int) initialAck);
-                }
             }
         }
 
@@ -1906,6 +1902,11 @@ public final class Http2ServerFactory implements StreamFactory
             else
             {
                 cleanupDecodeSlotIfNecessary();
+            }
+
+            if (!Http2State.initialClosed(state))
+            {
+                doNetworkWindow(traceId, authorization, budgetId, decodeSlotReserved, initialMax);
             }
 
             return progress;
@@ -2463,7 +2464,7 @@ public final class Http2ServerFactory implements StreamFactory
         {
             final int slotCapacity = bufferPool.slotCapacity();
             final int responseSharedPadding = framePadding(remoteSharedBudget, remoteSettings.maxFrameSize);
-            final int remoteSharedBudgetMax = remoteSharedBudget + responseSharedPadding + replyPadding;
+            final int remoteSharedBudgetMax = remoteSharedBudget + responseSharedPadding + replyPad;
             final int responseSharedCredit =
                 Math.min(slotCapacity - responseSharedBudget - encodeSlotReserved, replySharedBudget);
             final int responseSharedBudgetDelta = remoteSharedBudgetMax - (responseSharedBudget + encodeSlotReserved);
@@ -3222,10 +3223,11 @@ public final class Http2ServerFactory implements StreamFactory
 
                         final int remotePaddableMax = Math.min(remoteBudget, bufferPool.slotCapacity());
                         final int remotePadding = framePadding(remotePaddableMax, remoteSettings.maxFrameSize);
-                        final int responsePadding = replyPadding + remotePadding;
+                        final int responsePadding = replyPad + remotePadding;
 
+                        final int responseWin = responseMax - (int)(responseSeq - responseAck);
                         final int minimumClaim = 1024;
-                        final int responseCreditMin = (responseMax <= responsePadding + minimumClaim) ? 0 : remoteBudget >> 1;
+                        final int responseCreditMin = (responseWin <= responsePadding + minimumClaim) ? 0 : remoteBudget >> 1;
 
                         flushResponseWindow(traceId, authorization, responseCreditMin);
                     }
@@ -3336,17 +3338,25 @@ public final class Http2ServerFactory implements StreamFactory
                 if (!Http2State.replyClosed(state))
                 {
                     final int remotePaddableMax = Math.min(remoteBudget, bufferPool.slotCapacity());
-                    final int remotePadding = framePadding(remotePaddableMax, remoteSettings.maxFrameSize);
-                    final int responsePadding = replyPadding + remotePadding;
-                    final int responseBudgetMax = remoteBudget + responsePadding;
-                    final int responseCredit = responseBudgetMax - responseMax;
+                    final int remotePad = framePadding(remotePaddableMax, remoteSettings.maxFrameSize);
+                    final int responsePad = replyPad + remotePad;
+                    final int newResponseWin = remoteBudget + responsePad;
+                    final int responseWin = responseMax - (int)(responseSeq - responseAck);
+                    final int responseCredit = (int)(newResponseWin - responseWin);
 
-                    if (responseCredit > 0 && responseCredit >= responseCreditMin)
+                    if (responseCredit > 0 && responseCredit >= responseCreditMin && newResponseWin > responsePad)
                     {
-                        responseMax = responseCredit;
+                        final int responseNoAck = (int)(responseSeq - responseAck);
+                        final int responseAcked = Math.min(responseNoAck, responseCredit);
+
+                        responseAck += responseAcked;
+                        assert responseAck <= responseSeq;
+
+                        responseMax = newResponseWin + (int)(responseSeq - responseAck);
+                        assert responseMax >= 0;
 
                         doWindow(application, routeId, responseId, responseSeq, responseAck, responseMax, traceId, authorization,
-                                 budgetId, responsePadding);
+                                 budgetId, responsePad);
                     }
                 }
             }
