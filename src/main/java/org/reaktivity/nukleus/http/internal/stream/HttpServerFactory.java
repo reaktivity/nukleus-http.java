@@ -1393,7 +1393,7 @@ public final class HttpServerFactory implements StreamFactory
 
             if (exchange != null && exchange.responseState == HttpState.OPEN)
             {
-                exchange.flushResponseWindow(traceId);
+                exchange.doResponseWindow(traceId);
             }
         }
 
@@ -2241,17 +2241,12 @@ public final class HttpServerFactory implements StreamFactory
             private void doResponseWindow(
                 long traceId)
             {
-                doWindow(application, routeId, responseId, responseSeq, responseAck, responseMax,
-                     traceId, authorization, replyBudgetId, HttpServer.this.replyPad);
-            }
-
-            private void flushResponseWindow(
-                long traceId)
-            {
                 long responseAckMax = Math.max(responseSeq - replyPendingAck() - encodeSlotOffset, responseAck);
-                int minResponseMax = Math.min(responseRemaining - (int)(responseSeq - responseAckMax) + replyPad, replyMax);
+                int responseNoAckMin = (int)(responseSeq - responseAckMax);
+                int minResponseMax = Math.min(responseRemaining - responseNoAckMin + replyPad, replyMax);
 
-                if (responseAckMax > responseAck || (minResponseMax > responseMax && encodeSlotOffset == 0))
+                if (responseAckMax > responseAck ||
+                    (minResponseMax > responseMax && encodeSlotOffset == 0))
                 {
                     responseAck = responseAckMax;
                     assert responseAck <= responseSeq;
@@ -2259,7 +2254,8 @@ public final class HttpServerFactory implements StreamFactory
                     responseMax = minResponseMax;
                     assert responseMax >= 0;
 
-                    doResponseWindow(traceId);
+                    doWindow(application, routeId, responseId, responseSeq, responseAck, responseMax,
+                            traceId, authorization, replyBudgetId, HttpServer.this.replyPad);
                 }
             }
         }
