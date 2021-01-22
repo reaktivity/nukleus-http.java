@@ -398,7 +398,7 @@ public class HttpClientBM
                 windowRO.wrap(buffer, index, index + length);
                 if (windowRO.streamId() == streamId)
                 {
-                    availableWindow += windowRO.credit();
+                    //availableWindow += windowRO.credit();
                     //padding = windowRO.padding();
                 }
                 break;
@@ -470,7 +470,6 @@ public class HttpClientBM
         {
             final WindowFW window = windowRW.wrap(throttleBuffer, 0, throttleBuffer.capacity())
                     .streamId(streamId)
-                    .credit(credit)
                     .build();
             sharedState.clientAcceptReplyStreams.throttle.test(window.typeId(), window.buffer(), window.offset(),
                     window.sizeof());
@@ -545,7 +544,6 @@ public class HttpClientBM
         {
             final WindowFW window = windowRW.wrap(throttleBuffer, 0, throttleBuffer.capacity())
                     .streamId(streamId)
-                    .credit(credit)
                     .build();
             sharedState.clientConnectStreams.throttle.test(window.typeId(), window.buffer(), window.offset(), window.sizeof());
         }
@@ -656,7 +654,7 @@ public class HttpClientBM
                 windowRO.wrap(buffer, index, index + length);
                 if (windowRO.streamId() == streamId)
                 {
-                    availableWindow += windowRO.credit();
+                    //availableWindow += windowRO.credit();
                     padding = windowRO.padding();
                 }
                 break;
