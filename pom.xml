@@ -6,7 +6,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>org.reaktivity</groupId>
   <artifactId>nukleus-http</artifactId>
-  <version>0.158</version>
+  <version>0.159</version>
   <name>HTTP Nukleus Implementation</name>
   <description>HTTP Nukleus Implementation</description>
   <url>https://github.com/reaktivity/nukleus-http.java</url>
@@ -58,11 +58,11 @@
     <mockito.version>3.4.6</mockito.version>
 
     <k3po.version>3.1.0</k3po.version>
-    <nukleus.plugin.version>0.84</nukleus.plugin.version>
+    <nukleus.plugin.version>0.85</nukleus.plugin.version>
 
-    <nukleus.http.spec.version>0.108</nukleus.http.spec.version>
-    <nukleus.tcp.version>0.110</nukleus.tcp.version>
-    <reaktor.version>0.161</reaktor.version>
+    <nukleus.http.spec.version>0.109</nukleus.http.spec.version>
+    <nukleus.tcp.version>0.111</nukleus.tcp.version>
+    <reaktor.version>0.162</reaktor.version>
   </properties>
 
   <dependencies>
@@ -250,6 +250,7 @@
         <artifactId>jacoco-maven-plugin</artifactId>
         <version>0.8.6</version>
         <configuration>
+          <propertyName>jacoco.java.option</propertyName>
           <excludes>
             <exclude>org/reaktivity/nukleus/http/internal/types/**/*.class</exclude>
             <exclude>org/reaktivity/nukleus/http2/internal/types/**/*.class</exclude>
@@ -282,14 +283,29 @@
         </executions>
       </plugin>
       <plugin>
+        <groupId>org.moditect</groupId>
+        <artifactId>moditect-maven-plugin</artifactId>
+        <version>1.0.0.RC1</version>
+        <configuration>
+          <module>
+            <moduleInfoFile>src/main/moditect/module-info.java</moduleInfoFile>
+          </module>
+        </configuration>
+        <executions>
+          <execution>
+            <phase>package</phase>
+            <goals>
+              <goal>add-module-info</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
-        <version>2.22.1</version>
+        <version>3.0.0-M5</version>
         <configuration>
-          <argLine>@{argLine}</argLine>
-          <excludes>
-            <exclude/>
-          </excludes>
+          <argLine>@{jacoco.java.option}</argLine>
         </configuration>
       </plugin>
       <plugin>
@@ -321,9 +337,9 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-failsafe-plugin</artifactId>
-        <version>2.22.1</version>
+        <version>3.0.0-M4</version>
         <configuration>
-          <argLine>@{argLine}</argLine>
+          <argLine>@{jacoco.java.option}</argLine>
         </configuration>
         <executions>
           <execution>
@@ -411,6 +427,19 @@
                     <versionRange>[1.1.0,)</versionRange>
                     <goals>
                       <goal>check</goal>
+                    </goals>
+                  </pluginExecutionFilter>
+                  <action>
+                    <ignore></ignore>
+                  </action>
+                </pluginExecution>
+                <pluginExecution>
+                  <pluginExecutionFilter>
+                    <groupId>org.moditect</groupId>
+                    <artifactId>moditect-maven-plugin</artifactId>
+                    <versionRange>[1.0.0.RC1,)</versionRange>
+                    <goals>
+                      <goal>add-module-info</goal>
                     </goals>
                   </pluginExecutionFilter>
                   <action>
