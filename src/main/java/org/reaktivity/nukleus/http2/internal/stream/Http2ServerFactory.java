@@ -15,10 +15,6 @@
  */
 package org.reaktivity.nukleus.http2.internal.stream;
 
-import static java.util.Objects.requireNonNull;
-import static org.reaktivity.nukleus.budget.BudgetCreditor.NO_CREDITOR_INDEX;
-import static org.reaktivity.nukleus.budget.BudgetDebitor.NO_DEBITOR_INDEX;
-import static org.reaktivity.nukleus.buffer.BufferPool.NO_SLOT;
 import static org.reaktivity.nukleus.http2.internal.hpack.HpackContext.CONNECTION;
 import static org.reaktivity.nukleus.http2.internal.hpack.HpackContext.DEFAULT_ACCESS_CONTROL_ALLOW_ORIGIN;
 import static org.reaktivity.nukleus.http2.internal.hpack.HpackContext.KEEP_ALIVE;
@@ -29,6 +25,9 @@ import static org.reaktivity.nukleus.http2.internal.hpack.HpackContext.UPGRADE;
 import static org.reaktivity.nukleus.http2.internal.hpack.HpackHeaderFieldFW.HeaderFieldType.UNKNOWN;
 import static org.reaktivity.nukleus.http2.internal.hpack.HpackLiteralHeaderFieldFW.LiteralType.INCREMENTAL_INDEXING;
 import static org.reaktivity.nukleus.http2.internal.hpack.HpackLiteralHeaderFieldFW.LiteralType.WITHOUT_INDEXING;
+import static org.reaktivity.reaktor.nukleus.budget.BudgetCreditor.NO_CREDITOR_INDEX;
+import static org.reaktivity.reaktor.nukleus.budget.BudgetDebitor.NO_DEBITOR_INDEX;
+import static org.reaktivity.reaktor.nukleus.buffer.BufferPool.NO_SLOT;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -37,15 +36,11 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
-import java.util.function.Function;
 import java.util.function.LongFunction;
 import java.util.function.LongSupplier;
 import java.util.function.LongUnaryOperator;
-import java.util.function.Predicate;
-import java.util.function.ToIntFunction;
 
 import org.agrona.DirectBuffer;
 import org.agrona.ExpandableArrayBuffer;
@@ -58,22 +53,15 @@ import org.agrona.collections.MutableBoolean;
 import org.agrona.collections.MutableInteger;
 import org.agrona.concurrent.AtomicBuffer;
 import org.agrona.concurrent.UnsafeBuffer;
-import org.reaktivity.nukleus.budget.BudgetCreditor;
-import org.reaktivity.nukleus.budget.BudgetDebitor;
-import org.reaktivity.nukleus.buffer.BufferPool;
-import org.reaktivity.nukleus.concurrent.Signaler;
-import org.reaktivity.nukleus.function.MessageConsumer;
-import org.reaktivity.nukleus.function.MessageFunction;
-import org.reaktivity.nukleus.function.MessagePredicate;
 import org.reaktivity.nukleus.http.internal.HttpNukleus;
+import org.reaktivity.nukleus.http.internal.config.HttpBinding;
+import org.reaktivity.nukleus.http.internal.config.HttpRoute;
 import org.reaktivity.nukleus.http.internal.types.Array32FW;
 import org.reaktivity.nukleus.http.internal.types.Flyweight;
 import org.reaktivity.nukleus.http.internal.types.HttpHeaderFW;
 import org.reaktivity.nukleus.http.internal.types.OctetsFW;
 import org.reaktivity.nukleus.http.internal.types.String16FW;
 import org.reaktivity.nukleus.http.internal.types.String8FW;
-import org.reaktivity.nukleus.http.internal.types.control.HttpRouteExFW;
-import org.reaktivity.nukleus.http.internal.types.control.RouteFW;
 import org.reaktivity.nukleus.http.internal.types.stream.AbortFW;
 import org.reaktivity.nukleus.http.internal.types.stream.BeginFW;
 import org.reaktivity.nukleus.http.internal.types.stream.DataFW;
@@ -108,10 +96,16 @@ import org.reaktivity.nukleus.http2.internal.types.Http2RstStreamFW;
 import org.reaktivity.nukleus.http2.internal.types.Http2Setting;
 import org.reaktivity.nukleus.http2.internal.types.Http2SettingsFW;
 import org.reaktivity.nukleus.http2.internal.types.Http2WindowUpdateFW;
-import org.reaktivity.nukleus.route.RouteManager;
-import org.reaktivity.nukleus.stream.StreamFactory;
+import org.reaktivity.reaktor.config.Binding;
+import org.reaktivity.reaktor.nukleus.ElektronContext;
+import org.reaktivity.reaktor.nukleus.budget.BudgetCreditor;
+import org.reaktivity.reaktor.nukleus.budget.BudgetDebitor;
+import org.reaktivity.reaktor.nukleus.buffer.BufferPool;
+import org.reaktivity.reaktor.nukleus.concurrent.Signaler;
+import org.reaktivity.reaktor.nukleus.function.MessageConsumer;
+import org.reaktivity.reaktor.nukleus.stream.StreamFactory;
 
-public final class Http2ServerFactory implements StreamFactory
+public final class Http2ServerFactory implements Http2StreamFactory
 {
     private static final int CLIENT_INITIATED = 1;
     private static final int SERVER_INITIATED = 0;
@@ -122,8 +116,6 @@ public final class Http2ServerFactory implements StreamFactory
 
     private static final DirectBuffer EMPTY_BUFFER = new UnsafeBuffer(new byte[0]);
     private static final OctetsFW EMPTY_OCTETS = new OctetsFW().wrap(EMPTY_BUFFER, 0, 0);
-
-    private static final String8FW HEADER_PATH = new String8FW(":path");
 
     private static final Array32FW<HttpHeaderFW> HEADERS_200_OK =
             new Array32FW.Builder<>(new HttpHeaderFW.Builder(), new HttpHeaderFW())
@@ -147,9 +139,6 @@ public final class Http2ServerFactory implements StreamFactory
             new Array32FW.Builder<>(new HttpHeaderFW.Builder(), new HttpHeaderFW())
                 .wrap(new UnsafeBuffer(new byte[64]), 0, 64)
                 .build();
-
-    private final RouteFW routeRO = new RouteFW();
-    private final HttpRouteExFW routeExRO = new HttpRouteExFW();
 
     private final BeginFW beginRO = new BeginFW();
     private final DataFW dataRO = new DataFW();
@@ -233,62 +222,65 @@ public final class Http2ServerFactory implements StreamFactory
     }
 
 
-    private final MessageFunction<RouteFW> wrapRoute = (t, b, i, l) -> routeRO.wrap(b, i, i + l);
-
     private final Http2HeadersDecoder headersDecoder = new Http2HeadersDecoder();
     private final Http2HeadersEncoder headersEncoder = new Http2HeadersEncoder();
 
     private final Http2Configuration config;
-    private final RouteManager router;
     private final MutableDirectBuffer writeBuffer;
     private final MutableDirectBuffer frameBuffer;
     private final BufferPool bufferPool;
     private final BudgetCreditor creditor;
+    private final StreamFactory streamFactory;
     private final LongFunction<BudgetDebitor> supplyDebitor;
     private final LongUnaryOperator supplyInitialId;
     private final LongUnaryOperator supplyReplyId;
     private final LongSupplier supplyBudgetId;
     private final Http2Counters counters;
     private final Signaler signaler;
-    private final Long2ObjectHashMap<Http2Server.Http2Exchange> correlations;
     private final Http2Settings initialSettings;
     private final BufferPool headersPool;
     private final int httpTypeId;
     private final MutableDirectBuffer extensionBuffer;
     private final int decodeMax;
+    private final Long2ObjectHashMap<HttpBinding> bindings;
 
-    Http2ServerFactory(
+    public Http2ServerFactory(
         Http2Configuration config,
-        RouteManager router,
-        MutableDirectBuffer writeBuffer,
-        BufferPool bufferPool,
-        BudgetCreditor creditor,
-        LongFunction<BudgetDebitor> supplyDebitor,
-        LongUnaryOperator supplyInitialId,
-        LongUnaryOperator supplyReplyId,
-        LongSupplier supplyBudgetId,
-        ToIntFunction<String> supplyTypeId,
-        Function<String, LongSupplier> supplyCounter,
-        Signaler signaler)
+        ElektronContext context)
     {
         this.config = config;
-        this.router = requireNonNull(router);
-        this.writeBuffer = requireNonNull(writeBuffer);
-        this.bufferPool = requireNonNull(bufferPool);
-        this.creditor = creditor;
-        this.supplyDebitor = supplyDebitor;
-        this.supplyInitialId = requireNonNull(supplyInitialId);
-        this.supplyReplyId = requireNonNull(supplyReplyId);
-        this.supplyBudgetId = requireNonNull(supplyBudgetId);
-        this.counters = new Http2Counters(supplyCounter);
-        this.signaler = signaler;
-        this.correlations = new Long2ObjectHashMap<>();
+        this.writeBuffer = context.writeBuffer();
+        this.bufferPool = context.bufferPool();
+        this.creditor = context.creditor();
+        this.streamFactory = context.streamFactory();
+        this.supplyDebitor = context::supplyDebitor;
+        this.supplyInitialId = context::supplyInitialId;
+        this.supplyReplyId = context::supplyReplyId;
+        this.supplyBudgetId = context::supplyBudgetId;
+        this.counters = new Http2Counters(context::supplyCounter);
+        this.signaler = context.signaler();
         this.headersPool = bufferPool.duplicate();
         this.initialSettings = new Http2Settings(config, headersPool);
-        this.httpTypeId = supplyTypeId.applyAsInt(HttpNukleus.NAME);
+        this.httpTypeId = context.supplyTypeId(HttpNukleus.NAME);
         this.frameBuffer = new UnsafeBuffer(new byte[writeBuffer.capacity()]);
         this.extensionBuffer = new UnsafeBuffer(new byte[writeBuffer.capacity()]);
         this.decodeMax = bufferPool.slotCapacity();
+        this.bindings = new Long2ObjectHashMap<>();
+    }
+
+    @Override
+    public void attach(
+        Binding binding)
+    {
+        HttpBinding httpBinding = new HttpBinding(binding);
+        bindings.put(binding.id, httpBinding);
+    }
+
+    @Override
+    public void detach(
+        long bindingId)
+    {
+        bindings.remove(bindingId);
     }
 
     @Override
@@ -297,38 +289,16 @@ public final class Http2ServerFactory implements StreamFactory
         DirectBuffer buffer,
         int index,
         int length,
-        MessageConsumer sender)
+        MessageConsumer network)
     {
         final BeginFW begin = beginRO.wrap(buffer, index, index + length);
-        final long streamId = begin.streamId();
-
-        MessageConsumer newStream;
-
-        if ((streamId & 0x0000_0000_0000_0001L) != 0L)
-        {
-            newStream = newNetworkStream(begin, sender);
-        }
-        else
-        {
-            newStream = newApplicationStream(begin, sender);
-        }
-
-        return newStream;
-    }
-
-    private MessageConsumer newNetworkStream(
-        final BeginFW begin,
-        final MessageConsumer network)
-    {
         final long routeId = begin.routeId();
-        final long authorization = begin.authorization();
 
-        final MessagePredicate filter = (t, b, o, l) -> true;
-        final RouteFW route = router.resolve(routeId, authorization, filter, wrapRoute);
+        HttpBinding binding = bindings.get(routeId);
 
         MessageConsumer newStream = null;
 
-        if (route != null)
+        if (binding != null)
         {
             final long initialId = begin.streamId();
             final long affinity = begin.affinity();
@@ -341,21 +311,36 @@ public final class Http2ServerFactory implements StreamFactory
         return newStream;
     }
 
-    private MessageConsumer newApplicationStream(
-        final BeginFW begin,
-        final MessageConsumer application)
+    private MessageConsumer newStream(
+        MessageConsumer sender,
+        long routeId,
+        long streamId,
+        long sequence,
+        long acknowledge,
+        int maximum,
+        long traceId,
+        long authorization,
+        long affinity,
+        Flyweight extension)
     {
-        final long replyId = begin.streamId();
+        final BeginFW begin = beginRW.wrap(writeBuffer, 0, writeBuffer.capacity())
+                .routeId(routeId)
+                .streamId(streamId)
+                .sequence(sequence)
+                .acknowledge(acknowledge)
+                .maximum(maximum)
+                .traceId(traceId)
+                .authorization(authorization)
+                .affinity(affinity)
+                .extension(extension.buffer(), extension.offset(), extension.sizeof())
+                .build();
 
-        MessageConsumer newStream = null;
+        MessageConsumer receiver =
+                streamFactory.newStream(begin.typeId(), begin.buffer(), begin.offset(), begin.sizeof(), sender);
 
-        final Http2Server.Http2Exchange exchange = correlations.remove(replyId);
-        if (exchange != null)
-        {
-            newStream = exchange::onResponse;
-        }
+        receiver.accept(begin.typeId(), begin.buffer(), begin.offset(), begin.sizeof());
 
-        return newStream;
+        return receiver;
     }
 
     private void doBegin(
@@ -1498,7 +1483,6 @@ public final class Http2ServerFactory implements StreamFactory
         {
             doBegin(network, routeId, replyId, replySeq, replyAck, replyMax,
                 traceId, authorization, affinity, EMPTY_OCTETS);
-            router.setThrottle(replyId, this::onNetwork);
 
             assert responseSharedBudgetIndex == NO_CREDITOR_INDEX;
             responseSharedBudgetIndex = creditor.acquire(budgetId);
@@ -2211,28 +2195,20 @@ public final class Http2ServerFactory implements StreamFactory
                     headers.put(":authority", authority + defaultPort);
                 }
 
-                final MessagePredicate filter = (t, b, o, l) ->
-                {
-                    final RouteFW route = routeRO.wrap(b, o, o + l);
-                    final HttpRouteExFW routeEx = route.extension().get(routeExRO::tryWrap);
-
-                    return routeEx == null || matchHeaders(headers, routeEx.headers());
-                };
-
-                final RouteFW route = router.resolve(routeId, authorization, filter, wrapRoute);
+                final HttpBinding binding = bindings.get(routeId);
+                final HttpRoute route = binding.resolve(authorization, headers::get);
                 if (route == null)
                 {
                     doEncodeHeaders(traceId, authorization, streamId, HEADERS_404_NOT_FOUND, true);
                 }
                 else
                 {
-                    final HttpRouteExFW routeEx = route.extension().get(routeExRO::tryWrap);
-                    if (routeEx != null)
+                    if (binding.options != null && binding.options.overrides != null)
                     {
-                        routeEx.overrides().forEach(h -> headers.put(h.name().asString(), h.value().asString()));
+                        binding.options.overrides.forEach((k, v) -> headers.put(k.asString(), v.asString()));
                     }
 
-                    final long routeId = route.correlationId();
+                    final long routeId = route.id;
                     final long contentLength = headersDecoder.contentLength;
 
                     final Http2Exchange exchange = new Http2Exchange(routeId, streamId, contentLength);
@@ -2243,7 +2219,6 @@ public final class Http2ServerFactory implements StreamFactory
                             .build();
 
                     exchange.doRequestBegin(traceId, authorization, beginEx);
-                    correlations.put(exchange.responseId, exchange);
 
                     if (endRequest)
                     {
@@ -2251,27 +2226,6 @@ public final class Http2ServerFactory implements StreamFactory
                     }
                 }
             }
-        }
-
-        private boolean matchHeaders(
-            Map<String, String> beginHeaders,
-            Array32FW<HttpHeaderFW> routeHeaders)
-        {
-            final Predicate<HttpHeaderFW> matcher = r ->
-            {
-                final String8FW name = r.name();
-                final String value = r.value().asString();
-                final String candidate = beginHeaders.get(name.asString());
-                return Objects.equals(value, candidate) ||
-                       (candidate != null &&
-                        HEADER_PATH.equals(name) &&
-                        value.endsWith("/") &&
-                        candidate.startsWith(value));
-            };
-
-            final MutableBoolean match = new MutableBoolean(true);
-            routeHeaders.forEach(r -> match.value &= matcher.test(r));
-            return match.value;
         }
 
         private void onDecodeTrailers(
@@ -2508,15 +2462,8 @@ public final class Http2ServerFactory implements StreamFactory
             headers.clear();
             promise.forEach(h -> headers.put(h.name().asString(), h.value().asString()));
 
-            final MessagePredicate filter = (t, b, o, l) ->
-            {
-                final RouteFW route = routeRO.wrap(b, o, o + l);
-                final HttpRouteExFW routeEx = route.extension().get(routeExRO::tryWrap);
-
-                return routeEx == null || matchHeaders(headers, routeEx.headers());
-            };
-
-            final RouteFW route = router.resolve(routeId, authorization, filter, wrapRoute);
+            final HttpBinding binding = bindings.get(routeId);
+            final HttpRoute route = binding.resolve(authorization, headers::get);
             if (route != null)
             {
                 final int pushId =
@@ -2536,13 +2483,12 @@ public final class Http2ServerFactory implements StreamFactory
 
                 if (pushId != -1)
                 {
-                    final HttpRouteExFW routeEx = route.extension().get(routeExRO::tryWrap);
-                    if (routeEx != null)
+                    if (binding.options != null && binding.options.overrides != null)
                     {
-                        routeEx.overrides().forEach(h -> headers.put(h.name().asString(), h.value().asString()));
+                        binding.options.overrides.forEach((k, v) -> headers.put(k.asString(), v.asString()));
                     }
 
-                    final long routeId = route.correlationId();
+                    final long routeId = route.id;
                     final long contentLength = headersDecoder.contentLength;
                     final int promiseId = ++maxServerStreamId << 1;
 
@@ -2556,7 +2502,6 @@ public final class Http2ServerFactory implements StreamFactory
                             .build();
 
                     exchange.doRequestBegin(traceId, authorization, beginEx);
-                    correlations.put(exchange.responseId, exchange);
 
                     exchange.doRequestEnd(traceId, authorization, EMPTY_OCTETS);
                 }
@@ -2832,7 +2777,7 @@ public final class Http2ServerFactory implements StreamFactory
 
         private final class Http2Exchange
         {
-            private final MessageConsumer application;
+            private MessageConsumer application;
             private final long routeId;
             private final long requestId;
             private final long responseId;
@@ -2866,7 +2811,6 @@ public final class Http2ServerFactory implements StreamFactory
                 this.streamId = streamId;
                 this.contentLength = contentLength;
                 this.requestId = supplyInitialId.applyAsLong(routeId);
-                this.application = router.supplyReceiver(requestId);
                 this.responseId = supplyReplyId.applyAsLong(requestId);
             }
 
@@ -2884,9 +2828,8 @@ public final class Http2ServerFactory implements StreamFactory
                 assert state == 0;
                 state = Http2State.openingInitial(state);
 
-                doBegin(application, routeId, requestId, requestSeq, requestAck, requestMax,
+                application = newStream(this::onExchange, routeId, requestId, requestSeq, requestAck, requestMax,
                     traceId, authorization, affinity, extension);
-                router.setThrottle(requestId, this::onRequest);
                 streams.put(streamId, this);
                 streamsActive[streamId & 0x01]++;
                 applicationHeadersProcessed.add(streamId);
@@ -2971,7 +2914,7 @@ public final class Http2ServerFactory implements StreamFactory
                 }
             }
 
-            private void onRequest(
+            private void onExchange(
                 int msgTypeId,
                 DirectBuffer buffer,
                 int index,
@@ -2987,19 +2930,37 @@ public final class Http2ServerFactory implements StreamFactory
                     final WindowFW window = windowRO.wrap(buffer, index, index + length);
                     onRequestWindow(window);
                     break;
+                case BeginFW.TYPE_ID:
+                    final BeginFW begin = beginRO.wrap(buffer, index, index + length);
+                    onResponseBegin(begin);
+                    break;
+                case DataFW.TYPE_ID:
+                    final DataFW data = dataRO.wrap(buffer, index, index + length);
+                    onResponseData(data);
+                    break;
+                case EndFW.TYPE_ID:
+                    final EndFW end = endRO.wrap(buffer, index, index + length);
+                    onResponseEnd(end);
+                    break;
+                case AbortFW.TYPE_ID:
+                    final AbortFW abort = abortRO.wrap(buffer, index, index + length);
+                    onResponseAbort(abort);
+                    break;
+                case FlushFW.TYPE_ID:
+                    final FlushFW flush = flushRO.wrap(buffer, index, index + length);
+                    onResponseFlush(flush);
+                    break;
                 }
             }
 
             private void onRequestReset(
                 ResetFW reset)
             {
-                final boolean correlated = correlations.remove(responseId) == null;
-
                 setRequestClosed();
 
                 final long traceId = reset.traceId();
 
-                if (correlated)
+                if (Http2State.replyOpened(state))
                 {
                     doEncodeRstStream(traceId, authorization, streamId, Http2ErrorCode.NO_ERROR);
                 }
@@ -3100,37 +3061,6 @@ public final class Http2ServerFactory implements StreamFactory
             private boolean isResponseOpen()
             {
                 return Http2State.replyOpened(state);
-            }
-
-            private void onResponse(
-                int msgTypeId,
-                DirectBuffer buffer,
-                int index,
-                int length)
-            {
-                switch (msgTypeId)
-                {
-                case BeginFW.TYPE_ID:
-                    final BeginFW begin = beginRO.wrap(buffer, index, index + length);
-                    onResponseBegin(begin);
-                    break;
-                case DataFW.TYPE_ID:
-                    final DataFW data = dataRO.wrap(buffer, index, index + length);
-                    onResponseData(data);
-                    break;
-                case EndFW.TYPE_ID:
-                    final EndFW end = endRO.wrap(buffer, index, index + length);
-                    onResponseEnd(end);
-                    break;
-                case AbortFW.TYPE_ID:
-                    final AbortFW abort = abortRO.wrap(buffer, index, index + length);
-                    onResponseAbort(abort);
-                    break;
-                case FlushFW.TYPE_ID:
-                    final FlushFW flush = flushRO.wrap(buffer, index, index + length);
-                    onResponseFlush(flush);
-                    break;
-                }
             }
 
             private void onResponseBegin(
@@ -3302,8 +3232,6 @@ public final class Http2ServerFactory implements StreamFactory
                 long traceId,
                 long authorization)
             {
-                correlations.remove(responseId);
-
                 if (!Http2State.replyClosed(state))
                 {
                     doResponseReset(traceId, authorization);

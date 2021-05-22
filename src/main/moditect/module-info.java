@@ -17,11 +17,7 @@ module org.reaktivity.nukleus.http
 {
     requires org.reaktivity.reaktor;
 
-    provides org.reaktivity.nukleus.NukleusFactorySpi
+    provides org.reaktivity.reaktor.nukleus.NukleusFactorySpi
         with org.reaktivity.nukleus.http.internal.HttpNukleusFactorySpi,
              org.reaktivity.nukleus.http2.internal.Http2NukleusFactorySpi;
-
-    provides org.reaktivity.nukleus.ControllerFactorySpi
-        with org.reaktivity.nukleus.http.internal.HttpControllerFactorySpi,
-             org.reaktivity.nukleus.http2.internal.Http2ControllerFactorySpi;
 }

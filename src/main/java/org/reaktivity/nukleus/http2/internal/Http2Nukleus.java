@@ -15,11 +15,12 @@
  */
 package org.reaktivity.nukleus.http2.internal;
 
-import org.reaktivity.nukleus.Nukleus;
+import org.reaktivity.reaktor.nukleus.ElektronContext;
+import org.reaktivity.reaktor.nukleus.Nukleus;
 
-final class Http2Nukleus implements Nukleus
+public final class Http2Nukleus implements Nukleus
 {
-    static final String NAME = "http2";
+    public static final String NAME = "http2";
 
     private final Http2Configuration config;
 
@@ -42,8 +43,9 @@ final class Http2Nukleus implements Nukleus
     }
 
     @Override
-    public Http2Elektron supplyElektron()
+    public Http2Elektron supplyElektron(
+        ElektronContext context)
     {
-        return new Http2Elektron(config);
+        return new Http2Elektron(config, context);
     }
 }

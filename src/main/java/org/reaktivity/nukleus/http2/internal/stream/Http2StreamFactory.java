@@ -13,20 +13,16 @@
  * License for the specific language governing permissions and limitations
  * under the License.
  */
-module org.reaktivity.nukleus.http
+package org.reaktivity.nukleus.http2.internal.stream;
+
+import org.reaktivity.reaktor.config.Binding;
+import org.reaktivity.reaktor.nukleus.stream.StreamFactory;
+
+public interface Http2StreamFactory extends StreamFactory
 {
-    requires org.reaktivity.nukleus;
-    requires com.google.gson;
+    void attach(
+        Binding binding);
 
-    provides org.reaktivity.nukleus.NukleusFactorySpi
-        with org.reaktivity.nukleus.http.internal.HttpNukleusFactorySpi;
-
-    provides org.reaktivity.nukleus.NukleusFactorySpi
-        with org.reaktivity.nukleus.http2.internal.Http2NukleusFactorySpi;
-
-    provides org.reaktivity.nukleus.ControllerFactorySpi
-        with org.reaktivity.nukleus.http.internal.HttpControllerFactorySpi;
-
-    provides org.reaktivity.nukleus.ControllerFactorySpi
-        with org.reaktivity.nukleus.http2.internal.Http2ControllerFactorySpi;
+    void detach(
+        long bindingId);
 }

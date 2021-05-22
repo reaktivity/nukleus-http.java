@@ -20,7 +20,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.rules.RuleChain.outerRule;
 import static org.reaktivity.nukleus.http.internal.HttpConfiguration.HTTP_MAXIMUM_CONNECTIONS;
 import static org.reaktivity.nukleus.http.internal.HttpConfigurationTest.HTTP_MAXIMUM_QUEUED_REQUESTS_NAME;
-import static org.reaktivity.reaktor.test.ReaktorRule.EXTERNAL_AFFINITY_MASK;
 
 import org.junit.Rule;
 import org.junit.Test;
@@ -32,26 +31,26 @@ import org.kaazing.k3po.junit.rules.K3poRule;
 import org.reaktivity.nukleus.http.internal.test.HttpCountersRule;
 import org.reaktivity.reaktor.ReaktorConfiguration;
 import org.reaktivity.reaktor.test.ReaktorRule;
+import org.reaktivity.reaktor.test.annotation.Configuration;
 import org.reaktivity.reaktor.test.annotation.Configure;
 
 public class ConnectionManagementPoolSize1IT
 {
     private final K3poRule k3po = new K3poRule()
-            .addScriptRoot("route", "org/reaktivity/specification/nukleus/http/control/route")
-            .addScriptRoot("client", "org/reaktivity/specification/nukleus/http/streams/rfc7230/connection.management")
-            .addScriptRoot("server", "org/reaktivity/specification/http/rfc7230/connection.management");
+        .addScriptRoot("app", "org/reaktivity/specification/nukleus/http/streams/application/rfc7230/connection.management")
+        .addScriptRoot("net", "org/reaktivity/specification/nukleus/http/streams/network/rfc7230/connection.management");
 
     private final TestRule timeout = new DisableOnDebug(new Timeout(10, SECONDS));
 
     private final ReaktorRule reaktor = new ReaktorRule()
-        .nukleus("http"::equals)
         .directory("target/nukleus-itests")
         .commandBufferCapacity(1024)
         .responseBufferCapacity(1024)
         .counterValuesBufferCapacity(8192)
         .configure(HTTP_MAXIMUM_CONNECTIONS, 1)
-        .affinityMask("target#0", EXTERNAL_AFFINITY_MASK)
         .configure(ReaktorConfiguration.REAKTOR_DRAIN_ON_CLOSE, false)
+        .configurationRoot("org/reaktivity/specification/nukleus/http/config")
+        .external("net#0")
         .clean();
 
     private final HttpCountersRule counters = new HttpCountersRule(reaktor);
@@ -60,12 +59,10 @@ public class ConnectionManagementPoolSize1IT
     public final TestRule chain = outerRule(reaktor).around(counters).around(k3po).around(timeout);
 
     @Test
+    @Configuration("client.json")
     @Specification({
-        "${route}/client/controller",
-        "${client}/concurrent.requests/client",
-        "${server}/multiple.requests.same.connection/server" })
-    // With connection pool size limited to one the second concurrent request
-    // must wait to use the same single connection
+        "${app}/concurrent.requests/client",
+        "${net}/multiple.requests.same.connection/server" })
     public void concurrentRequestsSameConnection() throws Exception
     {
         k3po.start();
@@ -76,10 +73,10 @@ public class ConnectionManagementPoolSize1IT
     }
 
     @Test
+    @Configuration("client.json")
     @Specification({
-        "${route}/client/controller",
-        "${client}/concurrent.upgrade.requests.and.responses.with.data/client",
-        "${server}/concurrent.upgrade.requests.and.responses.with.data/server" })
+        "${app}/concurrent.upgrade.requests.and.responses.with.data/client",
+        "${net}/concurrent.upgrade.requests.and.responses.with.data/server" })
     public void connectionsLimitShouldNotApplyToUpgradedConnections() throws Exception
     {
         k3po.start();
@@ -91,10 +88,10 @@ public class ConnectionManagementPoolSize1IT
     }
 
     @Test
+    @Configuration("client.json")
     @Specification({
-        "${route}/client/controller",
-        "${client}/request.and.503.response/client",
-        "${server}/request.incomplete.response.headers.and.abort/server" })
+        "${app}/request.and.503.response/client",
+        "${net}/request.incomplete.response.headers.and.abort/server" })
     public void shouldGive503ResponseAndFreeConnectionWhenConnectReplyStreamIsAbortedBeforeResponseHeadersComplete()
             throws Exception
     {
@@ -102,60 +99,60 @@ public class ConnectionManagementPoolSize1IT
     }
 
     @Test
+    @Configuration("client.json")
     @Specification({
-        "${route}/client/controller",
-        "${client}/request.and.503.response/client",
-        "${server}/request.incomplete.response.headers.and.end/server" })
+        "${app}/request.and.503.response/client",
+        "${net}/request.incomplete.response.headers.and.end/server" })
     public void shouldGive503ResponseAndFreeConnectionWhenConnectReplyStreamEndsBeforeResponseHeadersComplete() throws Exception
     {
         k3po.finish();
     }
 
     @Test
+    @Configuration("client.json")
     @Specification({
-        "${route}/client/controller",
-        "${client}/request.and.503.response/client",
-        "${server}/request.incomplete.response.headers.and.reset/server" })
+        "${app}/request.and.503.response/client",
+        "${net}/request.incomplete.response.headers.and.reset/server" })
     public void shouldGive503ResponseAndFreeConnectionWhenConnectStreamIsResetBeforeResponseHeadersComplete() throws Exception
     {
         k3po.finish();
     }
 
     @Test
+    @Configuration("client.json")
     @Specification({
-        "${route}/client/controller",
-        "${client}/request.and.503.response/client",
-        "${server}/request.no.response.and.end/server" })
+        "${app}/request.and.503.response/client",
+        "${net}/request.no.response.and.end/server" })
     public void shouldGive503ResponseAndFreeConnectionWhenConnectReplyStreamEndsBeforeResponseReceived() throws Exception
     {
         k3po.finish();
     }
 
     @Test
+    @Configuration("client.json")
     @Specification({
-        "${route}/client/controller",
-        "${client}/request.and.503.response/client",
-        "${server}/request.no.response.and.reset/server" })
+        "${app}/request.and.503.response/client",
+        "${net}/request.no.response.and.reset/server" })
     public void shouldGive503ResponseAndFreeConnectionWhenConnectStreamIsResetBeforeResponseReceived() throws Exception
     {
         k3po.finish();
     }
 
     @Test
+    @Configuration("client.json")
     @Specification({
-        "${route}/client/controller",
-        "${client}/request.and.abort/client",
-        "${server}/request.and.abort/server"})
+        "${app}/request.and.abort/client",
+        "${net}/request.and.abort/server"})
     public void shouldAbortTransportAndFreeConnectionWhenRequestIsAborted() throws Exception
     {
         k3po.finish();
     }
 
     @Test
+    @Configuration("client.json")
     @Specification({
-        "${route}/client/controller",
-        "${client}/pending.request.second.request.and.abort/client",
-        "${server}/pending.request.second.request.and.abort/server"})
+        "${app}/pending.request.second.request.and.abort/client",
+        "${net}/pending.request.second.request.and.abort/server"})
     public void shouldLeaveTransportUntouchedWhenEnqueuedRequestIsAborted() throws Exception
     {
         assertEquals(0, counters.enqueues());
@@ -166,40 +163,40 @@ public class ConnectionManagementPoolSize1IT
     }
 
     @Test
+    @Configuration("client.json")
     @Specification({
-        "${route}/client/controller",
-        "${client}/request.receive.reset/client",
-        "${server}/partial.request.receive.reset/server"})
+        "${app}/request.receive.reset/client",
+        "${net}/partial.request.receive.reset/server"})
     public void shouldResetRequestAndFreeConnectionWhenLowLevelIsReset() throws Exception
     {
         k3po.finish();
     }
 
     @Test
+    @Configuration("client.json")
     @Specification({
-        "${route}/client/controller",
-        "${client}/request.and.response.twice/client",
-        "${server}/request.response.and.end/server"})
+        "${app}/request.and.response.twice/client",
+        "${net}/request.response.and.end/server"})
     public void shouldEndOutputAndFreeConnectionWhenEndReceivedAfterCompleteResponse() throws Exception
     {
         k3po.finish();
     }
 
     @Test
+    @Configuration("client.json")
     @Specification({
-        "${route}/client/controller",
-        "${client}/request.response/client",
-        "${server}/request.response.and.abort/server"})
+        "${app}/request.response/client",
+        "${net}/request.response.and.abort/server"})
     public void shouldFreeConnectionWhenAbortReceivedAfterCompleteResponse() throws Exception
     {
         k3po.finish();
     }
 
     @Test
+    @Configuration("client.json")
     @Specification({
-        "${route}/client/controller",
-        "${client}/request.and.response.twice.awaiting.barrier/client",
-        "${server}/request.response.and.reset/server"})
+        "${app}/request.and.response.twice.awaiting.barrier/client",
+        "${net}/request.response.and.reset/server"})
     public void shouldEndOutputAndFreeConnectionWhenResetReceivedAfterCompleteResponse() throws Exception
     {
         k3po.start();
@@ -209,30 +206,30 @@ public class ConnectionManagementPoolSize1IT
     }
 
     @Test
+    @Configuration("client.json")
     @Specification({
-        "${route}/client/controller",
-        "${client}/request.and.response.with.incomplete.data.and.abort/client",
-        "${server}/request.response.headers.incomplete.data.and.end/server"})
+        "${app}/request.and.response.with.incomplete.data.and.abort/client",
+        "${net}/request.response.headers.incomplete.data.and.end/server"})
     public void shouldSendAbortAndFreeConnectionWhenConnectReplyStreamEndsBeforeResponseDataComplete() throws Exception
     {
         k3po.finish();
     }
 
     @Test
+    @Configuration("client.json")
     @Specification({
-        "${route}/client/controller",
-        "${client}/request.and.response.with.incomplete.data.and.abort/client",
-        "${server}/request.response.headers.incomplete.data.and.abort/server"})
+        "${app}/request.and.response.with.incomplete.data.and.abort/client",
+        "${net}/request.response.headers.incomplete.data.and.abort/server"})
     public void shouldSendAbortAndFreeConnectionWhenConnectReplyStreamIsAbortedBeforeResponseDataComplete() throws Exception
     {
         k3po.finish();
     }
 
     @Test
+    @Configuration("client.json")
     @Specification({
-        "${route}/client/controller",
-        "${client}/response.with.content.length.is.reset/client",
-        "${server}/response.with.content.length.is.reset/server" })
+        "${app}/response.with.content.length.is.reset/client",
+        "${net}/response.with.content.length.is.reset/server" })
     public void shouldResetRequestAndFreeConnectionWhenRequestWithContentLengthIsReset() throws Exception
     {
         k3po.finish();
@@ -240,10 +237,10 @@ public class ConnectionManagementPoolSize1IT
 
     @Configure(name = HTTP_MAXIMUM_QUEUED_REQUESTS_NAME, value = "0")
     @Test
+    @Configuration("client.json")
     @Specification({
-        "${route}/client/controller",
-        "${client}/503.with.retry.after/client",
-        "${server}/503.with.retry.after/server" })
+        "${app}/503.with.retry.after/client",
+        "${net}/503.with.retry.after/server" })
     public void shouldSend503WithRetryAfterForSecondRequest() throws Exception
     {
         k3po.finish();
@@ -251,10 +248,10 @@ public class ConnectionManagementPoolSize1IT
     }
 
     @Test
+    @Configuration("client.json")
     @Specification({
-        "${route}/client/controller",
-        "${client}/request.send.abort.after.response.received/client",
-        "${server}/request.send.abort.after.response.received/server"})
+        "${app}/request.send.abort.after.response.received/client",
+        "${net}/request.send.abort.after.response.received/server"})
     public void shouldSendAbortAndResetOnAbortedRequestAfterResponseHeaderReceived() throws Exception
     {
         k3po.finish();
