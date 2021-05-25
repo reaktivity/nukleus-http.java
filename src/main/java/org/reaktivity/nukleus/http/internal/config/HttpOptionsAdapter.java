@@ -52,7 +52,7 @@ public final class HttpOptionsAdapter implements OptionsAdapterSpi, JsonbAdapter
             !httpOptions.overrides.isEmpty())
         {
             JsonObjectBuilder entries = Json.createObjectBuilder();
-            httpOptions.overrides.forEach((k, v) -> entries.add(k.asString(), k.asString()));
+            httpOptions.overrides.forEach((k, v) -> entries.add(k.asString(), v.asString()));
 
             object.add(OVERRIDES_NAME, entries);
         }
