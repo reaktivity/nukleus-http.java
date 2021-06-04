@@ -60,8 +60,8 @@
     <k3po.version>3.1.0</k3po.version>
     <nukleus.plugin.version>0.85</nukleus.plugin.version>
 
-    <nukleus.http.spec.version>develop-SNAPSHOT</nukleus.http.spec.version>
-    <reaktor.version>develop-SNAPSHOT</reaktor.version>
+    <nukleus.http.spec.version>0.110</nukleus.http.spec.version>
+    <reaktor.version>0.166</reaktor.version>
   </properties>
 
   <dependencies>
