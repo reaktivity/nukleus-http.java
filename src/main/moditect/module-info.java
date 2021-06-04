@@ -23,9 +23,9 @@ module org.reaktivity.nukleus.http
 
     provides org.reaktivity.reaktor.config.OptionsAdapterSpi
         with org.reaktivity.nukleus.http.internal.config.HttpOptionsAdapter,
-        with org.reaktivity.nukleus.http2.internal.config.Http2OptionsAdapter;
+             org.reaktivity.nukleus.http2.internal.config.Http2OptionsAdapter;
 
     provides org.reaktivity.reaktor.config.ConditionAdapterSpi
         with org.reaktivity.nukleus.http.internal.config.HttpConditionAdapter,
-        with org.reaktivity.nukleus.http2.internal.config.Http2ConditionAdapter;
+             org.reaktivity.nukleus.http2.internal.config.Http2ConditionAdapter;
 }
