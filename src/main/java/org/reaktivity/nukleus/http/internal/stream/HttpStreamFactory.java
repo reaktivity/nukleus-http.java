@@ -13,23 +13,16 @@
  * License for the specific language governing permissions and limitations
  * under the License.
  */
-package org.reaktivity.nukleus.http2.internal;
+package org.reaktivity.nukleus.http.internal.stream;
 
-import org.reaktivity.reaktor.nukleus.Configuration;
-import org.reaktivity.reaktor.nukleus.NukleusFactorySpi;
+import org.reaktivity.reaktor.config.Binding;
+import org.reaktivity.reaktor.nukleus.stream.StreamFactory;
 
-public final class Http2NukleusFactorySpi implements NukleusFactorySpi
+public interface HttpStreamFactory extends StreamFactory
 {
-    @Override
-    public String name()
-    {
-        return Http2Nukleus.NAME;
-    }
+    void attach(
+        Binding binding);
 
-    @Override
-    public Http2Nukleus create(
-        Configuration config)
-    {
-        return new Http2Nukleus(new Http2Configuration(config));
-    }
+    void detach(
+        long bindingId);
 }

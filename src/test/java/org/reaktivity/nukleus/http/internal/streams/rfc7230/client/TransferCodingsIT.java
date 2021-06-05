@@ -17,7 +17,6 @@ package org.reaktivity.nukleus.http.internal.streams.rfc7230.client;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.rules.RuleChain.outerRule;
-import static org.reaktivity.reaktor.test.ReaktorRule.EXTERNAL_AFFINITY_MASK;
 
 import org.junit.Ignore;
 import org.junit.Rule;
@@ -28,33 +27,33 @@ import org.junit.rules.Timeout;
 import org.kaazing.k3po.junit.annotation.Specification;
 import org.kaazing.k3po.junit.rules.K3poRule;
 import org.reaktivity.reaktor.test.ReaktorRule;
+import org.reaktivity.reaktor.test.annotation.Configuration;
 
 public class TransferCodingsIT
 {
     private final K3poRule k3po = new K3poRule()
-            .addScriptRoot("route", "org/reaktivity/specification/nukleus/http/control/route")
-            .addScriptRoot("server", "org/reaktivity/specification/http/rfc7230/transfer.codings")
-            .addScriptRoot("client", "org/reaktivity/specification/nukleus/http/streams/rfc7230/transfer.codings");
+        .addScriptRoot("net", "org/reaktivity/specification/nukleus/http/streams/network/rfc7230/transfer.codings")
+        .addScriptRoot("app", "org/reaktivity/specification/nukleus/http/streams/application/rfc7230/transfer.codings");
 
     private final TestRule timeout = new DisableOnDebug(new Timeout(10, SECONDS));
 
     private final ReaktorRule reaktor = new ReaktorRule()
-        .nukleus("http"::equals)
         .directory("target/nukleus-itests")
         .commandBufferCapacity(1024)
         .responseBufferCapacity(1024)
         .counterValuesBufferCapacity(8192)
-        .affinityMask("target#0", EXTERNAL_AFFINITY_MASK)
+        .configurationRoot("org/reaktivity/specification/nukleus/http/config")
+        .external("net#0")
         .clean();
 
     @Rule
     public final TestRule chain = outerRule(reaktor).around(k3po).around(timeout);
 
     @Test
+    @Configuration("client.json")
     @Specification({
-        "${route}/client/controller",
-        "${client}/request.transfer.encoding.chunked/client",
-        "${server}/request.transfer.encoding.chunked/server" })
+        "${app}/request.transfer.encoding.chunked/client",
+        "${net}/request.transfer.encoding.chunked/server" })
     @Ignore // TODO: implement chunked request encoding
     public void requestTransferEncodingChunked() throws Exception
     {
@@ -62,10 +61,10 @@ public class TransferCodingsIT
     }
 
     @Test
+    @Configuration("client.json")
     @Specification({
-        "${route}/client/controller",
-        "${client}/response.transfer.encoding.chunked/client",
-        "${server}/response.transfer.encoding.chunked/server" })
+        "${app}/response.transfer.encoding.chunked/client",
+        "${net}/response.transfer.encoding.chunked/server" })
     public void responseTransferEncodingChunked() throws Exception
     {
         k3po.finish();
@@ -86,10 +85,10 @@ public class TransferCodingsIT
     }
 
     @Test
+    @Configuration("client.json")
     @Specification({
-        "${route}/client/controller",
-        "${client}/request.transfer.encoding.chunked.with.trailer/client",
-        "${server}/request.transfer.encoding.chunked.with.trailer/server" })
+        "${app}/request.transfer.encoding.chunked.with.trailer/client",
+        "${net}/request.transfer.encoding.chunked.with.trailer/server" })
     @Ignore // TODO: implement chunked request encoding
     public void requestTransferEncodingChunkedWithTrailer() throws Exception
     {
@@ -97,14 +96,13 @@ public class TransferCodingsIT
     }
 
     @Test
+    @Configuration("client.json")
     @Specification({
-        "${route}/client/controller",
-        "${client}/response.transfer.encoding.chunked.with.trailer/client",
-        "${server}/response.transfer.encoding.chunked.with.trailer/server" })
+        "${app}/response.transfer.encoding.chunked.with.trailer/client",
+        "${net}/response.transfer.encoding.chunked.with.trailer/server" })
     @Ignore // TODO: implement chunked response trailer decoding
     public void responseTransferEncodingChunkedWithTrailer() throws Exception
     {
         k3po.finish();
     }
-
 }

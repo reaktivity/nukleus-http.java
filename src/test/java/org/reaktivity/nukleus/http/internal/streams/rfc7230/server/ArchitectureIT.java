@@ -17,7 +17,6 @@ package org.reaktivity.nukleus.http.internal.streams.rfc7230.server;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.rules.RuleChain.outerRule;
-import static org.reaktivity.reaktor.test.ReaktorRule.EXTERNAL_AFFINITY_MASK;
 
 import org.junit.Rule;
 import org.junit.Test;
@@ -27,98 +26,98 @@ import org.junit.rules.Timeout;
 import org.kaazing.k3po.junit.annotation.Specification;
 import org.kaazing.k3po.junit.rules.K3poRule;
 import org.reaktivity.reaktor.test.ReaktorRule;
+import org.reaktivity.reaktor.test.annotation.Configuration;
 
 public class ArchitectureIT
 {
     private final K3poRule k3po = new K3poRule()
-            .addScriptRoot("route", "org/reaktivity/specification/nukleus/http/control/route")
-            .addScriptRoot("client", "org/reaktivity/specification/http/rfc7230/architecture")
-            .addScriptRoot("server", "org/reaktivity/specification/nukleus/http/streams/rfc7230/architecture");
+        .addScriptRoot("net", "org/reaktivity/specification/nukleus/http/streams/network/rfc7230/architecture")
+        .addScriptRoot("app", "org/reaktivity/specification/nukleus/http/streams/application/rfc7230/architecture");
 
     private final TestRule timeout = new DisableOnDebug(new Timeout(10, SECONDS));
 
     private final ReaktorRule reaktor = new ReaktorRule()
-        .nukleus("http"::equals)
         .directory("target/nukleus-itests")
         .commandBufferCapacity(1024)
         .responseBufferCapacity(1024)
         .counterValuesBufferCapacity(4096)
-        .affinityMask("target#0", EXTERNAL_AFFINITY_MASK)
+        .configurationRoot("org/reaktivity/specification/nukleus/http/config")
+        .external("app#0")
         .clean();
 
     @Rule
     public final TestRule chain = outerRule(reaktor).around(k3po).around(timeout);
 
     @Test
+    @Configuration("server.json")
     @Specification({
-        "${route}/server/controller",
-        "${client}/request.and.response/client",
-        "${server}/request.and.response/server" })
+        "${net}/request.and.response/client",
+        "${app}/request.and.response/server" })
     public void shouldCorrelateRequestAndResponse() throws Exception
     {
         k3po.finish();
     }
 
     @Test
+    @Configuration("server.json")
     @Specification({
-        "${route}/server/controller",
-        "${client}/request.uri.with.percent.chars/client",
-        "${server}/request.uri.with.percent.chars/server" })
+        "${net}/request.uri.with.percent.chars/client",
+        "${app}/request.uri.with.percent.chars/server" })
     public void shouldAcceptRequestWithPercentChars() throws Exception
     {
         k3po.finish();
     }
 
     @Test
+    @Configuration("server.json")
     @Specification({
-        "${route}/server/controller",
-        "${client}/request.version.1.2+/client",
-        "${server}/request.version.1.2+/server" })
+        "${net}/request.version.1.2+/client",
+        "${app}/request.version.1.2+/server" })
     public void shouldRespondVersionHttp11WhenRequestVersionHttp12plus() throws Exception
     {
         k3po.finish();
     }
 
     @Test
+    @Configuration("server.json")
     @Specification({
-        "${route}/server/controller",
-        "${client}/request.header.host.missing/client" })
+        "${net}/request.header.host.missing/client" })
     public void shouldRejectRequestWhenHostHeaderMissing() throws Exception
     {
         k3po.finish();
     }
 
     @Test
+    @Configuration("server.json")
     @Specification({
-        "${route}/server/controller",
-        "${client}/request.version.invalid/client" })
+        "${net}/request.version.invalid/client" })
     public void shouldRejectRequestWhenVersionInvalid() throws Exception
     {
         k3po.finish();
     }
 
     @Test
+    @Configuration("server.json")
     @Specification({
-        "${route}/server/controller",
-        "${client}/request.version.missing/client" })
+        "${net}/request.version.missing/client" })
     public void shouldRejectRequestWhenVersionMissing() throws Exception
     {
         k3po.finish();
     }
 
     @Test
+    @Configuration("server.json")
     @Specification({
-        "${route}/server/controller",
-        "${client}/request.version.not.1.x/client" })
+        "${net}/request.version.not.1.x/client" })
     public void shouldRejectRequestWhenVersionNotHttp1x() throws Exception
     {
         k3po.finish();
     }
 
     @Test
+    @Configuration("server.json")
     @Specification({
-        "${route}/server/controller",
-        "${client}/request.uri.with.user.info/client", })
+        "${net}/request.uri.with.user.info/client", })
     public void shouldRejectRequestWithUserInfo() throws Exception
     {
         k3po.finish();

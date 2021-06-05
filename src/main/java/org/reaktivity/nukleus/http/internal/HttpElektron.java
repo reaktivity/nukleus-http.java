@@ -15,41 +15,64 @@
  */
 package org.reaktivity.nukleus.http.internal;
 
-import static org.reaktivity.nukleus.route.RouteKind.CLIENT;
-import static org.reaktivity.nukleus.route.RouteKind.SERVER;
+import static org.reaktivity.reaktor.config.Role.CLIENT;
+import static org.reaktivity.reaktor.config.Role.SERVER;
 
 import java.util.EnumMap;
 import java.util.Map;
 
-import org.reaktivity.nukleus.Elektron;
-import org.reaktivity.nukleus.http.internal.stream.HttpClientFactoryBuilder;
-import org.reaktivity.nukleus.http.internal.stream.HttpServerFactoryBuilder;
-import org.reaktivity.nukleus.route.RouteKind;
-import org.reaktivity.nukleus.stream.StreamFactoryBuilder;
+import org.reaktivity.nukleus.http.internal.stream.HttpClientFactory;
+import org.reaktivity.nukleus.http.internal.stream.HttpServerFactory;
+import org.reaktivity.nukleus.http.internal.stream.HttpStreamFactory;
+import org.reaktivity.reaktor.config.Binding;
+import org.reaktivity.reaktor.config.Role;
+import org.reaktivity.reaktor.nukleus.Elektron;
+import org.reaktivity.reaktor.nukleus.ElektronContext;
+import org.reaktivity.reaktor.nukleus.stream.StreamFactory;
 
 final class HttpElektron implements Elektron
 {
-    private final Map<RouteKind, StreamFactoryBuilder> streamFactoryBuilders;
+    private final Map<Role, HttpStreamFactory> factories;
 
     HttpElektron(
-        HttpConfiguration config)
+        HttpConfiguration config,
+        ElektronContext context)
     {
-        Map<RouteKind, StreamFactoryBuilder> streamFactoryBuilders = new EnumMap<>(RouteKind.class);
-        streamFactoryBuilders.put(CLIENT, new HttpClientFactoryBuilder(config));
-        streamFactoryBuilders.put(SERVER, new HttpServerFactoryBuilder(config));
-        this.streamFactoryBuilders = streamFactoryBuilders;
+        Map<Role, HttpStreamFactory> factories = new EnumMap<>(Role.class);
+        factories.put(CLIENT, new HttpClientFactory(config, context));
+        factories.put(SERVER, new HttpServerFactory(config, context));
+        this.factories = factories;
     }
 
     @Override
-    public StreamFactoryBuilder streamFactoryBuilder(
-        RouteKind kind)
+    public StreamFactory attach(
+        Binding binding)
     {
-        return streamFactoryBuilders.get(kind);
+        HttpStreamFactory factory = factories.get(binding.kind);
+
+        if (factory != null)
+        {
+            factory.attach(binding);
+        }
+
+        return factory;
+    }
+
+    @Override
+    public void detach(
+        Binding binding)
+    {
+        HttpStreamFactory factory = factories.get(binding.kind);
+
+        if (factory != null)
+        {
+            factory.detach(binding.id);
+        }
     }
 
     @Override
     public String toString()
     {
-        return String.format("%s %s", getClass().getSimpleName(), streamFactoryBuilders);
+        return String.format("%s %s", getClass().getSimpleName(), factories);
     }
 }

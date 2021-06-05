@@ -19,22 +19,19 @@ import static java.lang.Character.toLowerCase;
 import static java.lang.Character.toUpperCase;
 import static java.lang.Integer.parseInt;
 import static java.nio.charset.StandardCharsets.US_ASCII;
-import static java.util.Objects.requireNonNull;
-import static org.reaktivity.nukleus.buffer.BufferPool.NO_SLOT;
+import static java.util.Collections.emptyMap;
 import static org.reaktivity.nukleus.http.internal.util.BufferUtil.limitOfBytes;
+import static org.reaktivity.reaktor.nukleus.buffer.BufferPool.NO_SLOT;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Queue;
-import java.util.function.Function;
 import java.util.function.LongConsumer;
 import java.util.function.LongSupplier;
 import java.util.function.LongUnaryOperator;
-import java.util.function.ToIntFunction;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -44,20 +41,16 @@ import org.agrona.MutableDirectBuffer;
 import org.agrona.collections.Long2ObjectHashMap;
 import org.agrona.collections.MutableInteger;
 import org.agrona.concurrent.UnsafeBuffer;
-import org.reaktivity.nukleus.buffer.BufferPool;
-import org.reaktivity.nukleus.function.MessageConsumer;
-import org.reaktivity.nukleus.function.MessageFunction;
-import org.reaktivity.nukleus.function.MessagePredicate;
 import org.reaktivity.nukleus.http.internal.HttpConfiguration;
 import org.reaktivity.nukleus.http.internal.HttpNukleus;
+import org.reaktivity.nukleus.http.internal.config.HttpBinding;
+import org.reaktivity.nukleus.http.internal.config.HttpRoute;
 import org.reaktivity.nukleus.http.internal.types.Array32FW;
 import org.reaktivity.nukleus.http.internal.types.Flyweight;
 import org.reaktivity.nukleus.http.internal.types.HttpHeaderFW;
 import org.reaktivity.nukleus.http.internal.types.OctetsFW;
 import org.reaktivity.nukleus.http.internal.types.String16FW;
 import org.reaktivity.nukleus.http.internal.types.String8FW;
-import org.reaktivity.nukleus.http.internal.types.control.HttpRouteExFW;
-import org.reaktivity.nukleus.http.internal.types.control.RouteFW;
 import org.reaktivity.nukleus.http.internal.types.stream.AbortFW;
 import org.reaktivity.nukleus.http.internal.types.stream.BeginFW;
 import org.reaktivity.nukleus.http.internal.types.stream.DataFW;
@@ -67,10 +60,13 @@ import org.reaktivity.nukleus.http.internal.types.stream.HttpBeginExFW;
 import org.reaktivity.nukleus.http.internal.types.stream.HttpEndExFW;
 import org.reaktivity.nukleus.http.internal.types.stream.ResetFW;
 import org.reaktivity.nukleus.http.internal.types.stream.WindowFW;
-import org.reaktivity.nukleus.route.RouteManager;
-import org.reaktivity.nukleus.stream.StreamFactory;
+import org.reaktivity.reaktor.config.Binding;
+import org.reaktivity.reaktor.nukleus.ElektronContext;
+import org.reaktivity.reaktor.nukleus.buffer.BufferPool;
+import org.reaktivity.reaktor.nukleus.function.MessageConsumer;
+import org.reaktivity.reaktor.nukleus.stream.StreamFactory;
 
-public final class HttpClientFactory implements StreamFactory
+public final class HttpClientFactory implements HttpStreamFactory
 {
     private static final Pattern RESPONSE_LINE_PATTERN =
             Pattern.compile("(?<version>HTTP/\\d\\.\\d)\\s+(?<status>\\d+)\\s+(?<reason>[^\\r\\n]+)\r\n");
@@ -122,13 +118,7 @@ public final class HttpClientFactory implements StreamFactory
             new Array32FW.Builder<>(new HttpHeaderFW.Builder(), new HttpHeaderFW())
                          .wrap(new UnsafeBuffer(new byte[8]), 0, 8)
                          .build();
-    private static final Array32FW<HttpHeaderFW> EMPTY_OVERRIDES =
-            new Array32FW.Builder<>(new HttpHeaderFW.Builder(), new HttpHeaderFW())
-                    .wrap(new UnsafeBuffer(new byte[8]), 0, 8)
-                    .build();
-
-    private final RouteFW routeRO = new RouteFW();
-    private final HttpRouteExFW routeExRO = new HttpRouteExFW();
+    private static final Map<String8FW, String16FW> EMPTY_OVERRIDES = emptyMap();
 
     private final BeginFW beginRO = new BeginFW();
     private final DataFW dataRO = new DataFW();
@@ -167,20 +157,18 @@ public final class HttpClientFactory implements StreamFactory
     private final HttpClientDecoder decodeUpgraded = this::decodeUpgraded;
     private final HttpClientDecoder decodeIgnore = this::decodeIgnore;
 
-    private final MessageFunction<RouteFW> wrapRoute = (t, b, i, l) -> routeRO.wrap(b, i, i + l);
-
     private final MutableInteger codecOffset = new MutableInteger();
 
-    private final RouteManager router;
     private final MutableDirectBuffer writeBuffer;
     private final MutableDirectBuffer codecBuffer;
     private final BufferPool bufferPool;
+    private final StreamFactory streamFactory;
     private final LongUnaryOperator supplyInitialId;
     private final LongUnaryOperator supplyReplyId;
     private final LongSupplier supplyTraceId;
     private final int httpTypeId;
     private final Long2ObjectHashMap<HttpClientPool> clientPools;
-    private final Long2ObjectHashMap<MessageConsumer> correlations;
+    private final Long2ObjectHashMap<HttpBinding> bindings;
     private final Matcher responseLine;
     private final Matcher versionPart;
     private final Matcher headerLine;
@@ -201,25 +189,17 @@ public final class HttpClientFactory implements StreamFactory
 
     public HttpClientFactory(
         HttpConfiguration config,
-        RouteManager router,
-        MutableDirectBuffer writeBuffer,
-        BufferPool bufferPool,
-        LongUnaryOperator supplyInitialId,
-        LongUnaryOperator supplyReplyId,
-        LongSupplier supplyTraceId,
-        ToIntFunction<String> supplyTypeId,
-        Function<String, LongSupplier> supplyCounter,
-        Function<String, LongConsumer> supplyAccumulator)
+        ElektronContext context)
     {
-        this.router = requireNonNull(router);
-        this.writeBuffer = requireNonNull(writeBuffer);
+        this.writeBuffer = context.writeBuffer();
         this.codecBuffer = new UnsafeBuffer(new byte[writeBuffer.capacity()]);
-        this.bufferPool = requireNonNull(bufferPool);
-        this.supplyInitialId = requireNonNull(supplyInitialId);
-        this.supplyReplyId = requireNonNull(supplyReplyId);
-        this.supplyTraceId = requireNonNull(supplyTraceId);
-        this.httpTypeId = supplyTypeId.applyAsInt(HttpNukleus.NAME);
-        this.correlations = new Long2ObjectHashMap<>();
+        this.bufferPool = context.bufferPool();
+        this.streamFactory = context.streamFactory();
+        this.supplyInitialId = context::supplyInitialId;
+        this.supplyReplyId = context::supplyReplyId;
+        this.supplyTraceId = context::supplyTraceId;
+        this.httpTypeId = context.supplyTypeId(HttpNukleus.NAME);
+        this.bindings = new Long2ObjectHashMap<>();
         this.responseLine = RESPONSE_LINE_PATTERN.matcher("");
         this.headerLine = HEADER_LINE_PATTERN.matcher("");
         this.versionPart = VERSION_PATTERN.matcher("");
@@ -229,15 +209,30 @@ public final class HttpClientFactory implements StreamFactory
         this.clientPools = new Long2ObjectHashMap<>();
         this.maximumConnectionsPerRoute = config.maximumConnectionsPerRoute();
         this.maximumQueuedRequestsPerRoute = config.maximumRequestsQueuedPerRoute();
-        this.countRequests = supplyCounter.apply("http.requests");
-        this.countRequestsRejected = supplyCounter.apply("http.requests.rejected");
-        this.countRequestsAbandoned = supplyCounter.apply("http.requests.abandoned");
-        this.countResponses = supplyCounter.apply("http.responses");
-        this.countResponsesAbandoned = supplyCounter.apply("http.responses.abandoned");
-        this.enqueues = supplyCounter.apply("http.enqueues");
-        this.dequeues = supplyCounter.apply("http.dequeues");
-        this.connectionInUse = supplyAccumulator.apply("http.connections.in.use");
+        this.countRequests = context.supplyCounter("http.requests");
+        this.countRequestsRejected = context.supplyCounter("http.requests.rejected");
+        this.countRequestsAbandoned = context.supplyCounter("http.requests.abandoned");
+        this.countResponses = context.supplyCounter("http.responses");
+        this.countResponsesAbandoned = context.supplyCounter("http.responses.abandoned");
+        this.enqueues = context.supplyCounter("http.enqueues");
+        this.dequeues = context.supplyCounter("http.dequeues");
+        this.connectionInUse = context.supplyAccumulator("http.connections.in.use");
         this.decodeMax = bufferPool.slotCapacity();
+    }
+
+    @Override
+    public void attach(
+        Binding binding)
+    {
+        HttpBinding httpBinding = new HttpBinding(binding);
+        bindings.put(binding.id, httpBinding);
+    }
+
+    @Override
+    public void detach(
+        long bindingId)
+    {
+        bindings.remove(bindingId);
     }
 
     @Override
@@ -246,65 +241,69 @@ public final class HttpClientFactory implements StreamFactory
         DirectBuffer buffer,
         int index,
         int length,
-        MessageConsumer sender)
+        MessageConsumer application)
     {
         final BeginFW begin = beginRO.wrap(buffer, index, index + length);
-        final long streamId = begin.streamId();
-
-        MessageConsumer newStream;
-
-        if ((streamId & 0x0000_0000_0000_0001L) != 0L)
-        {
-            newStream = newApplicationStream(begin, sender);
-        }
-        else
-        {
-            newStream = correlations.remove(streamId);
-        }
-
-        return newStream;
-    }
-
-    private MessageConsumer newApplicationStream(
-        final BeginFW begin,
-        final MessageConsumer application)
-    {
         final long routeId = begin.routeId();
         final long authorization = begin.authorization();
         final HttpBeginExFW beginEx = begin.extension().get(beginExRO::tryWrap);
 
-        // TODO: avoid object creation
-        final Map<String, String> headers = beginEx != null ? asHeadersMap(beginEx.headers()) : EMPTY_HEADERS;
-        final MessagePredicate filter = (t, b, o, l) ->
+        final HttpBinding binding = bindings.get(routeId);
+
+        HttpRoute route = null;
+
+        if (binding != null)
         {
-            final RouteFW route = routeRO.wrap(b, o, o + l);
-            final HttpRouteExFW routeEx = route.extension().get(routeExRO::tryWrap);
-
-            boolean headersMatch = true;
-            if (routeEx != null)
-            {
-                headersMatch = !routeEx.headers().anyMatch(
-                    h -> !Objects.equals(h.value().asString(), headers.get(h.name().asString())));
-            }
-
-            return headersMatch;
-        };
-
-        final RouteFW route = router.resolve(routeId, authorization, filter, wrapRoute);
+            // TODO: avoid object creation
+            final Map<String, String> headers = beginEx != null ? asHeadersMap(beginEx.headers()) : EMPTY_HEADERS;
+            route = binding.resolve(authorization, headers::get);
+        }
 
         MessageConsumer newStream = null;
 
         if (route != null)
         {
-            final long resolvedId = route.correlationId();
-            final HttpRouteExFW routeEx = route.extension().get(routeExRO::tryWrap);
-            final Array32FW<HttpHeaderFW> overrides = routeEx != null ? routeEx.overrides() : EMPTY_OVERRIDES;
+            final long resolvedId = route.id;
+            final Map<String8FW, String16FW> overrides =
+                binding.options != null && binding.options.overrides != null ? binding.options.overrides : EMPTY_OVERRIDES;
 
             final HttpClientPool clientPool = clientPools.computeIfAbsent(resolvedId, HttpClientPool::new);
             newStream = clientPool.newStream(application, begin, overrides);
         }
 
         return newStream;
+    }
+
+    private MessageConsumer newStream(
+        MessageConsumer sender,
+        long routeId,
+        long streamId,
+        long sequence,
+        long acknowledge,
+        int maximum,
+        long traceId,
+        long authorization,
+        long affinity,
+        Flyweight extension)
+    {
+        final BeginFW begin = beginRW.wrap(writeBuffer, 0, writeBuffer.capacity())
+                .routeId(routeId)
+                .streamId(streamId)
+                .sequence(sequence)
+                .acknowledge(acknowledge)
+                .maximum(maximum)
+                .traceId(traceId)
+                .authorization(authorization)
+                .affinity(affinity)
+                .extension(extension.buffer(), extension.offset(), extension.sizeof())
+                .build();
+
+        MessageConsumer receiver =
+                streamFactory.newStream(begin.typeId(), begin.buffer(), begin.offset(), begin.sizeof(), sender);
+
+        receiver.accept(begin.typeId(), begin.buffer(), begin.offset(), begin.sizeof());
+
+        return receiver;
     }
 
     private void doBegin(
@@ -863,7 +862,7 @@ public final class HttpClientFactory implements StreamFactory
         public MessageConsumer newStream(
             MessageConsumer sender,
             BeginFW begin,
-            Array32FW<HttpHeaderFW> overrides)
+            Map<String8FW, String16FW> overrides)
         {
             // count all requests
             countRequests.getAsLong();
@@ -978,13 +977,13 @@ public final class HttpClientFactory implements StreamFactory
         private final class HttpRequest
         {
             private final MessageConsumer sender;
-            private final Array32FW<HttpHeaderFW> overrides;
+            private final Map<String8FW, String16FW> overrides;
             private MessageConsumer receiver;
             private DirectBuffer message;
 
             private HttpRequest(
                 MessageConsumer sender,
-                Array32FW<HttpHeaderFW> overrides)
+                Map<String8FW, String16FW> overrides)
             {
                 this.sender = sender;
                 this.overrides = overrides;
@@ -1038,7 +1037,7 @@ public final class HttpClientFactory implements StreamFactory
     private final class HttpClient
     {
         private final HttpClientPool pool;
-        private final MessageConsumer network;
+        private MessageConsumer network;
         private final long routeId;
         private final long initialId;
         private final long replyId;
@@ -1072,7 +1071,6 @@ public final class HttpClientFactory implements StreamFactory
             this.pool = pool;
             this.routeId = pool.resolvedId;
             this.initialId = supplyInitialId.applyAsLong(routeId);
-            this.network = router.supplyReceiver(initialId);
             this.replyId = supplyReplyId.applyAsLong(initialId);
             this.decoder = decodeEmptyLines;
             this.decodeSlot = NO_SLOT;
@@ -1092,7 +1090,7 @@ public final class HttpClientFactory implements StreamFactory
         private HttpExchange newExchange(
             MessageConsumer sender,
             BeginFW begin,
-            Array32FW<HttpHeaderFW> overrides)
+            Map<String8FW, String16FW> overrides)
         {
             final long routeId = begin.routeId();
             final long initialId = begin.streamId();
@@ -1302,10 +1300,8 @@ public final class HttpClientFactory implements StreamFactory
             {
                 state = HttpState.openingInitial(state);
 
-                doBegin(network, routeId, initialId, initialSeq, initialAck,
+                network = newStream(this::onNetwork, routeId, initialId, initialSeq, initialAck,
                     initialMax, traceId, authorization, affinity, EMPTY_OCTETS);
-                router.setThrottle(initialId, this::onNetwork);
-                correlations.put(replyId, this::onNetwork);
             }
         }
 
@@ -1413,7 +1409,7 @@ public final class HttpClientFactory implements StreamFactory
             {
                 state = HttpState.closeReply(state);
                 cleanupDecodeSlotIfNecessary();
-                correlations.remove(replyId);
+                bindings.remove(replyId);
                 doReset(network, routeId, replyId, replySeq, replyAck, initialMax, traceId, authorization);
 
                 if (HttpState.closed(state))
@@ -1585,13 +1581,13 @@ public final class HttpClientFactory implements StreamFactory
             long authorization,
             long budgetId,
             Array32FW<HttpHeaderFW> headers,
-            Array32FW<HttpHeaderFW> overrides)
+            Map<String8FW, String16FW> overrides)
         {
             assert exchange == this.exchange;
 
             Map<String8FW, String16FW> headersMap = new LinkedHashMap<>();
             headers.forEach(h -> headersMap.put(newString8FW(h.name()), newString16FW(h.value())));
-            overrides.forEach(h -> headersMap.put(newString8FW(h.name()), newString16FW(h.value())));
+            headersMap.putAll(overrides);
 
             final String16FW contentLength = headersMap.get(HEADER_CONTENT_LENGTH);
             exchange.requestRemaining = contentLength != null ? parseInt(contentLength.asString()) : Integer.MAX_VALUE;
@@ -1850,7 +1846,7 @@ public final class HttpClientFactory implements StreamFactory
         private final long routeId;
         private final long requestId;
         private final long responseId;
-        private final Array32FW<HttpHeaderFW> overrides;
+        private final Map<String8FW, String16FW> overrides;
 
         private long requestSeq;
         private long requestAck;
@@ -1872,7 +1868,7 @@ public final class HttpClientFactory implements StreamFactory
             MessageConsumer application,
             long routeId,
             long requestId,
-            Array32FW<HttpHeaderFW> overrides)
+            Map<String8FW, String16FW> overrides)
         {
             this.client = client;
             this.application = application;
@@ -2116,7 +2112,6 @@ public final class HttpClientFactory implements StreamFactory
 
             doBegin(application, routeId, responseId, responseSeq, responseAck, responseMax,
                     traceId, authorization, 0, extension);
-            router.setThrottle(responseId, this::onApplication);
         }
 
         private int doResponseData(

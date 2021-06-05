@@ -18,7 +18,6 @@ package org.reaktivity.nukleus.http2.internal.streams.rfc7540.server;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.rules.RuleChain.outerRule;
 import static org.reaktivity.nukleus.http2.internal.Http2Configuration.HTTP2_SERVER_CONCURRENT_STREAMS;
-import static org.reaktivity.reaktor.test.ReaktorRule.EXTERNAL_AFFINITY_MASK;
 
 import org.junit.Rule;
 import org.junit.Test;
@@ -28,37 +27,36 @@ import org.junit.rules.Timeout;
 import org.kaazing.k3po.junit.annotation.Specification;
 import org.kaazing.k3po.junit.rules.K3poRule;
 import org.reaktivity.reaktor.test.ReaktorRule;
+import org.reaktivity.reaktor.test.annotation.Configuration;
 
 public class FlowControlIT
 {
     private final K3poRule k3po = new K3poRule()
-            .addScriptRoot("route", "org/reaktivity/specification/nukleus/http2/control/route/")
-            .addScriptRoot("spec", "org/reaktivity/specification/http2/rfc7540/flow.control/")
-            .addScriptRoot("nukleus", "org/reaktivity/specification/nukleus/http2/streams/rfc7540/flow.control");
+        .addScriptRoot("net", "org/reaktivity/specification/nukleus/http2/streams/network/rfc7540/flow.control")
+        .addScriptRoot("app", "org/reaktivity/specification/nukleus/http2/streams/application/rfc7540/flow.control");
 
     private final TestRule timeout = new DisableOnDebug(new Timeout(10, SECONDS));
 
     private final ReaktorRule reaktor = new ReaktorRule()
-            .directory("target/nukleus-itests")
-            .commandBufferCapacity(1024)
-            .responseBufferCapacity(1024)
-            .counterValuesBufferCapacity(8192)
-            .nukleus("http2"::equals)
-            .configure(HTTP2_SERVER_CONCURRENT_STREAMS, 100)
-            .affinityMask("target#0", EXTERNAL_AFFINITY_MASK)
-            .clean();
+        .directory("target/nukleus-itests")
+        .commandBufferCapacity(1024)
+        .responseBufferCapacity(1024)
+        .counterValuesBufferCapacity(8192)
+        .configure(HTTP2_SERVER_CONCURRENT_STREAMS, 100)
+        .configurationRoot("org/reaktivity/specification/nukleus/http2/config")
+        .external("app#0")
+        .clean();
 
     @Rule
     public final TestRule chain = outerRule(reaktor).around(k3po).around(timeout);
 
     @Test
+    @Configuration("server.json")
     @Specification({
-            "${route}/server/controller",
-            "${spec}/stream.flow/client",
-            "${nukleus}/stream.flow/server" })
+        "${net}/stream.flow/client",
+        "${app}/stream.flow/server" })
     public void streamFlow() throws Exception
     {
         k3po.finish();
     }
-
 }

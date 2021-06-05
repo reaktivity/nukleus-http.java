@@ -19,7 +19,6 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.rules.RuleChain.outerRule;
 import static org.reaktivity.nukleus.http2.internal.Http2ConfigurationTest.HTTP2_SERVER_CONCURRENT_STREAMS_NAME;
 import static org.reaktivity.nukleus.http2.internal.Http2ConfigurationTest.HTTP2_SERVER_MAX_HEADER_LIST_SIZE_NAME;
-import static org.reaktivity.reaktor.test.ReaktorRule.EXTERNAL_AFFINITY_MASK;
 
 import org.junit.Rule;
 import org.junit.Test;
@@ -29,33 +28,32 @@ import org.junit.rules.Timeout;
 import org.kaazing.k3po.junit.annotation.Specification;
 import org.kaazing.k3po.junit.rules.K3poRule;
 import org.reaktivity.reaktor.test.ReaktorRule;
+import org.reaktivity.reaktor.test.annotation.Configuration;
 import org.reaktivity.reaktor.test.annotation.Configure;
 
 public class SettingsIT
 {
     private final K3poRule k3po = new K3poRule()
-            .addScriptRoot("route", "org/reaktivity/specification/nukleus/http2/control/route")
-            .addScriptRoot("spec", "org/reaktivity/specification/http2/rfc7540/settings")
-            .addScriptRoot("nukleus", "org/reaktivity/specification/nukleus/http2/streams/rfc7540/connection.management");
+        .addScriptRoot("net", "org/reaktivity/specification/nukleus/http2/streams/network/rfc7540/settings");
 
     private final TestRule timeout = new DisableOnDebug(new Timeout(10, SECONDS));
 
     private final ReaktorRule reaktor = new ReaktorRule()
-            .directory("target/nukleus-itests")
-            .commandBufferCapacity(1024)
-            .responseBufferCapacity(1024)
-            .counterValuesBufferCapacity(8192)
-            .nukleus("http2"::equals)
-            .affinityMask("target#0", EXTERNAL_AFFINITY_MASK)
-            .clean();
+        .directory("target/nukleus-itests")
+        .commandBufferCapacity(1024)
+        .responseBufferCapacity(1024)
+        .counterValuesBufferCapacity(8192)
+        .configurationRoot("org/reaktivity/specification/nukleus/http2/config")
+        .external("app#0")
+        .clean();
 
     @Rule
     public final TestRule chain = outerRule(reaktor).around(k3po).around(timeout);
 
     @Test
+    @Configuration("server.json")
     @Specification({
-        "${route}/server/controller",
-        "${spec}/max.concurrent.streams/client" })
+        "${net}/max.concurrent.streams/client" })
     @Configure(name = HTTP2_SERVER_CONCURRENT_STREAMS_NAME, value = "250")
     public void maxConcurrentStreams() throws Exception
     {
@@ -63,9 +61,9 @@ public class SettingsIT
     }
 
     @Test
+    @Configuration("server.json")
     @Specification({
-        "${route}/server/controller",
-        "${spec}/max.header.list.size/client" })
+        "${net}/max.header.list.size/client" })
     @Configure(name = HTTP2_SERVER_MAX_HEADER_LIST_SIZE_NAME, value = "4096")
     public void maxHeaderListSize() throws Exception
     {
