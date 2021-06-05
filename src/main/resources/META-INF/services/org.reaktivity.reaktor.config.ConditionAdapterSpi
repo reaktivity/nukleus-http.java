@@ -1,0 +1,2 @@
+org.reaktivity.nukleus.http.internal.config.HttpConditionAdapter
+org.reaktivity.nukleus.http2.internal.config.Http2ConditionAdapter

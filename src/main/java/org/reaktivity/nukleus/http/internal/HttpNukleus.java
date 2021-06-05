@@ -15,7 +15,8 @@
  */
 package org.reaktivity.nukleus.http.internal;
 
-import org.reaktivity.nukleus.Nukleus;
+import org.reaktivity.reaktor.nukleus.ElektronContext;
+import org.reaktivity.reaktor.nukleus.Nukleus;
 
 public final class HttpNukleus implements Nukleus
 {
@@ -42,8 +43,9 @@ public final class HttpNukleus implements Nukleus
     }
 
     @Override
-    public HttpElektron supplyElektron()
+    public HttpElektron supplyElektron(
+        ElektronContext context)
     {
-        return new HttpElektron(config);
+        return new HttpElektron(config, context);
     }
 }

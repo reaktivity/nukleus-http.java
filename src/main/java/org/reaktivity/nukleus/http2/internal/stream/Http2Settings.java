@@ -15,9 +15,9 @@
  */
 package org.reaktivity.nukleus.http2.internal.stream;
 
-import org.reaktivity.nukleus.buffer.BufferPool;
 import org.reaktivity.nukleus.http2.internal.Http2Configuration;
 import org.reaktivity.nukleus.http2.internal.types.Http2ErrorCode;
+import org.reaktivity.reaktor.nukleus.buffer.BufferPool;
 
 public class Http2Settings
 {

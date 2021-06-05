@@ -13,23 +13,27 @@
  * License for the specific language governing permissions and limitations
  * under the License.
  */
-package org.reaktivity.nukleus.http2.internal;
+package org.reaktivity.nukleus.http.internal.config;
 
-import org.reaktivity.reaktor.nukleus.Configuration;
-import org.reaktivity.reaktor.nukleus.NukleusFactorySpi;
+import static java.util.stream.Collectors.toList;
 
-public final class Http2NukleusFactorySpi implements NukleusFactorySpi
+import java.util.List;
+
+import org.reaktivity.reaktor.config.Options;
+import org.reaktivity.reaktor.config.Route;
+
+public final class HttpRoute extends Options
 {
-    @Override
-    public String name()
-    {
-        return Http2Nukleus.NAME;
-    }
+    public final long id;
+    public List<HttpMatcher> when;
 
-    @Override
-    public Http2Nukleus create(
-        Configuration config)
+    public HttpRoute(
+        Route route)
     {
-        return new Http2Nukleus(new Http2Configuration(config));
+        this.id = route.id;
+        this.when = route.when.stream()
+            .map(HttpCondition.class::cast)
+            .map(HttpMatcher::new)
+            .collect(toList());
     }
 }

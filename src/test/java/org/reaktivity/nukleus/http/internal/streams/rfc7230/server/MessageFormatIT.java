@@ -17,7 +17,6 @@ package org.reaktivity.nukleus.http.internal.streams.rfc7230.server;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.rules.RuleChain.outerRule;
-import static org.reaktivity.reaktor.test.ReaktorRule.EXTERNAL_AFFINITY_MASK;
 
 import org.junit.Ignore;
 import org.junit.Rule;
@@ -30,73 +29,73 @@ import org.kaazing.k3po.junit.annotation.Specification;
 import org.kaazing.k3po.junit.rules.K3poRule;
 import org.reaktivity.reaktor.ReaktorConfiguration;
 import org.reaktivity.reaktor.test.ReaktorRule;
+import org.reaktivity.reaktor.test.annotation.Configuration;
 
 public class MessageFormatIT
 {
     private final K3poRule k3po = new K3poRule()
-            .addScriptRoot("route", "org/reaktivity/specification/nukleus/http/control/route")
-            .addScriptRoot("client", "org/reaktivity/specification/http/rfc7230/message.format")
-            .addScriptRoot("server", "org/reaktivity/specification/nukleus/http/streams/rfc7230/message.format");
+        .addScriptRoot("net", "org/reaktivity/specification/nukleus/http/streams/network/rfc7230/message.format")
+        .addScriptRoot("app", "org/reaktivity/specification/nukleus/http/streams/application/rfc7230/message.format");
 
     private final TestRule timeout = new DisableOnDebug(new Timeout(10, SECONDS));
 
     private final ReaktorRule reaktor = new ReaktorRule()
-        .nukleus("http"::equals)
         .directory("target/nukleus-itests")
         .commandBufferCapacity(1024)
         .responseBufferCapacity(1024)
         .counterValuesBufferCapacity(8192)
         .configure(ReaktorConfiguration.REAKTOR_BUFFER_SLOT_CAPACITY, 8192)
-        .affinityMask("target#0", EXTERNAL_AFFINITY_MASK)
+        .configurationRoot("org/reaktivity/specification/nukleus/http/config")
+        .external("app#0")
         .clean();
 
     @Rule
     public final TestRule chain = outerRule(reaktor).around(k3po).around(timeout);
 
     @Test
+    @Configuration("server.json")
     @Specification({
-        "${route}/server/controller",
-        "${client}/request.with.headers/client",
-        "${server}/request.with.headers/server" })
+        "${net}/request.with.headers/client",
+        "${app}/request.with.headers/server" })
     public void requestWithHeaders() throws Exception
     {
         k3po.finish();
     }
 
     @Test
+    @Configuration("server.json")
     @Specification({
-        "${route}/server/controller",
-        "${client}/request.with.content.length/client",
-        "${server}/request.with.content.length/server" })
+        "${net}/request.with.content.length/client",
+        "${app}/request.with.content.length/server" })
     public void requestWithContentLength() throws Exception
     {
         k3po.finish();
     }
 
     @Test
+    @Configuration("server.json")
     @Specification({
-        "${route}/server/controller",
-        "${client}/response.with.headers/client",
-        "${server}/response.with.headers/server" })
+        "${net}/response.with.headers/client",
+        "${app}/response.with.headers/server" })
     public void responseWithHeaders() throws Exception
     {
         k3po.finish();
     }
 
     @Test
+    @Configuration("server.json")
     @Specification({
-        "${route}/server/controller",
-        "${client}/response.with.content.length/client",
-        "${server}/response.with.content.length/server" })
+        "${net}/response.with.content.length/client",
+        "${app}/response.with.content.length/server" })
     public void responseWithContentLength() throws Exception
     {
         k3po.finish();
     }
 
     @Test
+    @Configuration("server.json")
     @Specification({
-        "${route}/server/controller",
-        "${client}/invalid.request.whitespace.after.start.line/client"})
+        "${net}/invalid.request.whitespace.after.start.line/client"})
     public void invalidRequestWhitespaceAfterStartLine() throws Exception
     {
         // As per RFC, alternatively could process everything before whitespace,
@@ -105,82 +104,82 @@ public class MessageFormatIT
     }
 
     @Test
+    @Configuration("server.json")
     @Specification({
-        "${route}/server/controller",
-        "${client}/invalid.request.missing.target/client"})
+        "${net}/invalid.request.missing.target/client"})
     public void invalidRequestMissingTarget() throws Exception
     {
         k3po.finish();
     }
 
     @Test
+    @Configuration("server.json")
     @Specification({
-        "${route}/server/controller",
-        "${client}/invalid.request.not.http/client"})
+        "${net}/invalid.request.not.http/client"})
     public void invalidRequestNotHttp() throws Exception
     {
         k3po.finish();
     }
 
     @Test
+    @Configuration("server.json")
     @Specification({
-        "${route}/server/controller",
-        "${client}/incomplete.request.with.unimplemented.method/client"})
+        "${net}/incomplete.request.with.unimplemented.method/client"})
     public void incompleteRequestWithUnimplementedMethod() throws Exception
     {
         k3po.finish();
     }
 
     @Test
+    @Configuration("server.json")
     @Specification({
-        "${route}/server/controller",
-        "${client}/request.with.unimplemented.method/client"})
+        "${net}/request.with.unimplemented.method/client"})
     public void requestWithUnimplementedMethod() throws Exception
     {
         k3po.finish();
     }
 
     @Test
+    @Configuration("server.json")
     @Specification({
-        "${route}/server/controller",
-        "${client}/request.with.extra.CRLF.before.request.line/client",
-        "${server}/request.with.extra.CRLF.before.request.line/server" })
+        "${net}/request.with.extra.CRLF.before.request.line/client",
+        "${app}/request.with.extra.CRLF.before.request.line/server" })
     public void robustServerShouldAllowExtraCRLFBeforeRequestLine() throws Exception
     {
         k3po.finish();
     }
 
     @Test
+    @Configuration("server.json")
     @Specification({
-        "${route}/server/controller",
-        "${client}/request.with.start.line.too.long/client"})
+        "${net}/request.with.start.line.too.long/client"})
     public void requestWithStartLineTooLong() throws Exception
     {
         k3po.finish();
     }
 
     @Test
+    @Configuration("server.json")
     @Specification({
-        "${route}/server/controller",
-        "${client}/invalid.request.space.before.colon.in.header/client"})
+        "${net}/invalid.request.space.before.colon.in.header/client"})
     public void invalidRequestSpaceBeforeColonInHeader() throws Exception
     {
         k3po.finish();
     }
 
     @Test
+    @Configuration("server.json")
     @Specification({
-        "${route}/server/controller",
-        "${client}/request.with.obsolete.line.folding/client"})
+        "${net}/request.with.obsolete.line.folding/client"})
     public void requestWithObsoleteLineFolding() throws Exception
     {
         k3po.finish();
     }
 
     @Test
+    @Configuration("server.json")
     @Specification({
-        "${route}/server/controller",
-        "${client}/request.with.header.value.too.long/client"})
+        "${net}/request.with.header.value.too.long/client"})
     @ScriptProperty("headerSize \"9001\"")
     public void requestWithHeaderValueTooLong() throws Exception
     {
@@ -188,59 +187,59 @@ public class MessageFormatIT
     }
 
     @Test
+    @Configuration("server.json")
     @Specification({
-        "${route}/server/controller",
-        "${client}/request.with.unknown.transfer.encoding/client"})
+        "${net}/request.with.unknown.transfer.encoding/client"})
     public void requestWithUnknownTransferEncoding() throws Exception
     {
         k3po.finish();
     }
 
     @Test
+    @Configuration("server.json")
     @Specification({
-        "${route}/server/controller",
-        "${client}/post.request.with.no.content/client",
-        "${server}/post.request.with.no.content/server" })
+        "${net}/post.request.with.no.content/client",
+        "${app}/post.request.with.no.content/server" })
     public void postRequestWithNoContent() throws Exception
     {
         k3po.finish();
     }
 
     @Test
+    @Configuration("server.json")
     @Specification({
-        "${route}/server/controller",
-        "${client}/head.request.and.response/client",
-        "${server}/head.request.and.response/server" })
+        "${net}/head.request.and.response/client",
+        "${app}/head.request.and.response/server" })
     public void headRequestAndResponse() throws Exception
     {
         k3po.finish();
     }
 
     @Test
+    @Configuration("server.json")
     @Specification({
-        "${route}/server/controller",
-        "${client}/head.request.and.response.with.content.length/client",
-        "${server}/head.request.and.response.with.content.length/server" })
+        "${net}/head.request.and.response.with.content.length/client",
+        "${app}/head.request.and.response.with.content.length/server" })
     public void headRequestAndResponseWithContentLength() throws Exception
     {
         k3po.finish();
     }
 
     @Test
+    @Configuration("server.json")
     @Specification({
-        "${route}/server/controller",
-        "${client}/invalid.request.multiple.content.lengths/client"})
+        "${net}/invalid.request.multiple.content.lengths/client"})
     public void invalidRequestMultipleContentLengths() throws Exception
     {
         k3po.finish();
     }
 
     @Test
+    @Configuration("server.json")
     @Specification({
-        "${route}/server/controller",
-        "${client}/gateway.must.reject.request.with.multiple.different.content.length/client",
+        "${net}/gateway.must.reject.request.with.multiple.different.content.length/client",
         "${gateway}/gateway.must.reject.request.with.multiple.different.content.length/gateway",
-        "${server}/gateway.must.reject.request.with.multiple.different.content.length/server" })
+        "${app}/gateway.must.reject.request.with.multiple.different.content.length/server" })
     @Ignore("proxy tests not implemented")
     public void gatewayMustRejectResponseWithMultipleDifferentContentLength() throws Exception
     {
@@ -248,10 +247,10 @@ public class MessageFormatIT
     }
 
     @Test
+    @Configuration("server.json")
     @Specification({
-        "${route}/server/controller",
-        "${client}/on.response.proxy.must.remove.space.in.header.with.space.between.header.name.and.colon/client",
-        "${server}/on.response.proxy.must.remove.space.in.header.with.space.between.header.name.and.colon/server",
+        "${net}/on.response.proxy.must.remove.space.in.header.with.space.between.header.name.and.colon/client",
+        "${app}/on.response.proxy.must.remove.space.in.header.with.space.between.header.name.and.colon/server",
         "${proxy}/on.response.proxy.must.remove.space.in.header.with.space.between.header.name.and.colon/proxy" })
     @Ignore("proxy tests not implemented")
     public void onResponseProxyMustRemoveSpaceInHeaderWithSpaceBetweenHeaderNameAndColon() throws Exception
@@ -260,10 +259,10 @@ public class MessageFormatIT
     }
 
     @Test
+    @Configuration("server.json")
     @Specification({
-        "${route}/server/controller",
-        "${client}/proxy.or.gateway.must.reject.obs.in.header.value/client",
-        "${server}/proxy.or.gateway.must.reject.obs.in.header.value/server" })
+        "${net}/proxy.or.gateway.must.reject.obs.in.header.value/client",
+        "${app}/proxy.or.gateway.must.reject.obs.in.header.value/server" })
     @Ignore("proxy tests not implemented")
     public void proxyOrGatewayMustRejectOBSInHeaderValue() throws Exception
     {
@@ -271,16 +270,14 @@ public class MessageFormatIT
     }
 
     @Test
+    @Configuration("server.json")
     @Specification({
-        "${route}/server/controller",
-        "${client}/proxy.should.preserve.unrecongnized.headers/client",
-        "${server}/proxy.should.preserve.unrecongnized.headers/server",
+        "${net}/proxy.should.preserve.unrecongnized.headers/client",
+        "${app}/proxy.should.preserve.unrecongnized.headers/server",
         "${proxy}/proxy.should.preserve.unrecongnized.headers/proxy" })
     @Ignore("proxy tests not implemented")
     public void proxyShouldPreserveUnrecognizedHeaders() throws Exception
     {
         k3po.finish();
     }
-
 }
-

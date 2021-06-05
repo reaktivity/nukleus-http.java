@@ -17,7 +17,6 @@ package org.reaktivity.nukleus.http.internal.streams.rfc7230.server;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.rules.RuleChain.outerRule;
-import static org.reaktivity.reaktor.test.ReaktorRule.EXTERNAL_AFFINITY_MASK;
 
 import org.junit.Ignore;
 import org.junit.Rule;
@@ -28,53 +27,53 @@ import org.junit.rules.Timeout;
 import org.kaazing.k3po.junit.annotation.Specification;
 import org.kaazing.k3po.junit.rules.K3poRule;
 import org.reaktivity.reaktor.test.ReaktorRule;
+import org.reaktivity.reaktor.test.annotation.Configuration;
 
 public class TransferCodingsIT
 {
     private final K3poRule k3po = new K3poRule()
-            .addScriptRoot("route", "org/reaktivity/specification/nukleus/http/control/route")
-            .addScriptRoot("client", "org/reaktivity/specification/http/rfc7230/transfer.codings")
-            .addScriptRoot("server", "org/reaktivity/specification/nukleus/http/streams/rfc7230/transfer.codings");
+            .addScriptRoot("net", "org/reaktivity/specification/nukleus/http/streams/network/rfc7230/transfer.codings")
+            .addScriptRoot("app", "org/reaktivity/specification/nukleus/http/streams/application/rfc7230/transfer.codings");
 
     private final TestRule timeout = new DisableOnDebug(new Timeout(10, SECONDS));
 
     private final ReaktorRule reaktor = new ReaktorRule()
-        .nukleus("http"::equals)
         .directory("target/nukleus-itests")
         .commandBufferCapacity(1024)
         .responseBufferCapacity(1024)
         .counterValuesBufferCapacity(8192)
-        .affinityMask("target#0", EXTERNAL_AFFINITY_MASK)
+        .configurationRoot("org/reaktivity/specification/nukleus/http/config")
+        .external("app#0")
         .clean();
 
     @Rule
     public final TestRule chain = outerRule(reaktor).around(k3po).around(timeout);
 
     @Test
+    @Configuration("server.json")
     @Specification({
-        "${route}/server/controller",
-        "${client}/request.transfer.encoding.chunked/client",
-        "${server}/request.transfer.encoding.chunked/server" })
+        "${net}/request.transfer.encoding.chunked/client",
+        "${app}/request.transfer.encoding.chunked/server" })
     public void requestTransferEncodingChunked() throws Exception
     {
         k3po.finish();
     }
 
     @Test
+    @Configuration("server.json")
     @Specification({
-        "${route}/server/controller",
-        "${client}/invalid.chunked.request.no.crlf.at.end.of.chunk/client",
-        "${server}/invalid.chunked.request.no.crlf.at.end.of.chunk/server" })
+        "${net}/invalid.chunked.request.no.crlf.at.end.of.chunk/client",
+        "${app}/invalid.chunked.request.no.crlf.at.end.of.chunk/server" })
     public void invalidRequestTransferEncodingChunked() throws Exception
     {
         k3po.finish();
     }
 
     @Test
+    @Configuration("server.json")
     @Specification({
-        "${route}/server/controller",
-        "${client}/response.transfer.encoding.chunked/client",
-        "${server}/response.transfer.encoding.chunked/server" })
+        "${net}/response.transfer.encoding.chunked/client",
+        "${app}/response.transfer.encoding.chunked/server" })
     @Ignore // TODO: implement encoding chunked responses
     public void responseTransferEncodingChunked() throws Exception
     {
@@ -96,10 +95,10 @@ public class TransferCodingsIT
     }
 
     @Test
+    @Configuration("server.json")
     @Specification({
-        "${route}/server/controller",
-        "${client}/request.transfer.encoding.chunked.with.trailer/client",
-        "${server}/request.transfer.encoding.chunked.with.trailer/server" })
+        "${net}/request.transfer.encoding.chunked.with.trailer/client",
+        "${app}/request.transfer.encoding.chunked.with.trailer/server" })
     @Ignore // TODO: implement chunked request trailer decoding
     public void requestTransferEncodingChunkedWithTrailer() throws Exception
     {
@@ -107,14 +106,13 @@ public class TransferCodingsIT
     }
 
     @Test
+    @Configuration("server.json")
     @Specification({
-        "${route}/server/controller",
-        "${client}/response.transfer.encoding.chunked.with.trailer/client",
-        "${server}/response.transfer.encoding.chunked.with.trailer/server" })
+        "${net}/response.transfer.encoding.chunked.with.trailer/client",
+        "${app}/response.transfer.encoding.chunked.with.trailer/server" })
     @Ignore // TODO: implement encoding chunked responses
     public void responseTransferEncodingChunkedWithTrailer() throws Exception
     {
         k3po.finish();
     }
-
 }

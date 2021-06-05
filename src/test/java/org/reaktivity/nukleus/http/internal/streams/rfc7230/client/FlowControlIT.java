@@ -17,7 +17,6 @@ package org.reaktivity.nukleus.http.internal.streams.rfc7230.client;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.rules.RuleChain.outerRule;
-import static org.reaktivity.reaktor.test.ReaktorRule.EXTERNAL_AFFINITY_MASK;
 
 import org.junit.Rule;
 import org.junit.Test;
@@ -29,34 +28,34 @@ import org.kaazing.k3po.junit.annotation.Specification;
 import org.kaazing.k3po.junit.rules.K3poRule;
 import org.reaktivity.reaktor.ReaktorConfiguration;
 import org.reaktivity.reaktor.test.ReaktorRule;
+import org.reaktivity.reaktor.test.annotation.Configuration;
 
 public class FlowControlIT
 {
     private final K3poRule k3po = new K3poRule()
-            .addScriptRoot("route", "org/reaktivity/specification/nukleus/http/control/route")
-            .addScriptRoot("server", "org/reaktivity/specification/http/rfc7230")
-            .addScriptRoot("client", "org/reaktivity/specification/nukleus/http/streams/rfc7230");
+        .addScriptRoot("net", "org/reaktivity/specification/nukleus/http/streams/network/rfc7230")
+        .addScriptRoot("app", "org/reaktivity/specification/nukleus/http/streams/application/rfc7230");
 
     private final TestRule timeout = new DisableOnDebug(new Timeout(10, SECONDS));
 
     private final ReaktorRule reaktor = new ReaktorRule()
-        .nukleus("http"::equals)
         .directory("target/nukleus-itests")
         .commandBufferCapacity(1024)
         .responseBufferCapacity(1024)
         .counterValuesBufferCapacity(8192)
-        .affinityMask("target#0", EXTERNAL_AFFINITY_MASK)
         .configure(ReaktorConfiguration.REAKTOR_DRAIN_ON_CLOSE, false)
+        .configurationRoot("org/reaktivity/specification/nukleus/http/config")
+        .external("net#0")
         .clean();
 
     @Rule
     public final TestRule chain = outerRule(reaktor).around(k3po).around(timeout);
 
     @Test
+    @Configuration("client.json")
     @Specification({
-        "${route}/client/controller",
-        "${client}/architecture/request.and.response/client",
-        "${server}/architecture/request.and.response/server" })
+        "${app}/architecture/request.and.response/client",
+        "${net}/architecture/request.and.response/server" })
     @ScriptProperty("serverInitialWindow \"3\"")
     public void shouldFlowControlRequest() throws Exception
     {
@@ -64,10 +63,10 @@ public class FlowControlIT
     }
 
     @Test
+    @Configuration("client.json")
     @Specification({
-        "${route}/client/controller",
-        "${client}/message.format/request.with.content.length/client",
-        "${server}/message.format/request.with.content.length/server"})
+        "${app}/message.format/request.with.content.length/client",
+        "${net}/message.format/request.with.content.length/server"})
     @ScriptProperty("serverInitialWindow \"9\"")
     public void shouldFlowControlRequestWithContent() throws Exception
     {
@@ -75,10 +74,10 @@ public class FlowControlIT
     }
 
     @Test
+    @Configuration("client.json")
     @Specification({
-        "${route}/client/controller",
-        "${client}/connection.management/upgrade.request.and.response.with.data/client",
-        "${server}/connection.management/upgrade.request.and.response.with.data/server"})
+        "${app}/connection.management/upgrade.request.and.response.with.data/client",
+        "${net}/connection.management/upgrade.request.and.response.with.data/server"})
     @ScriptProperty({"clientInitialWindow \"11\"",
                      "serverInitialWindow \"9\""})
     public void shouldFlowControlDataAfterUpgrade() throws Exception
@@ -87,30 +86,30 @@ public class FlowControlIT
     }
 
     @Test
+    @Configuration("client.json")
     @Specification({
-        "${route}/client/controller",
-        "${client}/message.format/response.with.headers/client",
-        "${server}/flow.control/response.fragmented/server"})
+        "${app}/message.format/response.with.headers/client",
+        "${net}/flow.control/response.fragmented/server"})
     public void shouldProcessFragmentedResponse() throws Exception
     {
         k3po.finish();
     }
 
     @Test
+    @Configuration("client.json")
     @Specification({
-        "${route}/client/controller",
-        "${client}/message.format/response.with.content.length/client",
-        "${server}/flow.control/response.fragmented.with.content.length/server"})
+        "${app}/message.format/response.with.content.length/client",
+        "${net}/flow.control/response.fragmented.with.content.length/server"})
     public void shouldProcessFragmentedResponseWithContentLength() throws Exception
     {
         k3po.finish();
     }
 
     @Test
+    @Configuration("client.json")
     @Specification({
-        "${route}/client/controller",
-        "${client}/message.format/response.with.content.length/client",
-        "${server}/message.format/response.with.content.length/server"})
+        "${app}/message.format/response.with.content.length/client",
+        "${net}/message.format/response.with.content.length/server"})
     @ScriptProperty("clientInitialWindow \"9\"")
     public void shouldFlowControlResponseWithContentLength() throws Exception
     {
@@ -118,10 +117,10 @@ public class FlowControlIT
     }
 
     @Test
+    @Configuration("client.json")
     @Specification({
-        "${route}/client/controller",
-        "${client}/message.format/response.with.content.length/client",
-        "${server}/flow.control/response.fragmented.with.content.length/server"})
+        "${app}/message.format/response.with.content.length/client",
+        "${net}/flow.control/response.fragmented.with.content.length/server"})
     @ScriptProperty("clientInitialWindow \"9\"")
     public void shouldFlowControlFragmentedResponseWithContentLength() throws Exception
     {
@@ -129,30 +128,30 @@ public class FlowControlIT
     }
 
     @Test
+    @Configuration("client.json")
     @Specification({
-            "${route}/client/controller",
-            "${client}/flow.control/request.with.padding/client",
-            "${server}/flow.control/request.with.padding/server" })
+        "${app}/flow.control/request.with.padding/client",
+        "${net}/flow.control/request.with.padding/server" })
     public void shouldProcessRequestWithPadding() throws Exception
     {
         k3po.finish();
     }
 
     @Test
+    @Configuration("client.json")
     @Specification({
-        "${route}/client/controller",
-        "${client}/flow.control/response.with.padding/client",
-        "${server}/flow.control/response.with.padding/server" })
+        "${app}/flow.control/response.with.padding/client",
+        "${net}/flow.control/response.with.padding/server" })
     public void shouldProcessResponseWithPadding() throws Exception
     {
         k3po.finish();
     }
 
     @Test
+    @Configuration("client.json")
     @Specification({
-        "${route}/client/controller",
-        "${client}/transfer.codings/response.transfer.encoding.chunked/client",
-        "${server}/transfer.codings/response.transfer.encoding.chunked/server" })
+        "${app}/transfer.codings/response.transfer.encoding.chunked/client",
+        "${net}/transfer.codings/response.transfer.encoding.chunked/server" })
     @ScriptProperty("clientInitialWindow \"9\"")
     public void shouldFlowControlResponseWithChunkedTransferEncoding() throws Exception
     {
@@ -160,20 +159,20 @@ public class FlowControlIT
     }
 
     @Test
+    @Configuration("client.json")
     @Specification({
-        "${route}/client/controller",
-        "${client}/message.format/response.with.content.length//client",
-        "${server}/flow.control/response.with.content.length.and.transport.close/server" })
+        "${app}/message.format/response.with.content.length//client",
+        "${net}/flow.control/response.with.content.length.and.transport.close/server" })
     public void shouldDeferEndProcessingUntilResponseProcessed() throws Exception
     {
         k3po.finish();
     }
 
     @Test
+    @Configuration("client.json")
     @Specification({
-        "${route}/client/controller",
-        "${client}/connection.management/multiple.requests.serialized/client",
-        "${server}/connection.management/multiple.requests.same.connection/server" })
+        "${app}/connection.management/multiple.requests.serialized/client",
+        "${net}/connection.management/multiple.requests.same.connection/server" })
     @ScriptProperty("serverInitialWindow 16")
     public void shouldProcessFragmentedRequests() throws Exception
     {

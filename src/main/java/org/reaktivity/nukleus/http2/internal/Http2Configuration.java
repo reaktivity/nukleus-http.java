@@ -19,8 +19,8 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 
 import org.agrona.DirectBuffer;
 import org.agrona.concurrent.UnsafeBuffer;
-import org.reaktivity.nukleus.Configuration;
 import org.reaktivity.reaktor.ReaktorConfiguration;
+import org.reaktivity.reaktor.nukleus.Configuration;
 
 public class Http2Configuration extends Configuration
 {

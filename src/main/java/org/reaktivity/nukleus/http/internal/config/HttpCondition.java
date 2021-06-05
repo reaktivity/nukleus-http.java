@@ -13,23 +13,19 @@
  * License for the specific language governing permissions and limitations
  * under the License.
  */
-package org.reaktivity.nukleus.http2.internal;
+package org.reaktivity.nukleus.http.internal.config;
 
-import org.reaktivity.reaktor.nukleus.Configuration;
-import org.reaktivity.reaktor.nukleus.NukleusFactorySpi;
+import java.util.Map;
 
-public final class Http2NukleusFactorySpi implements NukleusFactorySpi
+import org.reaktivity.reaktor.config.Condition;
+
+public final class HttpCondition extends Condition
 {
-    @Override
-    public String name()
-    {
-        return Http2Nukleus.NAME;
-    }
+    public final Map<String, String> headers;
 
-    @Override
-    public Http2Nukleus create(
-        Configuration config)
+    public HttpCondition(
+        Map<String, String> headers)
     {
-        return new Http2Nukleus(new Http2Configuration(config));
+        this.headers = headers;
     }
 }
